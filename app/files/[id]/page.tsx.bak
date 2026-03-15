@@ -56,7 +56,6 @@ export default function FileAnalysisDetail() {
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
-  const [analyzingProgress, setAnalyzingProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   // Audio player state
@@ -138,113 +137,22 @@ export default function FileAnalysisDetail() {
   // ── AI re-analysis ──
   const triggerAnalysis = async () => {
     setAnalyzing(true);
-    setAnalyzingProgress(0);
-    setError(null);
     try {
-      // Step 1: Start analysis with retry logic
-      console.log('[Analysis] Starting analysis for file:', fileId);
-      let taskId: string | null = null;
-      let startAttempts = 0;
-      const maxStartAttempts = 3;
-
-      while (!taskId && startAttempts < maxStartAttempts) {
-        try {
-          const res = await Promise.race([
-            fetch(`${API_BASE}/api/v1/ai/analyze/${fileId}`, { method: 'POST' }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Start request timeout')), 15000))
-          ]) as Response;
-
-          if (!res.ok) {
-            const errorData = await res.json().catch(() => ({}));
-            throw new Error(errorData.detail || `HTTP ${res.status}`);
-          }
-          const data = await res.json();
-          taskId = data.task_id;
-          if (!taskId) throw new Error('No task_id in response');
-        } catch (err: any) {
-          startAttempts++;
-          console.warn(`[Analysis] Start attempt ${startAttempts}/${maxStartAttempts} failed:`, err.message);
-          if (startAttempts < maxStartAttempts) await new Promise(r => setTimeout(r, 1000));
-        }
+      const res = await fetch(`${API_BASE}/api/v1/ai/analyze/${fileId}`, { method: 'POST' });
+      if (!res.ok) throw new Error('Analysis request failed');
+      const data = await res.json();
+      const taskId = data.task_id;
+      let attempts = 0;
+      while (attempts < 20) {
+        await new Promise(r => setTimeout(r, 2000));
+        const sr = await fetch(`${API_BASE}/api/v1/ai/status/${taskId}`);
+        const sd = await sr.json();
+        if (sd.status === 'completed') { await fetchDetail(); break; }
+        if (sd.status === 'failed') throw new Error('Analysis failed');
+        attempts++;
       }
-
-      if (!taskId) throw new Error('Failed to start analysis after multiple attempts');
-      console.log('[Analysis] ✓ Started task:', taskId);
-
-      // Step 2: Poll for status (1200 attempts × 1s = 20 minutes max)
-      const maxAttempts = 1200;
-      const pollInterval = 1000;
-      let failureCount = 0;
-      const maxFailures = 5;
-      let lastStatus = 'unknown';
-
-      for (let attempts = 0; attempts < maxAttempts; attempts++) {
-        if (attempts > 0) {
-          await new Promise(r => setTimeout(r, pollInterval));
-        }
-
-        const progress = Math.min(95, Math.round((attempts / maxAttempts) * 100));
-        setAnalyzingProgress(progress);
-
-        try {
-          const sr = await Promise.race([
-            fetch(`${API_BASE}/api/v1/ai/status/${taskId}`),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Status check timeout')), 10000))
-          ]) as Response;
-
-          if (!sr.ok) {
-            failureCount++;
-            console.warn(`[Analysis] Status HTTP ${sr.status} (failure ${failureCount}/${maxFailures})`);
-            if (failureCount >= maxFailures) {
-              throw new Error(`Server error: HTTP ${sr.status} - backend may be unavailable`);
-            }
-            continue;
-          }
-
-          failureCount = 0;
-          const sd = await sr.json();
-
-          if (attempts % 5 === 0 || sd.status !== lastStatus) {
-            console.log(`[Analysis] Attempt ${attempts + 1}/${maxAttempts} | Status: ${sd.status} | Progress: ${progress}%`);
-            if (sd.message) console.log(`[Analysis] Message: ${sd.message}`);
-          }
-
-          lastStatus = sd.status || lastStatus;
-
-          if (sd.status === 'completed' || sd.status === 'done' || sd.status === 'success') {
-            console.log('[Analysis] ✓ Completed! Refreshing data...');
-            setAnalyzingProgress(100);
-            await new Promise(r => setTimeout(r, 800));
-            await fetchDetail();
-            setAnalyzing(false);
-            return;
-          }
-
-          if (sd.status === 'failed' || sd.status === 'error') {
-            throw new Error(sd.error_message || 'Analysis failed');
-          }
-
-          if (sd.status === 'not_found' || sd.status === 'invalid') {
-            throw new Error('Task expired or not found');
-          }
-        } catch (err: any) {
-          failureCount++;
-          console.warn(`[Analysis] Poll error (${failureCount}/${maxFailures}):`, err.message);
-
-          if (failureCount >= maxFailures) {
-            throw new Error('Network error: Unable to connect to server. Check if backend is running.');
-          }
-        }
-      }
-
-      throw new Error('Analysis timeout after 20 minutes. The file may be too large or backend is very slow. Please try again or check backend logs.');
-    } catch (err: any) {
-      console.error('[Analysis] Error:', err);
-      setError(err.message || 'Analysis failed. Please try again.');
-    } finally {
-      setAnalyzing(false);
-      setAnalyzingProgress(0);
-    }
+    } catch { setError('การวิเคราะห์ล้มเหลว'); }
+    finally { setAnalyzing(false); }
   };
 
   const handleDelete = async () => {
@@ -308,21 +216,11 @@ export default function FileAnalysisDetail() {
               </div>
             </div>
             <div className="flex items-center space-x-2.5">
-              <div className="flex flex-col items-end mr-2">
-                <button onClick={triggerAnalysis} disabled={analyzing}
-                  className="flex items-center space-x-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all cursor-pointer shadow-sm active:scale-95 disabled:opacity-50">
-                  <RefreshCw size={16} className={`text-slate-400 ${analyzing ? 'animate-spin' : ''}`} />
-                  <span>{analyzing ? 'กำลังวิเคราะห์...' : 're-Analyze'}</span>
-                </button>
-                {analyzing && (
-                  <div className="w-32 bg-slate-100 rounded-full h-1.5 mt-2 overflow-hidden">
-                    <div
-                      className="bg-blue-600 h-full transition-all duration-500 ease-out"
-                      style={{ width: `${analyzingProgress}%` }}
-                    />
-                  </div>
-                )}
-              </div>
+              <button onClick={triggerAnalysis} disabled={analyzing}
+                className="flex items-center space-x-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all cursor-pointer shadow-sm active:scale-95 disabled:opacity-50">
+                <RefreshCw size={16} className={`text-slate-400 ${analyzing ? 'animate-spin' : ''}`} />
+                <span>{analyzing ? 'กำลังวิเคราะห์...' : 're-Analyze'}</span>
+              </button>
               <button onClick={handleDelete}
                 className="flex items-center space-x-2 px-4 py-2.5 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100 transition-all cursor-pointer shadow-sm active:scale-95">
                 <Trash2 size={16} /><span>Delete</span>
@@ -336,24 +234,10 @@ export default function FileAnalysisDetail() {
               <AlertCircle size={32} className="text-amber-500 mx-auto mb-3" />
               <h3 className="text-lg font-bold text-amber-800 mb-2">ยังไม่ได้วิเคราะห์ไฟล์นี้</h3>
               <p className="text-sm text-amber-600 mb-4">กดปุ่ม &quot;re-Analyze&quot; เพื่อเริ่มวิเคราะห์ด้วย AI (Whisper → Wav2Vec2 → Llama)</p>
-
-              {analyzing ? (
-                <div className="max-w-md mx-auto">
-                  <div className="bg-white rounded-full h-3 mb-3 overflow-hidden border border-amber-200">
-                    <div
-                      className="bg-blue-600 h-full transition-all duration-500 ease-out"
-                      style={{ width: `${analyzingProgress}%` }}
-                    />
-                  </div>
-                  <p className="text-sm font-bold text-blue-700">{analyzingProgress}%</p>
-                  <p className="text-xs text-amber-700 mt-2">กำลังวิเคราะห์... กรุณารอสักครู่</p>
-                </div>
-              ) : (
-                <button onClick={triggerAnalysis} disabled={analyzing}
-                  className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-xl font-bold text-sm cursor-pointer disabled:opacity-50">
-                  เริ่มวิเคราะห์ด้วย AI
-                </button>
-              )}
+              <button onClick={triggerAnalysis} disabled={analyzing}
+                className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-xl font-bold text-sm cursor-pointer disabled:opacity-50">
+                {analyzing ? 'กำลังวิเคราะห์...' : 'เริ่มวิเคราะห์ด้วย AI'}
+              </button>
             </div>
           )}
 
