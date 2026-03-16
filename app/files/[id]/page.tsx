@@ -7,7 +7,16 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-interface TranscriptionLine { speaker: string; time: string; text: string; }
+interface TranscriptionLine {
+  speaker: string;
+  speaker_id?: string;
+  time?: string;
+  start?: number;
+  end?: number;
+  timecode?: string;
+  subtitle?: string;
+  text?: string;
+}
 
 interface AnalysisData {
   analysis_id: string;
@@ -75,6 +84,45 @@ interface FileData {
   upload_date: string;
 }
 
+const normalizeSpeakerLabel = (line: TranscriptionLine, index: number): 'Speaker A' | 'Speaker B' => {
+  const raw = String(line?.speaker || '').trim().toLowerCase();
+  if (raw === 'speaker a' || raw === 'speaker_a' || raw === 'a' || raw === 'agent') return 'Speaker A';
+  if (raw === 'speaker b' || raw === 'speaker_b' || raw === 'b' || raw === 'customer') return 'Speaker B';
+  if (line?.speaker_id === 'A') return 'Speaker A';
+  if (line?.speaker_id === 'B') return 'Speaker B';
+  return index % 2 === 0 ? 'Speaker A' : 'Speaker B';
+};
+
+const normalizeTranscription = (analysisPayload: unknown): TranscriptionLine[] => {
+  if (!analysisPayload || typeof analysisPayload !== 'object') return [];
+  const a = analysisPayload as Record<string, unknown>;
+
+  const candidates = [
+    a.subtitle_segments,
+    a.transcription_detail,
+    a.subtitles,
+    (a.analysis_detail as Record<string, unknown> | undefined)?.transcription,
+    a.transcription,
+  ];
+
+  const rows = candidates.find((x) => Array.isArray(x)) as unknown[] | undefined;
+  if (!rows) return [];
+
+  return rows
+    .filter((row): row is Record<string, unknown> => !!row && typeof row === 'object')
+    .map((row) => ({
+      speaker: String(row.speaker ?? ''),
+      speaker_id: row.speaker_id ? String(row.speaker_id) : undefined,
+      time: row.time ? String(row.time) : undefined,
+      start: typeof row.start === 'number' ? row.start : undefined,
+      end: typeof row.end === 'number' ? row.end : undefined,
+      timecode: row.timecode ? String(row.timecode) : undefined,
+      subtitle: row.subtitle ? String(row.subtitle) : undefined,
+      text: row.text ? String(row.text) : undefined,
+    }))
+    .filter((line) => !!(line.subtitle || line.text));
+};
+
 export default function FileAnalysisDetail() {
   const router = useRouter();
   const params = useParams();
@@ -107,7 +155,15 @@ export default function FileAnalysisDetail() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setFileData(data.file);
-      setAnalysis(data.analysis);
+      if (data.analysis) {
+        const normalizedAnalysis = {
+          ...data.analysis,
+          transcription: normalizeTranscription(data.analysis),
+        };
+        setAnalysis(normalizedAnalysis);
+      } else {
+        setAnalysis(null);
+      }
 
       // Fetch enhanced analysis after main data is loaded
       if (data.analysis) {
@@ -460,29 +516,34 @@ export default function FileAnalysisDetail() {
 
                   {analysis.transcription && analysis.transcription.length > 0 ? (
                     <div className="space-y-5">
-                      {analysis.transcription.map((line, idx) =>
-                        line.speaker === 'agent' ? (
+                      {analysis.transcription.map((line, idx) => {
+                        const speakerLabel = normalizeSpeakerLabel(line, idx);
+                        const isSpeakerA = speakerLabel === 'Speaker A';
+                        const subtitleText = line.subtitle || line.text || '';
+                        const timeText = line.time || (typeof line.start === 'number' ? formatTime(line.start) : '00:00');
+
+                        return isSpeakerA ? (
                           <div key={idx}>
                             <div className="flex items-center space-x-2 mb-1.5">
-                              <span className="text-xs font-bold text-blue-700">AGENT</span>
-                              <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{line.time}</span>
+                              <span className="text-xs font-bold text-blue-700">Speaker A</span>
+                              <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{timeText}</span>
                             </div>
                             <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl rounded-tl-sm text-slate-700 text-sm w-[88%]">
-                              {line.text}
+                              {subtitleText}
                             </div>
                           </div>
                         ) : (
                           <div key={idx} className="flex flex-col items-end">
                             <div className="flex items-center space-x-2 mb-1.5">
-                              <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{line.time}</span>
-                              <span className="text-xs font-bold text-slate-600">CUSTOMER</span>
+                              <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{timeText}</span>
+                              <span className="text-xs font-bold text-slate-600">Speaker B</span>
                             </div>
                             <div className="bg-blue-50 border border-blue-100 p-4 rounded-2xl rounded-tr-sm text-slate-700 text-sm w-[88%]">
-                              {line.text}
+                              {subtitleText}
                             </div>
                           </div>
-                        )
-                      )}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-slate-400 text-sm text-center py-8">ไม่มีข้อมูล Transcription</p>
