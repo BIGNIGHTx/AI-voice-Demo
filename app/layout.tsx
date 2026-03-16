@@ -1,5 +1,12 @@
 import type { Metadata } from "next";
+import { Sarabun } from "next/font/google";
 import "./globals.css";
+
+const sarabun = Sarabun({
+  subsets: ["thai", "latin"],
+  weight: ["100", "200", "300", "400", "500", "600", "700", "800"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "AI Voice File Manager",
@@ -13,12 +20,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="th">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@100;200;300;400;500;600;700;800&display=swap" rel="stylesheet" />
-      </head>
-      <body className="antialiased">
+      <body className={`${sarabun.className} antialiased`}>
         {children}
       </body>
     </html>

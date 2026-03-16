@@ -1,7 +1,7 @@
 'use client';
 
 import Sidebar from '@/components/Sidebar';
-import { AudioWaveform, Sparkles, MessageCircle, Info, Lightbulb, RefreshCw, Trash2, ArrowLeft, Play, Pause, AlertCircle, Loader2, Tag } from 'lucide-react';
+import { AudioWaveform, Sparkles, MessageCircle, Info, Lightbulb, RefreshCw, Trash2, ArrowLeft, Play, Pause, AlertCircle, Loader2, Tag, Package, Key, FileText, Star, Smile } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback } from 'react';
 
@@ -36,6 +36,34 @@ interface AnalysisData {
   created_at: string;
 }
 
+interface EnhancedAnalysis {
+  entities: {
+    brands: string[];
+    products: string[];
+    orders: string[];
+    amounts: { value: number; currency: string }[];
+  };
+  keywords: {
+    categories: Record<string, { matched: string[] }>;
+  };
+  topic: {
+    primary_category: string;
+    secondary_categories?: string[];
+    confidence: number;
+  };
+  qaScore: {
+    overall_score: number;
+    grade: string;
+    criteria: Record<string, { score: number; max_score: number }>;
+    strengths: string[];
+    areas_for_improvement: string[];
+  };
+  csat: {
+    csat_score: number;
+    reasoning: string;
+  };
+}
+
 interface FileData {
   file_id: string;
   original_filename: string;
@@ -58,14 +86,39 @@ export default function FileAnalysisDetail() {
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzingProgress, setAnalyzingProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [enhancedAnalysis, setEnhancedAnalysis] = useState<EnhancedAnalysis | null>(null);
+  const [loadingEnhanced, setLoadingEnhanced] = useState(false);
 
   // Audio player state
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
-  const [isAudioLoaded, setIsAudioLoaded] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const progressRef = useRef<HTMLDivElement | null>(null);
+
+  const getErrorMessage = (error: unknown): string =>
+    error instanceof Error ? error.message : 'Unknown error';
+
+  const fetchDetail = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/audio/detail/${fileId}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setFileData(data.file);
+      setAnalysis(data.analysis);
+
+      // Fetch enhanced analysis after main data is loaded
+      if (data.analysis) {
+        fetchEnhancedAnalysis(fileId);
+      }
+    } catch {
+      setError('ไม่สามารถโหลดข้อมูลไฟล์ได้ — ตรวจสอบว่า Backend กำลังทำงาน');
+    } finally {
+      setLoading(false);
+    }
+  }, [fileId]);
 
   useEffect(() => {
     fetchDetail();
@@ -75,21 +128,32 @@ export default function FileAnalysisDetail() {
         audioRef.current = null;
       }
     };
-  }, [fileId]);
+  }, [fetchDetail]);
 
-  const fetchDetail = async () => {
-    setLoading(true);
-    setError(null);
+  const fetchEnhancedAnalysis = async (fileId: string) => {
+    setLoadingEnhanced(true);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/audio/detail/${fileId}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setFileData(data.file);
-      setAnalysis(data.analysis);
-    } catch (err: any) {
-      setError('ไม่สามารถโหลดข้อมูลไฟล์ได้ — ตรวจสอบว่า Backend กำลังทำงาน');
+      const [entitiesRes, keywordsRes, topicRes, qaRes, csatRes] = await Promise.all([
+        fetch(`${API_BASE}/api/v1/ai/entities/${fileId}`),
+        fetch(`${API_BASE}/api/v1/ai/keywords/${fileId}`),
+        fetch(`${API_BASE}/api/v1/ai/topic/${fileId}`),
+        fetch(`${API_BASE}/api/v1/ai/qa-score/${fileId}`),
+        fetch(`${API_BASE}/api/v1/ai/csat/${fileId}`)
+      ]);
+
+      const [entities, keywords, topic, qaScore, csat] = await Promise.all([
+        entitiesRes.json().catch(() => ({ brands: [], products: [], orders: [], amounts: [] })),
+        keywordsRes.json().catch(() => ({ categories: {} })),
+        topicRes.json().catch(() => ({ primary_category: 'Unknown', confidence: 0 })),
+        qaRes.json().catch(() => ({ overall_score: 0, grade: 'N/A', criteria: {}, strengths: [], areas_for_improvement: [] })),
+        csatRes.json().catch(() => ({ csat_score: 0, reasoning: 'No data' }))
+      ]);
+
+      setEnhancedAnalysis({ entities, keywords, topic, qaScore, csat });
+    } catch (error) {
+      console.error('Failed to fetch enhanced analysis:', error);
     } finally {
-      setLoading(false);
+      setLoadingEnhanced(false);
     }
   };
 
@@ -100,7 +164,6 @@ export default function FileAnalysisDetail() {
     audio.preload = 'metadata';
     audio.addEventListener('loadedmetadata', () => {
       setDuration(audio.duration);
-      setIsAudioLoaded(true);
     });
     audio.addEventListener('timeupdate', () => setCurrentTime(audio.currentTime));
     audio.addEventListener('ended', () => setIsPlaying(false));
@@ -161,9 +224,9 @@ export default function FileAnalysisDetail() {
           const data = await res.json();
           taskId = data.task_id;
           if (!taskId) throw new Error('No task_id in response');
-        } catch (err: any) {
+        } catch (err: unknown) {
           startAttempts++;
-          console.warn(`[Analysis] Start attempt ${startAttempts}/${maxStartAttempts} failed:`, err.message);
+          console.warn(`[Analysis] Start attempt ${startAttempts}/${maxStartAttempts} failed:`, getErrorMessage(err));
           if (startAttempts < maxStartAttempts) await new Promise(r => setTimeout(r, 1000));
         }
       }
@@ -227,9 +290,9 @@ export default function FileAnalysisDetail() {
           if (sd.status === 'not_found' || sd.status === 'invalid') {
             throw new Error('Task expired or not found');
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           failureCount++;
-          console.warn(`[Analysis] Poll error (${failureCount}/${maxFailures}):`, err.message);
+          console.warn(`[Analysis] Poll error (${failureCount}/${maxFailures}):`, getErrorMessage(err));
 
           if (failureCount >= maxFailures) {
             throw new Error('Network error: Unable to connect to server. Check if backend is running.');
@@ -238,9 +301,9 @@ export default function FileAnalysisDetail() {
       }
 
       throw new Error('Analysis timeout after 20 minutes. The file may be too large or backend is very slow. Please try again or check backend logs.');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[Analysis] Error:', err);
-      setError(err.message || 'Analysis failed. Please try again.');
+      setError(getErrorMessage(err) || 'Analysis failed. Please try again.');
     } finally {
       setAnalyzing(false);
       setAnalyzingProgress(0);
@@ -606,6 +669,176 @@ export default function FileAnalysisDetail() {
                         <span key={i} className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full">{kw}</span>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {/* ── Enhanced Analysis Section ── */}
+                {enhancedAnalysis && (
+                  <div className="enhanced-analysis-grid">
+                    {/* Entities Card */}
+                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                      <div className="flex items-center space-x-2 mb-4">
+                        <Package size={18} className="text-blue-600" />
+                        <h3 className="text-sm font-bold text-slate-800">📦 ข้อมูลที่ตรวจจับได้</h3>
+                      </div>
+
+                      {enhancedAnalysis.entities.brands?.length > 0 && (
+                        <div className="entity-section mb-4">
+                          <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">แบรนด์</h4>
+                          <div className="tags">
+                            {enhancedAnalysis.entities.brands.map((brand: string) => (
+                              <span key={brand} className="tag brand">{brand}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {enhancedAnalysis.entities.products?.length > 0 && (
+                        <div className="entity-section mb-4">
+                          <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">สินค้า</h4>
+                          <div className="tags">
+                            {enhancedAnalysis.entities.products.map((product: string) => (
+                              <span key={product} className="tag product">{product}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {enhancedAnalysis.entities.amounts?.length > 0 && (
+                        <div className="entity-section">
+                          <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">จำนวนเงิน</h4>
+                          {enhancedAnalysis.entities.amounts.map((amount, idx) => (
+                            <div key={idx} className="amount text-sm font-semibold text-slate-700">
+                              {amount.value.toLocaleString()} {amount.currency}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Keywords Card */}
+                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                      <div className="flex items-center space-x-2 mb-4">
+                        <Key size={18} className="text-purple-600" />
+                        <h3 className="text-sm font-bold text-slate-800">🔑 คำสำคัญ</h3>
+                      </div>
+                      <div className="keyword-categories">
+                        {Object.entries(enhancedAnalysis.keywords.categories || {}).map(([category, data]) => (
+                          <div key={category} className={`keyword-category ${category.toLowerCase()}`}>
+                            <span className="category-label">{category}</span>
+                            <div className="keyword-tags">
+                              {data.matched.map((keyword: string) => (
+                                <span key={keyword} className="keyword-tag">{keyword}</span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Topic Card */}
+                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                      <div className="flex items-center space-x-2 mb-4">
+                        <FileText size={18} className="text-green-600" />
+                        <h3 className="text-sm font-bold text-slate-800">📋 ประเภทการโทร</h3>
+                      </div>
+                      <div className="topic-info">
+                        <div className="topic-primary text-base font-bold text-slate-800 mb-2">
+                          {enhancedAnalysis.topic.primary_category}
+                        </div>
+                        <div className="topic-confidence text-xs text-slate-500 mb-2">
+                          ความมั่นใจ: {(enhancedAnalysis.topic.confidence * 100).toFixed(0)}%
+                        </div>
+                        {enhancedAnalysis.topic.secondary_categories && enhancedAnalysis.topic.secondary_categories.length > 0 && (
+                          <div className="topic-secondary text-xs text-slate-600">
+                            ประเภทรอง: {enhancedAnalysis.topic.secondary_categories.join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* QA Score Card */}
+                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                      <div className="flex items-center space-x-2 mb-4">
+                        <Star size={18} className="text-yellow-600" />
+                        <h3 className="text-sm font-bold text-slate-800">⭐ คะแนนคุณภาพ Agent</h3>
+                      </div>
+                      <div className="qa-score-display">
+                        <div className="qa-overall mb-4">
+                          <div className="score-circle">
+                            {enhancedAnalysis.qaScore.overall_score?.toFixed(1)}
+                          </div>
+                          <div className="grade">{enhancedAnalysis.qaScore.grade}</div>
+                        </div>
+
+                        <div className="qa-criteria space-y-2">
+                          {Object.entries(enhancedAnalysis.qaScore.criteria || {}).map(([criteria, data]) => (
+                            <div key={criteria} className="criterion">
+                              <span className="criterion-name text-xs">{criteria}</span>
+                              <div className="criterion-bar">
+                                <div
+                                  className="criterion-fill"
+                                  style={{ width: `${(data.score / (data.max_score || 10)) * 100}%` }}
+                                />
+                              </div>
+                              <span className="criterion-score text-xs font-bold">{data.score}/{data.max_score || 10}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {enhancedAnalysis.qaScore.strengths?.length > 0 && (
+                          <div className="qa-section mt-4 pt-4 border-t border-slate-100">
+                            <h4 className="text-xs font-bold text-emerald-600 mb-2">✅ จุดแข็ง</h4>
+                            <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
+                              {enhancedAnalysis.qaScore.strengths.map((strength: string, idx: number) => (
+                                <li key={idx}>{strength}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {enhancedAnalysis.qaScore.areas_for_improvement?.length > 0 && (
+                          <div className="qa-section mt-3 pt-3 border-t border-slate-100">
+                            <h4 className="text-xs font-bold text-amber-600 mb-2">📈 ควรปรับปรุง</h4>
+                            <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
+                              {enhancedAnalysis.qaScore.areas_for_improvement.map((area: string, idx: number) => (
+                                <li key={idx}>{area}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* CSAT Card */}
+                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                      <div className="flex items-center space-x-2 mb-4">
+                        <Smile size={18} className="text-green-600" />
+                        <h3 className="text-sm font-bold text-slate-800">😊 ความพึงพอใจลูกค้า</h3>
+                      </div>
+                      <div className="csat-display">
+                        <div className="csat-score mb-3">
+                          <div className="csat-circle">
+                            {enhancedAnalysis.csat.csat_score}/5
+                          </div>
+                          <div className="csat-label text-sm font-bold mt-2">
+                            {enhancedAnalysis.csat.csat_score >= 4 ? 'พึงพอใจ' :
+                             enhancedAnalysis.csat.csat_score >= 3 ? 'ปานกลาง' : 'ไม่พึงพอใจ'}
+                          </div>
+                        </div>
+                        <div className="csat-reason text-xs text-slate-600 bg-slate-50 p-3 rounded-lg">
+                          {enhancedAnalysis.csat.reasoning}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Loading Enhanced Analysis */}
+                {loadingEnhanced && (
+                  <div className="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 text-center">
+                    <Loader2 size={32} className="animate-spin text-blue-600 mx-auto mb-3" />
+                    <p className="text-sm text-slate-500">กำลังโหลดข้อมูลวิเคราะห์ขั้นสูง...</p>
                   </div>
                 )}
 

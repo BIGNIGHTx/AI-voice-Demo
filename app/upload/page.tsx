@@ -24,6 +24,9 @@ export default function UploadPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  const getErrorMessage = (error: unknown): string =>
+    error instanceof Error ? error.message : 'Upload failed';
+
   const formatSize = (bytes: number) => {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -97,14 +100,14 @@ export default function UploadPage() {
         });
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        await res.json().catch(() => null);
 
         setQueue(prev => prev.map(f =>
           f.id === item.id ? { ...f, status: 'done' as const } : f
         ));
-      } catch (err: any) {
+      } catch (err: unknown) {
         setQueue(prev => prev.map(f =>
-          f.id === item.id ? { ...f, status: 'error' as const, error: err.message } : f
+          f.id === item.id ? { ...f, status: 'error' as const, error: getErrorMessage(err) } : f
         ));
       }
     }
