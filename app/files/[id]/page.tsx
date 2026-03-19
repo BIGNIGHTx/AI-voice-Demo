@@ -123,6 +123,48 @@ const normalizeTranscription = (analysisPayload: unknown): TranscriptionLine[] =
     .filter((line) => !!(line.subtitle || line.text));
 };
 
+const pickFullTranscriptionText = (line: TranscriptionLine): string => {
+  const subtitle = (line.subtitle || '').trim();
+  const text = (line.text || '').trim();
+  if (!subtitle && !text) return '';
+  if (!subtitle) return text;
+  if (!text) return subtitle;
+  return text.length >= subtitle.length ? text : subtitle;
+};
+
+const collectBrandKeywords = (
+  analysis: AnalysisData | null,
+  enhancedAnalysis: EnhancedAnalysis | null,
+  transcriptText: string
+): string[] => {
+  if (!analysis && !enhancedAnalysis) return [];
+
+  const candidates = new Set<string>();
+
+  const addCandidate = (value?: string) => {
+    const normalized = (value || '').trim();
+    if (normalized) candidates.add(normalized);
+  };
+
+  addCandidate(analysis?.brand_name);
+  enhancedAnalysis?.entities?.brands?.forEach((brand) => addCandidate(brand));
+
+  if (!transcriptText.trim()) return Array.from(candidates);
+
+  const lowerTranscript = transcriptText.toLowerCase();
+  const matched: string[] = [];
+
+  candidates.forEach((brand) => {
+    const lowerBrand = brand.toLowerCase();
+    const escaped = lowerBrand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const boundaryRegex = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i');
+    const isMatched = boundaryRegex.test(lowerTranscript) || lowerTranscript.includes(lowerBrand);
+    if (isMatched) matched.push(brand);
+  });
+
+  return matched;
+};
+
 export default function FileAnalysisDetail() {
   const router = useRouter();
   const params = useParams();
@@ -253,6 +295,14 @@ export default function FileAnalysisDetail() {
   };
 
   const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  const fullTranscript = analysis?.transcription
+    ?.map((line) => pickFullTranscriptionText(line))
+    .filter(Boolean)
+    .join(' ')
+    .trim() || '';
+
+  const brandKeywords = collectBrandKeywords(analysis, enhancedAnalysis, fullTranscript);
 
   // ── AI re-analysis ──
   const triggerAnalysis = async () => {
@@ -516,30 +566,24 @@ export default function FileAnalysisDetail() {
 
                   {analysis.transcription && analysis.transcription.length > 0 ? (
                     <div className="space-y-5">
+                      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                        <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-2">Full Transcript (No Cut)</p>
+                        <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap wrap-break-word">{fullTranscript || '-'}</p>
+                      </div>
+
                       {analysis.transcription.map((line, idx) => {
                         const speakerLabel = normalizeSpeakerLabel(line, idx);
-                        const isSpeakerA = speakerLabel === 'Speaker A';
-                        const subtitleText = line.subtitle || line.text || '';
+                        const subtitleText = pickFullTranscriptionText(line);
                         const timeText = line.time || (typeof line.start === 'number' ? formatTime(line.start) : '00:00');
 
-                        return isSpeakerA ? (
+                        return (
                           <div key={idx}>
                             <div className="flex items-center space-x-2 mb-1.5">
-                              <span className="text-xs font-bold text-blue-700">Speaker A</span>
+                              <span className="text-xs font-bold text-blue-700">{speakerLabel}</span>
                               <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{timeText}</span>
                             </div>
-                            <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl rounded-tl-sm text-slate-700 text-sm w-[88%]">
-                              {subtitleText}
-                            </div>
-                          </div>
-                        ) : (
-                          <div key={idx} className="flex flex-col items-end">
-                            <div className="flex items-center space-x-2 mb-1.5">
-                              <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{timeText}</span>
-                              <span className="text-xs font-bold text-slate-600">Speaker B</span>
-                            </div>
-                            <div className="bg-blue-50 border border-blue-100 p-4 rounded-2xl rounded-tr-sm text-slate-700 text-sm w-[88%]">
-                              {subtitleText}
+                            <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl rounded-tl-sm text-slate-700 text-sm w-full whitespace-pre-wrap wrap-break-word">
+                              {subtitleText || '-'}
                             </div>
                           </div>
                         );
@@ -728,6 +772,20 @@ export default function FileAnalysisDetail() {
                     <div className="flex flex-wrap gap-2">
                       {analysis.keywords.map((kw, i) => (
                         <span key={i} className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full">{kw}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {brandKeywords.length > 0 && (
+                  <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <Tag size={16} className="text-amber-600" />
+                      <h3 className="text-sm font-bold text-slate-800">Brand Keywords</h3>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {brandKeywords.map((kw) => (
+                        <span key={kw} className="px-3 py-1 bg-amber-50 text-amber-700 text-xs font-medium rounded-full">{kw}</span>
                       ))}
                     </div>
                   </div>
