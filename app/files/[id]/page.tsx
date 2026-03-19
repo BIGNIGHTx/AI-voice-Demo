@@ -53,7 +53,10 @@ interface EnhancedAnalysis {
     amounts: { value: number; currency: string }[];
   };
   keywords: {
-    categories: Record<string, { matched: string[] }>;
+    keywords: string[];
+    categories: Record<string, { matched: string[]; count?: number }>;
+    sentiment_indicators?: string[];
+    urgency_level?: string;
   };
   topic: {
     primary_category: string;
@@ -165,6 +168,25 @@ const collectBrandKeywords = (
   return matched;
 };
 
+const isUnknownLabel = (value?: string | null): boolean => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return !normalized || normalized === 'unknown' || normalized === 'n/a' || normalized === '-';
+};
+
+const normalizeKeywordList = (keywords: string[]): string[] => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const kw of keywords) {
+    const normalized = String(kw || '').trim();
+    if (!normalized) continue;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(normalized);
+  }
+  return result;
+};
+
 export default function FileAnalysisDetail() {
   const router = useRouter();
   const params = useParams();
@@ -247,7 +269,42 @@ export default function FileAnalysisDetail() {
         csatRes.json().catch(() => ({ csat_score: 0, reasoning: 'No data' }))
       ]);
 
-      setEnhancedAnalysis({ entities, keywords, topic, qaScore, csat });
+      const entitiesPayload = (entities?.entities || entities || {}) as Record<string, unknown>;
+      const keywordsPayload = (keywords?.keywords || keywords || {}) as Record<string, unknown>;
+      const topicPayload = (topic?.topic || topic || {}) as Record<string, unknown>;
+      const qaPayload = (qaScore?.qa_score || qaScore || {}) as Record<string, unknown>;
+      const csatPayload = (csat?.csat || csat || {}) as Record<string, unknown>;
+
+      setEnhancedAnalysis({
+        entities: {
+          brands: Array.isArray(entitiesPayload.brands) ? entitiesPayload.brands as string[] : [],
+          products: Array.isArray(entitiesPayload.products) ? entitiesPayload.products as string[] : [],
+          orders: Array.isArray(entitiesPayload.orders) ? entitiesPayload.orders as string[] : [],
+          amounts: Array.isArray(entitiesPayload.amounts) ? entitiesPayload.amounts as { value: number; currency: string }[] : [],
+        },
+        keywords: {
+          keywords: Array.isArray(keywordsPayload.keywords) ? keywordsPayload.keywords as string[] : [],
+          categories: (keywordsPayload.categories as Record<string, { matched: string[]; count?: number }>) || {},
+          sentiment_indicators: Array.isArray(keywordsPayload.sentiment_indicators) ? keywordsPayload.sentiment_indicators as string[] : [],
+          urgency_level: typeof keywordsPayload.urgency_level === 'string' ? keywordsPayload.urgency_level : 'normal',
+        },
+        topic: {
+          primary_category: typeof topicPayload.primary_category === 'string' ? topicPayload.primary_category : 'Unknown',
+          secondary_categories: Array.isArray(topicPayload.secondary_categories) ? topicPayload.secondary_categories as string[] : [],
+          confidence: typeof topicPayload.confidence === 'number' ? topicPayload.confidence : 0,
+        },
+        qaScore: {
+          overall_score: typeof qaPayload.overall_score === 'number' ? qaPayload.overall_score : 0,
+          grade: typeof qaPayload.grade === 'string' ? qaPayload.grade : 'N/A',
+          criteria: (qaPayload.criteria as Record<string, { score: number; max_score: number }>) || {},
+          strengths: Array.isArray(qaPayload.strengths) ? qaPayload.strengths as string[] : [],
+          areas_for_improvement: Array.isArray(qaPayload.areas_for_improvement) ? qaPayload.areas_for_improvement as string[] : [],
+        },
+        csat: {
+          csat_score: typeof csatPayload.csat_score === 'number' ? csatPayload.csat_score : 0,
+          reasoning: typeof csatPayload.reasoning === 'string' ? csatPayload.reasoning : 'No data',
+        },
+      });
     } catch (error) {
       console.error('Failed to fetch enhanced analysis:', error);
     } finally {
@@ -303,6 +360,28 @@ export default function FileAnalysisDetail() {
     .trim() || '';
 
   const brandKeywords = collectBrandKeywords(analysis, enhancedAnalysis, fullTranscript);
+  const primaryBrand = !isUnknownLabel(analysis?.brand_name)
+    ? String(analysis?.brand_name)
+    : (brandKeywords[0] || '-');
+
+  const enhancedCategoryKeywords = Object.values(enhancedAnalysis?.keywords?.categories || {})
+    .flatMap((item) => Array.isArray(item?.matched) ? item.matched : []);
+
+  const allKeywords = normalizeKeywordList([
+    ...(analysis?.keywords || []),
+    ...(enhancedAnalysis?.keywords?.keywords || []),
+    ...enhancedCategoryKeywords,
+  ]);
+
+  const brandTokenSet = new Set(brandKeywords.map((b) => b.toLowerCase()));
+  const conversationKeywords = allKeywords
+    .filter((kw) => {
+      const lower = kw.toLowerCase();
+      if (brandTokenSet.has(lower)) return false;
+      if (lower.length <= 1) return false;
+      return true;
+    })
+    .slice(0, 16);
 
   // ── AI re-analysis ──
   const triggerAnalysis = async () => {
@@ -566,6 +645,18 @@ export default function FileAnalysisDetail() {
 
                   {analysis.transcription && analysis.transcription.length > 0 ? (
                     <div className="space-y-5">
+                      {/* Agent / Customer Labels Header */}
+                      <div className="flex items-center gap-3 bg-gradient-to-r from-blue-50 to-emerald-50 border border-slate-200 rounded-xl p-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-blue-600"></div>
+                          <span className="text-xs font-bold text-blue-700">Agent</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-emerald-600"></div>
+                          <span className="text-xs font-bold text-emerald-700">Customer</span>
+                        </div>
+                      </div>
+
                       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
                         <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-2">Full Transcript (No Cut)</p>
                         <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap wrap-break-word">{fullTranscript || '-'}</p>
@@ -573,16 +664,23 @@ export default function FileAnalysisDetail() {
 
                       {analysis.transcription.map((line, idx) => {
                         const speakerLabel = normalizeSpeakerLabel(line, idx);
+                        const isAgent = speakerLabel === 'Speaker A';
                         const subtitleText = pickFullTranscriptionText(line);
                         const timeText = line.time || (typeof line.start === 'number' ? formatTime(line.start) : '00:00');
 
                         return (
                           <div key={idx}>
                             <div className="flex items-center space-x-2 mb-1.5">
-                              <span className="text-xs font-bold text-blue-700">{speakerLabel}</span>
+                              <span className={`text-xs font-bold ${isAgent ? 'text-blue-700' : 'text-emerald-700'}`}>
+                                {speakerLabel}
+                              </span>
                               <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{timeText}</span>
                             </div>
-                            <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl rounded-tl-sm text-slate-700 text-sm w-full whitespace-pre-wrap wrap-break-word">
+                            <div className={`border p-4 rounded-2xl rounded-tl-sm text-slate-700 text-sm w-full whitespace-pre-wrap wrap-break-word ${
+                              isAgent 
+                                ? 'bg-blue-50 border-blue-100' 
+                                : 'bg-emerald-50 border-emerald-100'
+                            }`}>
                               {subtitleText || '-'}
                             </div>
                           </div>
@@ -626,7 +724,7 @@ export default function FileAnalysisDetail() {
                     {/* From AI (Brand/Product detected from transcript) */}
                     <div>
                       <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Brand</p>
-                      <p className="text-sm font-semibold text-slate-800">{analysis?.brand_name || '-'}</p>
+                      <p className="text-sm font-semibold text-slate-800">{primaryBrand}</p>
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Product</p>
@@ -762,15 +860,16 @@ export default function FileAnalysisDetail() {
                   </div>
                 )}
 
-                {/* ── Keywords ── */}
-                {analysis?.keywords && analysis.keywords.length > 0 && (
+                {/* ── Conversation Keywords (non-brand) ── */}
+                {conversationKeywords.length > 0 && (
                   <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
                     <div className="flex items-center space-x-2 mb-3">
-                      <Tag size={16} className="text-slate-600" />
-                      <h3 className="text-sm font-bold text-slate-800">Keywords</h3>
+                      <Key size={16} className="text-blue-600" />
+                      <h3 className="text-sm font-bold text-slate-800">Conversation Keywords</h3>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{conversationKeywords.length}</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {analysis.keywords.map((kw, i) => (
+                      {conversationKeywords.map((kw, i) => (
                         <span key={i} className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full">{kw}</span>
                       ))}
                     </div>
@@ -781,13 +880,15 @@ export default function FileAnalysisDetail() {
                   <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
                     <div className="flex items-center space-x-2 mb-3">
                       <Tag size={16} className="text-amber-600" />
-                      <h3 className="text-sm font-bold text-slate-800">Brand Keywords</h3>
+                      <h3 className="text-sm font-bold text-slate-800">Brand Insights</h3>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">{brandKeywords.length}</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {brandKeywords.map((kw) => (
                         <span key={kw} className="px-3 py-1 bg-amber-50 text-amber-700 text-xs font-medium rounded-full">{kw}</span>
                       ))}
                     </div>
+                    <p className="text-[11px] text-slate-500 mt-3">แยกจาก Keywords เพื่อไม่ให้ชื่อแบรนด์กลบคำสำคัญเชิงปัญหา/ความต้องการลูกค้า</p>
                   </div>
                 )}
 

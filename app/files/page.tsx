@@ -16,7 +16,9 @@ import {
   Loader2,
   User,
   Star,
-  ArrowRight
+  ArrowRight,
+  Trash2,
+  Trash
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
@@ -71,6 +73,35 @@ const toArray = (payload: unknown, keys: string[]): unknown[] => {
 
 const toText = (value: unknown): string => (typeof value === 'string' ? value : '').trim();
 
+const getFileRows = (payload: unknown): Record<string, unknown>[] => {
+  if (!isObject(payload)) return [];
+  const candidates = [payload.files, payload.items, payload.results, payload.data];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate.filter((row): row is Record<string, unknown> => isObject(row));
+    }
+  }
+  return [];
+};
+
+const getFileId = (row: Record<string, unknown>): string => {
+  const raw = row.file_id ?? row.audio_file_id ?? row.id;
+  return typeof raw === 'string' ? raw : '';
+};
+
+const chunk = <T,>(arr: T[], size: number): T[][] => {
+  if (size <= 0) return [arr];
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    out.push(arr.slice(i, i + size));
+  }
+  return out;
+};
+
+const yieldToMain = async () => {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+};
+
 export default function FilesPage() {
   const router = useRouter();
   const [files, setFiles] = useState<FileRecord[]>([]);
@@ -96,6 +127,9 @@ export default function FilesPage() {
     dateTo: ''
   });
 
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [deletingAll, setDeletingAll] = useState(false);
+
   const perPage = 10;
 
   const fetchFiles = useCallback(async () => {
@@ -115,6 +149,116 @@ export default function FilesPage() {
       setFiles([]);
     } finally { setLoading(false); }
   }, [page, fileSearch]);
+
+  const handleDelete = async (fileId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('ต้องการลบไฟล์นี้จริงหรือไม่?')) return;
+    
+    setDeleting(fileId);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/audio/delete/${fileId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+      await fetchFiles();
+    } catch {
+      setError('ลบไฟล์ไม่สำเร็จ');
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const performDeleteAll = useCallback(async () => {
+    setDeletingAll(true);
+    setError(null);
+    try {
+      // Repeatedly fetch first page and delete until no files remain.
+      let failedCount = 0;
+      const failedStatuses: number[] = [];
+      let safetyRounds = 0;
+      const maxRounds = 200;
+
+      while (safetyRounds < maxRounds) {
+        safetyRounds += 1;
+
+        const listRes = await fetch(`${API_BASE}/api/v1/audio/list?page=1&per_page=200`, { cache: 'no-store' });
+        if (!listRes.ok) throw new Error('ไม่สามารถดึงรายการไฟล์เพื่อลบทั้งหมดได้');
+
+        const listData = await listRes.json();
+        const rows = getFileRows(listData);
+        const ids = Array.from(new Set(rows.map(getFileId).filter(Boolean)));
+
+        if (ids.length === 0) {
+          break;
+        }
+
+        const batches = chunk(ids, 5);
+        let deletedInRound = 0;
+
+        for (const batch of batches) {
+          const results = await Promise.allSettled(
+            batch.map((id) => fetch(`${API_BASE}/api/v1/audio/delete/${id}`, { method: 'DELETE' }))
+          );
+
+          for (const result of results) {
+            if (result.status === 'fulfilled' && result.value.ok) {
+              deletedInRound += 1;
+            } else {
+              failedCount += 1;
+              if (result.status === 'fulfilled') {
+                failedStatuses.push(result.value.status);
+              }
+            }
+          }
+
+          await yieldToMain();
+        }
+
+        if (deletedInRound === 0) {
+          throw new Error('Delete API ไม่ตอบรับไฟล์ใดเลย');
+        }
+
+        await yieldToMain();
+      }
+
+      if (safetyRounds >= maxRounds) {
+        throw new Error('ใช้เวลาลบนานเกินกำหนด กรุณาลองใหม่');
+      }
+
+      const verifyRes = await fetch(`${API_BASE}/api/v1/audio/list?page=1&per_page=10`, { cache: 'no-store' });
+      if (verifyRes.ok) {
+        const verifyData = await verifyRes.json();
+        const remaining = getFileRows(verifyData).length;
+        if (remaining === 0) {
+          setFiles([]);
+          setTotal(0);
+          setTotalPages(1);
+          setPage(1);
+        }
+      }
+
+      await fetchFiles();
+
+      if (failedCount > 0) {
+        const statusText = failedStatuses.length > 0
+          ? ` (status: ${Array.from(new Set(failedStatuses)).slice(0, 3).join(', ')})`
+          : '';
+        setError(`ลบได้บางส่วน: ลบไม่สำเร็จ ${failedCount} ไฟล์${statusText}`);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'ลบไฟล์ทั้งหมดไม่สำเร็จ';
+      setError(message || 'ลบไฟล์ทั้งหมดไม่สำเร็จ');
+    } finally {
+      setDeletingAll(false);
+    }
+  }, [fetchFiles]);
+
+  const handleDeleteAll = () => {
+    if (!confirm(`ต้องการลบไฟล์ทั้งหมด ${total} ไฟล์จริงหรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้!`)) return;
+
+    // Defer heavy async workflow so the click handler can return immediately.
+    setTimeout(() => {
+      void performDeleteAll();
+    }, 0);
+  };
 
   useEffect(() => { fetchFiles(); }, [fetchFiles]);
 
@@ -516,6 +660,16 @@ export default function FilesPage() {
                 <p className="text-xs text-slate-500">Quick filter for file list only</p>
               </div>
               <div className="flex items-center gap-2 w-full md:w-auto">
+                {files.length > 0 && (
+                  <button
+                    onClick={handleDeleteAll}
+                    disabled={deletingAll}
+                    className="flex items-center space-x-2 px-4 py-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100 transition-all cursor-pointer disabled:opacity-50 active:scale-95"
+                  >
+                    <Trash2 size={16} />
+                    <span>{deletingAll ? 'Deleting...' : 'Delete All'}</span>
+                  </button>
+                )}
                 <div className="flex-1 md:w-96 relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input
@@ -546,16 +700,17 @@ export default function FilesPage() {
                   <th className="p-4">Brand</th>
                   <th className="p-4">Status</th>
                   <th className="p-4">Date</th>
+                  <th className="p-4">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {loading ? (
-                  <tr><td colSpan={7} className="p-12 text-center text-slate-400">
+                  <tr><td colSpan={8} className="p-12 text-center text-slate-400">
                     <RefreshCw size={24} className="animate-spin mx-auto mb-2" />
                     <p className="text-sm">กำลังโหลดข้อมูล...</p>
                   </td></tr>
                 ) : files.length === 0 ? (
-                  <tr><td colSpan={7} className="p-12 text-center text-slate-400">
+                  <tr><td colSpan={8} className="p-12 text-center text-slate-400">
                     <FileAudio size={32} className="mx-auto mb-2 opacity-50" />
                     <p className="text-sm font-medium">ไม่พบไฟล์</p>
                     <p className="text-xs mt-1">ลอง upload ไฟล์ใหม่จากหน้า Upload</p>
@@ -590,6 +745,20 @@ export default function FilesPage() {
                         </span>
                       </td>
                       <td className="p-4 text-sm text-slate-500 whitespace-nowrap">{formatDate(file.date)}</td>
+                      <td className="p-4">
+                        <button
+                          onClick={(e) => handleDelete(file.file_id, e)}
+                          disabled={deleting === file.file_id}
+                          className="flex items-center justify-center p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer disabled:opacity-50 active:scale-95"
+                          title="Delete file"
+                        >
+                          {deleting === file.file_id ? (
+                            <Loader2 size={16} className="animate-spin" />
+                          ) : (
+                            <Trash size={16} />
+                          )}
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
