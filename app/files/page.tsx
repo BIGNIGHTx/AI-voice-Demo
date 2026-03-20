@@ -132,22 +132,27 @@ export default function FilesPage() {
 
   const perPage = 10;
 
-  const fetchFiles = useCallback(async () => {
-    setLoading(true);
+  const fetchFiles = useCallback(async (silent = false) => {
+    const isSilent = typeof silent === 'boolean' ? silent : false;
+    if (!isSilent) setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({ page: page.toString(), per_page: perPage.toString() });
       if (fileSearch) params.set('search', fileSearch);
-      const res = await fetch(`${API_BASE}/api/v1/audio/list?${params}`);
+      const res = await fetch(`${API_BASE}/api/v1/audio/list?${params}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setFiles(data.files || []);
       setTotalPages(data.total_pages || 1);
       setTotal(data.total || 0);
     } catch {
-      setError('ไม่สามารถเชื่อมต่อกับ API ได้ — กรุณาเปิด Backend Server');
-      setFiles([]);
-    } finally { setLoading(false); }
+      if (!isSilent) {
+        setError('ไม่สามารถเชื่อมต่อกับ API ได้ — กรุณาเปิด Backend Server');
+        setFiles([]);
+      }
+    } finally { 
+      if (!isSilent) setLoading(false); 
+    }
   }, [page, fileSearch]);
 
   const handleDelete = async (fileId: string, e: React.MouseEvent) => {
@@ -260,7 +265,16 @@ export default function FilesPage() {
     }, 0);
   };
 
-  useEffect(() => { fetchFiles(); }, [fetchFiles]);
+  useEffect(() => { 
+    fetchFiles(); 
+    
+    // Auto-refresh file list every 5 seconds
+    const interval = setInterval(() => {
+      fetchFiles(true);
+    }, 5000);
+    
+    return () => clearInterval(interval);
+  }, [fetchFiles]);
 
   useEffect(() => {
     const loadFilterOptions = async () => {
