@@ -44,44 +44,6 @@ interface WarrantyItem {
   status: 'ACTIVE' | 'EXPIRED' | 'PENDING';
 }
 
-// Mock Data
-const MOCK_CUSTOMER: CustomerDetail = {
-  customer_id: 'C001',
-  first_name: 'สมชาย',
-  last_name: 'ใจดี',
-  phone: '081-234-5678',
-  email: 'somchai@email.com',
-  gender: 'ชาย (MALE)',
-  date_of_birth: '1990-05-15',
-  address: '123/45 ซอยสุขใจ ถนนลาดพร้าว',
-  district: 'จตุจักร',
-  province: 'กรุงเทพมหานคร',
-  postcode: '10900'
-};
-
-const MOCK_WARRANTIES: WarrantyItem[] = [
-  {
-    file_id: 'f-1001',
-    registration_no: 'W4Z0NQ43GXH',
-    brand: 'Dunlopillo',
-    model: 'Fresco 5ft',
-    serial_no: 'B7IUWSAMRNCA',
-    warranty_period: '120 Months',
-    purchase_date: '2026-03-15',
-    status: 'ACTIVE'
-  },
-  {
-    file_id: 'f-1002',
-    registration_no: 'W9M2KX88PLZ',
-    brand: 'Slumberland',
-    model: 'Elegance 6ft',
-    serial_no: 'SLUM998877XX',
-    warranty_period: '120 Months',
-    purchase_date: '2025-11-10',
-    status: 'ACTIVE'
-  }
-];
-
 export default function CustomerDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -90,14 +52,33 @@ export default function CustomerDetailPage() {
   const [customer, setCustomer] = useState<CustomerDetail | null>(null);
   const [warranties, setWarranties] = useState<WarrantyItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // จำลองการเรียก API เดี่ยวของลูกค้า
-    setTimeout(() => {
-      setCustomer({ ...MOCK_CUSTOMER, customer_id: customerId });
-      setWarranties(MOCK_WARRANTIES);
-      setLoading(false);
-    }, 600);
+    async function fetchCustomerDetails() {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/customers/${customerId}`);
+        if (!res.ok) {
+          throw new Error(`Failed to fetch customer: ${res.status} ${res.statusText}`);
+        }
+        
+        const data = await res.json();
+        setCustomer(data.customer);
+        setWarranties(data.warranties || []);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching customer:', err);
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        setError(errorMsg);
+        // ไม่ใช้ mock data - แสดง error แทน
+        setCustomer(null);
+        setWarranties([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchCustomerDetails();
   }, [customerId]);
 
   if (loading) {
@@ -114,7 +95,28 @@ export default function CustomerDetailPage() {
     );
   }
 
-  if (!customer) return null;
+  if (error || !customer) {
+    return (
+      <div className="flex h-screen bg-slate-50 overflow-hidden">
+        <Sidebar />
+        <main className="flex-1 p-6 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-red-600 text-3xl">✕</span>
+            </div>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">ไม่พบข้อมูลลูกค้า</h2>
+            <p className="text-slate-500 mb-4">{error || 'Customer not found'}</p>
+            <button 
+              onClick={() => router.push('/customers')}
+              className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all"
+            >
+              กลับไปหน้ารายชื่อลูกค้า
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
@@ -217,12 +219,14 @@ export default function CustomerDetailPage() {
                     <div className="text-center py-12">
                       <Package size={48} className="text-slate-300 mx-auto mb-3" />
                       <p className="text-slate-500 font-medium">ไม่พบข้อมูลการประกันสินค้า</p>
+                      <p className="text-slate-400 text-sm mt-2">ลูกค้ารายนี้ยังไม่มีการลงทะเบียนประกันสินค้า</p>
+                      <p className="text-slate-400 text-xs mt-1">หรือข้อมูลไม่มี Brand/Product ที่ชัดเจน</p>
                     </div>
                   ) : (
                     warranties.map((warranty) => (
                       <Link 
                         href={`/customers/${customerId}/warranty/${warranty.file_id}`}
-                        key={warranty.registration_no}
+                        key={`${warranty.file_id}-${warranty.registration_no}`}
                         className="block bg-white border-2 border-slate-100 rounded-xl p-5 hover:border-blue-400 hover:shadow-md transition-all group"
                       >
                         <div className="flex justify-between items-start mb-4">

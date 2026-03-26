@@ -11,6 +11,7 @@ import {
   AlertCircle,
   UserCircle,
   RotateCw,
+  ShieldCheck,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
@@ -27,17 +28,9 @@ interface Customer {
   total_calls: number;
   last_call_date?: string;
   sentiment_summary?: string;
+  has_warranty: boolean;
+  warranty_count: number;
 }
-
-// Mock data สำหรับแสดงตัวอย่าง (จะถูกแทนที่ด้วย API จริง)
-const MOCK_CUSTOMERS: Customer[] = [
-  { customer_id: 'C001', first_name: 'สมชาย', last_name: 'ใจดี', phone: '081-234-5678', email: 'somchai@email.com', gender: 'MALE', total_calls: 3, last_call_date: '2026-03-20', sentiment_summary: 'POSITIVE' },
-  { customer_id: 'C002', first_name: 'สมหญิง', last_name: 'รักษ์ดี', phone: '089-876-5432', email: 'somying@email.com', gender: 'FEMALE', total_calls: 1, last_call_date: '2026-03-18', sentiment_summary: 'NEUTRAL' },
-  { customer_id: 'C003', first_name: 'วิชัย', last_name: 'สุขสันต์', phone: '062-111-2222', email: 'wichai@email.com', gender: 'MALE', total_calls: 5, last_call_date: '2026-03-22', sentiment_summary: 'NEGATIVE' },
-  { customer_id: 'C004', first_name: 'นภา', last_name: 'แสงทอง', phone: '091-333-4444', email: 'napa@email.com', gender: 'FEMALE', total_calls: 2, last_call_date: '2026-03-15', sentiment_summary: 'POSITIVE' },
-  { customer_id: 'C005', first_name: 'ธนา', last_name: 'มั่นคง', phone: '085-555-6666', email: 'tana@email.com', gender: 'MALE', total_calls: 4, last_call_date: '2026-03-23', sentiment_summary: 'POSITIVE' },
-  { customer_id: 'C006', first_name: 'พิมพ์ใจ', last_name: 'เย็นชื่น', phone: '093-777-8888', email: 'pimjai@email.com', gender: 'FEMALE', total_calls: 7, last_call_date: '2026-03-24', sentiment_summary: 'NEUTRAL' },
-];
 
 export default function CustomersPage() {
   const router = useRouter();
@@ -45,9 +38,12 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [warrantyFilter, setWarrantyFilter] = useState<'all' | 'with' | 'without'>('all');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [totalWithWarranty, setTotalWithWarranty] = useState(0);
+  const [totalWithoutWarranty, setTotalWithoutWarranty] = useState(0);
   const perPage = 12;
 
   const fetchCustomers = useCallback(async () => {
@@ -56,27 +52,27 @@ export default function CustomersPage() {
     try {
       const params = new URLSearchParams({ page: page.toString(), per_page: perPage.toString() });
       if (searchQuery) params.set('search', searchQuery);
+      if (warrantyFilter === 'with') params.set('has_warranty', 'true');
+      if (warrantyFilter === 'without') params.set('has_warranty', 'false');
+      
       const res = await fetch(`${API_BASE}/api/v1/customers?${params}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setCustomers(data.customers || []);
       setTotalPages(data.total_pages || 1);
       setTotal(data.total || 0);
-    } catch {
-      // ใช้ mock data เมื่อ API ไม่พร้อม
-      const filtered = MOCK_CUSTOMERS.filter(c =>
-        !searchQuery ||
-        c.first_name.includes(searchQuery) ||
-        c.last_name.includes(searchQuery) ||
-        c.phone.includes(searchQuery)
-      );
-      setCustomers(filtered);
-      setTotal(filtered.length);
-      setTotalPages(Math.ceil(filtered.length / perPage));
+      setTotalWithWarranty(data.total_with_warranty || 0);
+      setTotalWithoutWarranty(data.total_without_warranty || 0);
+    } catch (err) {
+      // แสดง error แทนการใช้ mock data
+      setError(`ไม่สามารถเชื่อมต่อ API ได้: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setCustomers([]);
+      setTotal(0);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
-  }, [page, searchQuery]);
+  }, [page, searchQuery, warrantyFilter]);
 
   useEffect(() => {
     fetchCustomers();
@@ -115,10 +111,54 @@ export default function CustomersPage() {
               </h1>
               <p className="text-slate-500 text-sm mt-1">ค้นหาและดูข้อมูลลูกค้าพร้อมประวัติการติดต่อ</p>
             </div>
-            <div className="text-right">
-              <div className="text-3xl font-bold text-slate-800">{total.toLocaleString()}</div>
-              <div className="text-xs text-slate-400">ลูกค้าทั้งหมด</div>
+            <div className="flex gap-4">
+              <div className="text-right">
+                <div className="text-3xl font-bold text-slate-800">{total.toLocaleString()}</div>
+                <div className="text-xs text-slate-400">ลูกค้าทั้งหมด</div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-emerald-600">{totalWithWarranty}</div>
+                <div className="text-xs text-slate-400">มีประกัน</div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-slate-400">{totalWithoutWarranty}</div>
+                <div className="text-xs text-slate-400">ไม่มีประกัน</div>
+              </div>
             </div>
+          </div>
+
+          {/* Filter Tabs */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => { setWarrantyFilter('all'); setPage(1); }}
+              className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${
+                warrantyFilter === 'all'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              ทั้งหมด ({total})
+            </button>
+            <button
+              onClick={() => { setWarrantyFilter('with'); setPage(1); }}
+              className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${
+                warrantyFilter === 'with'
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              มีประกัน ({totalWithWarranty})
+            </button>
+            <button
+              onClick={() => { setWarrantyFilter('without'); setPage(1); }}
+              className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${
+                warrantyFilter === 'without'
+                  ? 'bg-slate-600 text-white shadow-md'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              ไม่มีประกัน ({totalWithoutWarranty})
+            </button>
           </div>
 
           {/* Search Bar */}
@@ -200,9 +240,20 @@ export default function CustomersPage() {
                             <p className="text-xs text-slate-400 mt-0.5">ID: {c.customer_id}</p>
                           </div>
                         </div>
-                        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${badge.cls}`}>
-                          {badge.label}
-                        </span>
+                        <div className="flex flex-col gap-1 items-end">
+                          <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${badge.cls}`}>
+                            {badge.label}
+                          </span>
+                          {c.has_warranty ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                              ประกัน {c.warranty_count}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                              ไม่มีประกัน
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="space-y-2 text-sm text-slate-600">
