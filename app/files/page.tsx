@@ -18,7 +18,8 @@ import {
   Star,
   ArrowRight,
   Trash2,
-  Trash
+  Trash,
+  PhoneForwarded
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
@@ -55,6 +56,7 @@ interface SearchResult {
   call_date?: string;
   highlight?: string;
   summary?: string;
+  sale_channel?: string;
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -623,6 +625,18 @@ export default function FilesPage() {
                               <span>{new Date(result.call_date).toLocaleDateString()}</span>
                             </span>
                           )}
+                          {result.sale_channel && (
+                            <span className={`flex items-center space-x-1 px-2 py-0.5 rounded-full border ${
+                              result.sale_channel.toLowerCase().includes('inbound') 
+                                ? 'bg-blue-50 text-blue-600 border-blue-100' 
+                                : result.sale_channel.toLowerCase().includes('outbound')
+                                  ? 'bg-orange-50 text-orange-600 border-orange-100'
+                                  : 'bg-slate-50 text-slate-500 border-slate-100'
+                            }`}>
+                              <PhoneForwarded size={12} />
+                              <span className="font-bold">{result.sale_channel === 'Unknown' ? '-' : result.sale_channel}</span>
+                            </span>
+                          )}
                         </div>
 
                         {result.highlight && (
@@ -696,7 +710,7 @@ export default function FilesPage() {
                   />
                 </div>
                 <button
-                  onClick={fetchFiles}
+                  onClick={() => fetchFiles()}
                   className="p-2.5 bg-slate-50 text-slate-500 rounded-lg border border-slate-200 hover:bg-slate-100 cursor-pointer transition-colors"
                 >
                   <RotateCw size={18} className={loading ? 'animate-spin' : ''} />
@@ -712,6 +726,7 @@ export default function FilesPage() {
                   <th className="p-4">Customer</th>
                   <th className="p-4">Agent</th>
                   <th className="p-4">Brand</th>
+                  <th className="p-4">Type</th>
                   <th className="p-4">Status</th>
                   <th className="p-4">Date</th>
                   <th className="p-4">Actions</th>
@@ -748,6 +763,17 @@ export default function FilesPage() {
                       <td className="p-4 text-sm text-slate-600">{file.customer}</td>
                       <td className="p-4 text-sm text-slate-600">{file.agent}</td>
                       <td className="p-4 text-sm font-medium text-slate-800 uppercase">{file.brand || '-'}</td>
+                      <td className="p-4">
+                        <span className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${
+                          String(file.sale_channel || '').toLowerCase().includes('inbound') 
+                            ? 'bg-blue-50 text-blue-600 border-blue-100' 
+                            : String(file.sale_channel || '').toLowerCase().includes('outbound')
+                              ? 'bg-orange-50 text-orange-600 border-orange-100'
+                              : 'bg-slate-50 text-slate-500 border-slate-100'
+                        }`}>
+                          {file.sale_channel === 'Unknown' ? '-' : file.sale_channel || '-'}
+                        </span>
+                      </td>
                       <td className="p-4">
                         <span className={`inline-flex items-center space-x-1 text-xs font-bold ${
                           file.status === 'COMPLETE' ? 'text-emerald-500' : 'text-orange-500'

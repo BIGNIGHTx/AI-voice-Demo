@@ -130,15 +130,14 @@ export default function WarrantyDetailPage() {
   );
 
   const InfoRow = ({ label, value, bg = false }: { label: string, value: React.ReactNode, bg?: boolean }) => {
-    // ไม่แสดง row ถ้าไม่มีข้อมูล
-    if (value === null || value === undefined || value === '' || value === 'N/A' || value === 'Unknown') {
-      return null;
-    }
+    // แสดง - ถ้าไม่มีข้อมูล
+    const isMissing = value === null || value === undefined || value === '' || value === 'N/A' || value === 'Unknown';
+    const displayValue = isMissing ? '-' : value;
     
     return (
       <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 py-3 px-4 ${bg ? 'bg-slate-50 rounded-lg' : ''}`}>
         <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider">{label}</div>
-        <div className="min-h-[20px] md:col-span-2 text-sm font-bold text-slate-800 break-words">{value}</div>
+        <div className="min-h-[20px] md:col-span-2 text-sm font-bold text-slate-800 break-words">{displayValue}</div>
       </div>
     );
   };
@@ -256,6 +255,8 @@ export default function WarrantyDetailPage() {
                 <div className="space-y-1">
                   <InfoRow label="Brand" value={warranty.brand} bg />
                   <InfoRow label="Product Category" value={warranty.product_category} />
+                  <InfoRow label="Customer Phone" value={warranty.customer_phone} bg />
+                  <InfoRow label="Agent ID" value={warranty.agent_id} />
                   <InfoRow label="Intent" value={warranty.intent} bg />
                   <InfoRow label="Sentiment" value={`${warranty.sentiment} (${(warranty.sentiment_confidence * 100).toFixed(1)}%)`} />
                   <InfoRow label="Sentiment Reason" value={warranty.sentiment_reason} bg />

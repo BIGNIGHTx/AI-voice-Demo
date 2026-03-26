@@ -35,8 +35,10 @@ interface AnalysisData {
   sentiment_label: string;
   sentiment_reason: string;
   summary: string;
+  summary_text?: string;
   summary_points: string[];
   transcription: TranscriptionLine[];
+  full_transcript?: string;
   key_insights: string;
   intent: string;
   keywords: string[];
@@ -187,6 +189,69 @@ const normalizeKeywordList = (keywords: string[]): string[] => {
   return result;
 };
 
+const sanitizeSummaryPoints = (points: unknown): string[] => {
+  if (!Array.isArray(points)) return [];
+  const cleaned: string[] = [];
+  const seen = new Set<string>();
+
+  for (const item of points) {
+    const text = String(item || '').trim().replace(/\s+/g, ' ');
+    if (!text) continue;
+    if (text.length < 8 || text.length > 220) continue;
+    const weird = (text.match(/[^\u0E00-\u0E7Fa-zA-Z0-9\s\.,!?\-()'":;/%]/g) || []).length;
+    if (weird / Math.max(text.length, 1) > 0.04) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    cleaned.push(text);
+    if (cleaned.length >= 4) break;
+  }
+  return cleaned;
+};
+
+const extractPhoneFromFilename = (filename?: string): string | null => {
+  if (!filename) return null;
+  const basename = filename.replace(/\.[^.]+$/, '');
+  const pattern = /(?<!\d)(0(?:6|8|9)\d(?:[\s._-]?\d){7})(?!\d)/g;
+  const positiveContext = /(phone|tel|mobile|customer|cust|ลูกค้า|เบอร์)/i;
+  const negativeContext = /(agent|id|reg|registration|order|serial|sn|inv|invoice|date|time|timestamp|เวลา)/i;
+
+  let bestPhone: string | null = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (const match of basename.matchAll(pattern)) {
+    const raw = match[0] || '';
+    const digits = raw.replace(/\D/g, '');
+    if (!/^0[689]\d{8}$/.test(digits)) continue;
+
+    const index = match.index ?? 0;
+    const contextStart = Math.max(0, index - 20);
+    const contextEnd = Math.min(basename.length, index + raw.length + 20);
+    const context = basename.slice(contextStart, contextEnd);
+
+    let score = 0;
+    if (positiveContext.test(context)) score += 3;
+    if (negativeContext.test(context)) score -= 3;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestPhone = digits;
+    }
+  }
+
+  return bestPhone;
+};
+
+const extractAgentIdFromFilename = (filename?: string): string | null => {
+  if (!filename) return null;
+  const matches = filename.match(/(?:^|[^0-9])([12]\d{2})(?!\d)/g) || [];
+  for (const raw of matches) {
+    const id = raw.replace(/\D/g, '');
+    if (/^[12]\d{2}$/.test(id)) return id;
+  }
+  return null;
+};
+
 export default function FileAnalysisDetail() {
   const router = useRouter();
   const params = useParams();
@@ -220,8 +285,21 @@ export default function FileAnalysisDetail() {
       const data = await res.json();
       setFileData(data.file);
       if (data.analysis) {
+        const rawSummary = String(data.analysis.summary ?? data.analysis.summary_text ?? '').trim();
+        const rawTranscript = String(data.analysis.full_transcript ?? '').trim();
+        const summaryLooksLikeTranscript = !!rawSummary && (
+          (rawTranscript && rawSummary === rawTranscript) || rawSummary.length > 700
+        );
+        const normalizedSummaryPoints = Array.isArray(data.analysis.summary_points)
+          ? data.analysis.summary_points
+              .map((p: unknown) => String(p || '').trim())
+              .filter((p: string) => p.length > 0 && p.length <= 280)
+          : [];
+
         const normalizedAnalysis = {
           ...data.analysis,
+          summary: summaryLooksLikeTranscript ? '' : rawSummary,
+          summary_points: normalizedSummaryPoints,
           transcription: normalizeTranscription(data.analysis),
         };
         setAnalysis(normalizedAnalysis);
@@ -253,7 +331,7 @@ export default function FileAnalysisDetail() {
   const fetchEnhancedAnalysis = async (fileId: string) => {
     setLoadingEnhanced(true);
     try {
-      const [entitiesRes, keywordsRes, topicRes, qaRes, csatRes] = await Promise.all([
+      const [entitiesRes, keywordsRes, topicRes, qaRes, csatRes] = await Promise.allSettled([
         fetch(`${API_BASE}/api/v1/ai/entities/${fileId}`),
         fetch(`${API_BASE}/api/v1/ai/keywords/${fileId}`),
         fetch(`${API_BASE}/api/v1/ai/topic/${fileId}`),
@@ -261,12 +339,18 @@ export default function FileAnalysisDetail() {
         fetch(`${API_BASE}/api/v1/ai/csat/${fileId}`)
       ]);
 
+      const parseSettledJson = async (result: PromiseSettledResult<Response>, fallback: Record<string, unknown>) => {
+        if (result.status !== 'fulfilled') return fallback;
+        if (!result.value.ok) return fallback;
+        return result.value.json().catch(() => fallback);
+      };
+
       const [entities, keywords, topic, qaScore, csat] = await Promise.all([
-        entitiesRes.json().catch(() => ({ brands: [], products: [], orders: [], amounts: [] })),
-        keywordsRes.json().catch(() => ({ categories: {} })),
-        topicRes.json().catch(() => ({ primary_category: 'Unknown', confidence: 0 })),
-        qaRes.json().catch(() => ({ overall_score: 0, grade: 'N/A', criteria: {}, strengths: [], areas_for_improvement: [] })),
-        csatRes.json().catch(() => ({ csat_score: 0, reasoning: 'No data' }))
+        parseSettledJson(entitiesRes, { entities: { brands: ['-'], products: ['-'], order_numbers: ['-'], amounts: [] } }),
+        parseSettledJson(keywordsRes, { keywords: { keywords: ['-'], categories: {}, sentiment_indicators: ['-'], urgency_level: '-' } }),
+        parseSettledJson(topicRes, { topic: { primary_category: '-', confidence: 0, secondary_categories: ['-'] } }),
+        parseSettledJson(qaRes, { qa_score: { overall_score: 0, grade: '-', criteria: {}, strengths: ['-'], areas_for_improvement: ['-'] } }),
+        parseSettledJson(csatRes, { csat: { csat_score: 0, reasoning: '-' } })
       ]);
 
       const entitiesPayload = (entities?.entities || entities || {}) as Record<string, unknown>;
@@ -275,18 +359,55 @@ export default function FileAnalysisDetail() {
       const qaPayload = (qaScore?.qa_score || qaScore || {}) as Record<string, unknown>;
       const csatPayload = (csat?.csat || csat || {}) as Record<string, unknown>;
 
+      const normalizeCategories = (raw: unknown): Record<string, { matched: string[]; count?: number }> => {
+        if (!raw || typeof raw !== 'object') return { general: { matched: ['-'], count: 1 } };
+        const entries = Object.entries(raw as Record<string, unknown>);
+        const mapped: Record<string, { matched: string[]; count?: number }> = {};
+        for (const [key, value] of entries) {
+          if (Array.isArray(value)) {
+            mapped[key] = { matched: value.map((x) => String(x)), count: value.length };
+            continue;
+          }
+          if (value && typeof value === 'object') {
+            const obj = value as Record<string, unknown>;
+            const matched = Array.isArray(obj.matched) ? obj.matched.map((x) => String(x)) : [];
+            const count = typeof obj.count === 'number' ? obj.count : matched.length;
+            mapped[key] = { matched: matched.length > 0 ? matched : ['-'], count };
+          }
+        }
+        return Object.keys(mapped).length > 0 ? mapped : { general: { matched: ['-'], count: 1 } };
+      };
+
+      const normalizeAmounts = (raw: unknown): { value: number; currency: string }[] => {
+        if (!Array.isArray(raw)) return [];
+        return raw
+          .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+          .map((item) => {
+            const value = typeof item.value === 'number'
+              ? item.value
+              : Number(String(item.value ?? '').replace(/,/g, ''));
+            const currency = typeof item.currency === 'string' && item.currency.trim()
+              ? item.currency
+              : 'THB';
+            return { value, currency };
+          })
+          .filter((item) => Number.isFinite(item.value));
+      };
+
       setEnhancedAnalysis({
         entities: {
           brands: Array.isArray(entitiesPayload.brands) ? entitiesPayload.brands as string[] : [],
           products: Array.isArray(entitiesPayload.products) ? entitiesPayload.products as string[] : [],
-          orders: Array.isArray(entitiesPayload.orders) ? entitiesPayload.orders as string[] : [],
-          amounts: Array.isArray(entitiesPayload.amounts) ? entitiesPayload.amounts as { value: number; currency: string }[] : [],
+          orders: Array.isArray(entitiesPayload.orders)
+            ? entitiesPayload.orders as string[]
+            : (Array.isArray(entitiesPayload.order_numbers) ? entitiesPayload.order_numbers as string[] : []),
+          amounts: normalizeAmounts(entitiesPayload.amounts),
         },
         keywords: {
           keywords: Array.isArray(keywordsPayload.keywords) ? keywordsPayload.keywords as string[] : [],
-          categories: (keywordsPayload.categories as Record<string, { matched: string[]; count?: number }>) || {},
+          categories: normalizeCategories(keywordsPayload.categories),
           sentiment_indicators: Array.isArray(keywordsPayload.sentiment_indicators) ? keywordsPayload.sentiment_indicators as string[] : [],
-          urgency_level: typeof keywordsPayload.urgency_level === 'string' ? keywordsPayload.urgency_level : 'normal',
+          urgency_level: typeof keywordsPayload.urgency_level === 'string' ? keywordsPayload.urgency_level : '-',
         },
         topic: {
           primary_category: typeof topicPayload.primary_category === 'string' ? topicPayload.primary_category : 'Unknown',
@@ -307,6 +428,24 @@ export default function FileAnalysisDetail() {
       });
     } catch (error) {
       console.error('Failed to fetch enhanced analysis:', error);
+      setEnhancedAnalysis({
+        entities: { brands: ['-'], products: ['-'], orders: ['-'], amounts: [] },
+        keywords: {
+          keywords: ['-'],
+          categories: { general: { matched: ['-'], count: 1 } },
+          sentiment_indicators: ['-'],
+          urgency_level: '-',
+        },
+        topic: { primary_category: '-', secondary_categories: ['-'], confidence: 0 },
+        qaScore: {
+          overall_score: 0,
+          grade: '-',
+          criteria: {},
+          strengths: ['-'],
+          areas_for_improvement: ['-'],
+        },
+        csat: { csat_score: 0, reasoning: '-' },
+      });
     } finally {
       setLoadingEnhanced(false);
     }
@@ -364,6 +503,11 @@ export default function FileAnalysisDetail() {
     ? String(analysis?.brand_name)
     : (brandKeywords[0] || '-');
 
+  const parsedPhoneFromFilename = extractPhoneFromFilename(fileData?.original_filename);
+  const parsedAgentIdFromFilename = extractAgentIdFromFilename(fileData?.original_filename);
+  const displayPhone = parsedPhoneFromFilename || fileData?.customer_phone || analysis?.customer_phone || '-';
+  const displayAgentId = parsedAgentIdFromFilename || analysis?.agent_id || fileData?.agent_id || '-';
+
   const enhancedCategoryKeywords = Object.values(enhancedAnalysis?.keywords?.categories || {})
     .flatMap((item) => Array.isArray(item?.matched) ? item.matched : []);
 
@@ -382,6 +526,9 @@ export default function FileAnalysisDetail() {
       return true;
     })
     .slice(0, 16);
+
+  const safeSummaryPoints = sanitizeSummaryPoints(analysis?.summary_points);
+  const safeSummaryText = String(analysis?.summary || '').trim();
 
   // ── AI re-analysis ──
   const triggerAnalysis = async () => {
@@ -618,12 +765,12 @@ export default function FileAnalysisDetail() {
                     <h2 className="text-lg font-bold text-slate-800">Conversation Summary</h2>
                   </div>
                   <p className="text-[10px] text-slate-400 mb-5 ml-9">วิเคราะห์โดย Llama 3.3 จากข้อมูล Speech-to-Text ของ Whisper</p>
-                  {analysis.summary_points && analysis.summary_points.length > 0 ? (
+                  {safeSummaryPoints.length > 0 ? (
                     <ul className="space-y-3.5 text-slate-600 text-sm list-disc pl-5 marker:text-slate-300">
-                      {analysis.summary_points.map((point, i) => <li key={i}>{point}</li>)}
+                      {safeSummaryPoints.map((point, i) => <li key={i}>{point}</li>)}
                     </ul>
                   ) : (
-                    <p className="text-slate-500 text-sm">{analysis.summary}</p>
+                    <p className="text-slate-500 text-sm">{safeSummaryText || '-'}</p>
                   )}
                 </div>
 
@@ -708,13 +855,13 @@ export default function FileAnalysisDetail() {
                     <div className="col-span-2">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Customer Phone</p>
                       <p className="text-sm font-semibold text-slate-800">
-                        {fileData?.customer_phone || analysis?.customer_phone || 'N/A'}
+                        {displayPhone}
                       </p>
                     </div>
                     <div className="col-span-2">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Agent ID</p>
                       <p className="text-sm font-semibold text-slate-800">
-                        {analysis?.agent_id || fileData?.agent_id || 'N/A'}
+                        {displayAgentId}
                         {(analysis?.agent_name || fileData?.agent_name) && (
                           <span className="text-slate-500 font-normal"> ({analysis?.agent_name || fileData?.agent_name})</span>
                         )}
@@ -929,7 +1076,7 @@ export default function FileAnalysisDetail() {
                           <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">จำนวนเงิน</h4>
                           {enhancedAnalysis.entities.amounts.map((amount, idx) => (
                             <div key={idx} className="amount text-sm font-semibold text-slate-700">
-                              {amount.value.toLocaleString()} {amount.currency}
+                              {Number.isFinite(amount?.value) ? amount.value.toLocaleString() : '-'} {amount?.currency || 'THB'}
                             </div>
                           ))}
                         </div>

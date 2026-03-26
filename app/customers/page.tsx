@@ -12,6 +12,9 @@ import {
   UserCircle,
   RotateCw,
   ShieldCheck,
+  PhoneIncoming,
+  PhoneOutgoing,
+  PhoneMissed,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
@@ -30,6 +33,8 @@ interface Customer {
   sentiment_summary?: string;
   has_warranty: boolean;
   warranty_count: number;
+  call_type?: string;
+  call_type_counts?: { inbound: number; outbound: number; unknown: number };
 }
 
 export default function CustomersPage() {
@@ -54,7 +59,7 @@ export default function CustomersPage() {
       if (searchQuery) params.set('search', searchQuery);
       if (warrantyFilter === 'with') params.set('has_warranty', 'true');
       if (warrantyFilter === 'without') params.set('has_warranty', 'false');
-      
+
       const res = await fetch(`${API_BASE}/api/v1/customers?${params}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -83,6 +88,19 @@ export default function CustomersPage() {
       case 'POSITIVE': return { cls: 'bg-emerald-50 text-emerald-600 border border-emerald-100', label: 'พอใจ' };
       case 'NEGATIVE': return { cls: 'bg-red-50 text-red-500 border border-red-100', label: 'ไม่พอใจ' };
       default: return { cls: 'bg-slate-100 text-slate-500 border border-slate-200', label: 'กลาง' };
+    }
+  };
+
+  const getCallTypeBadge = (callType?: string) => {
+    switch (callType?.toLowerCase()) {
+      case 'inbound':
+        return { cls: 'bg-blue-50 text-blue-600 border border-blue-100', label: 'Inbound', icon: <PhoneIncoming size={10} /> };
+      case 'outbound':
+        return { cls: 'bg-orange-50 text-orange-600 border border-orange-100', label: 'Outbound', icon: <PhoneOutgoing size={10} /> };
+      case 'mixed':
+        return { cls: 'bg-purple-50 text-purple-600 border border-purple-100', label: 'Mixed', icon: <Phone size={10} /> };
+      default:
+        return { cls: 'bg-slate-50 text-slate-400 border border-slate-200', label: 'ไม่ระบุที่มา', icon: <PhoneMissed size={10} /> };
     }
   };
 
@@ -131,31 +149,28 @@ export default function CustomersPage() {
           <div className="flex gap-2 mb-4">
             <button
               onClick={() => { setWarrantyFilter('all'); setPage(1); }}
-              className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                warrantyFilter === 'all'
+              className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${warrantyFilter === 'all'
                   ? 'bg-blue-600 text-white shadow-md'
                   : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-              }`}
+                }`}
             >
               ทั้งหมด ({total})
             </button>
             <button
               onClick={() => { setWarrantyFilter('with'); setPage(1); }}
-              className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                warrantyFilter === 'with'
+              className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${warrantyFilter === 'with'
                   ? 'bg-emerald-600 text-white shadow-md'
                   : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-              }`}
+                }`}
             >
               มีประกัน ({totalWithWarranty})
             </button>
             <button
               onClick={() => { setWarrantyFilter('without'); setPage(1); }}
-              className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                warrantyFilter === 'without'
+              className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${warrantyFilter === 'without'
                   ? 'bg-slate-600 text-white shadow-md'
                   : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-              }`}
+                }`}
             >
               ไม่มีประกัน ({totalWithoutWarranty})
             </button>
@@ -229,21 +244,31 @@ export default function CustomersPage() {
                       className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all cursor-pointer group p-5"
                     >
                       <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-blue-700 font-bold text-lg">
+                        <div className="flex items-start gap-3 min-w-0 flex-1 pr-2">
+                          <div className="w-12 h-12 shrink-0 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-blue-700 font-bold text-lg">
                             {c.first_name?.[0] || '?'}
                           </div>
-                          <div>
-                            <h3 className="font-semibold text-slate-800 group-hover:text-blue-700 transition-colors">
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-semibold text-slate-800 group-hover:text-blue-700 transition-colors truncate">
                               {c.first_name} {c.last_name}
                             </h3>
-                            <p className="text-xs text-slate-400 mt-0.5">ID: {c.customer_id}</p>
+                            <p className="text-xs text-slate-400 mt-0.5 truncate">ID: {c.customer_id}</p>
                           </div>
                         </div>
                         <div className="flex flex-col gap-1 items-end">
                           <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${badge.cls}`}>
                             {badge.label}
                           </span>
+                          {/* Call Type Badge */}
+                          {(() => {
+                            const ct = getCallTypeBadge(c.call_type);
+                            return (
+                              <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${ct.cls}`}>
+                                {ct.icon}
+                                {ct.label}
+                              </span>
+                            );
+                          })()}
                           {c.has_warranty ? (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
                               ประกัน {c.warranty_count}
@@ -299,9 +324,8 @@ export default function CustomersPage() {
                     <button
                       key={p}
                       onClick={() => setPage(p)}
-                      className={`w-9 h-9 rounded-full text-sm font-medium cursor-pointer transition-colors ${
-                        p === page ? 'bg-blue-700 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'
-                      }`}
+                      className={`w-9 h-9 rounded-full text-sm font-medium cursor-pointer transition-colors ${p === page ? 'bg-blue-700 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'
+                        }`}
                     >
                       {p}
                     </button>
