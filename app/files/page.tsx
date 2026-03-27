@@ -51,6 +51,7 @@ interface SearchResult {
   sentiment?: string;
   customer_phone?: string;
   agent_id?: string;
+  agent_name?: string;
   topic?: string;
   qa_score?: number;
   call_date?: string;
@@ -604,7 +605,7 @@ export default function FilesPage() {
                           {result.agent_id && (
                             <span className="flex items-center space-x-1">
                               <User size={14} />
-                              <span>Agent: {result.agent_id}</span>
+                              <span>ID {result.agent_id}</span>
                             </span>
                           )}
                           {result.topic && (
@@ -724,7 +725,7 @@ export default function FilesPage() {
                   <th className="p-4 pl-6">File Name</th>
                   <th className="p-4">Sentiment</th>
                   <th className="p-4">Customer</th>
-                  <th className="p-4">Agent</th>
+                  <th className="p-4">Agent ID</th>
                   <th className="p-4">Brand</th>
                   <th className="p-4">Type</th>
                   <th className="p-4">Status</th>
@@ -761,7 +762,7 @@ export default function FilesPage() {
                         </span>
                       </td>
                       <td className="p-4 text-sm text-slate-600">{file.customer}</td>
-                      <td className="p-4 text-sm text-slate-600">{file.agent}</td>
+                      <td className="p-4 text-sm text-slate-600">ID {file.agent || '-'}</td>
                       <td className="p-4 text-sm font-medium text-slate-800 uppercase">{file.brand || '-'}</td>
                       <td className="p-4">
                         <span className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${

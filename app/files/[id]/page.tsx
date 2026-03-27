@@ -122,10 +122,20 @@ const normalizeTranscription = (analysisPayload: unknown): TranscriptionLine[] =
       start: typeof row.start === 'number' ? row.start : undefined,
       end: typeof row.end === 'number' ? row.end : undefined,
       timecode: row.timecode ? String(row.timecode) : undefined,
-      subtitle: row.subtitle ? String(row.subtitle) : undefined,
-      text: row.text ? String(row.text) : undefined,
+      subtitle: row.subtitle ? cleanTranscriptText(row.subtitle) : undefined,
+      text: row.text ? cleanTranscriptText(row.text) : undefined,
     }))
     .filter((line) => !!(line.subtitle || line.text));
+};
+
+const cleanTranscriptText = (value: unknown): string => {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  return text
+    .replace(/[^\u0E00-\u0E7Fa-zA-Z0-9\s\.,!?():;/%\-"'@#&+]/g, ' ')
+    .replace(/([!?.,]){3,}/g, '$1$1')
+    .replace(/\s+/g, ' ')
+    .trim();
 };
 
 const pickFullTranscriptionText = (line: TranscriptionLine): string => {
@@ -540,13 +550,13 @@ export default function FileAnalysisDetail() {
       console.log('[Analysis] Starting analysis for file:', fileId);
       let taskId: string | null = null;
       let startAttempts = 0;
-      const maxStartAttempts = 3;
+      const maxStartAttempts = 5;
 
       while (!taskId && startAttempts < maxStartAttempts) {
         try {
           const res = await Promise.race([
             fetch(`${API_BASE}/api/v1/ai/analyze/${fileId}`, { method: 'POST' }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Start request timeout')), 15000))
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Start request timeout (30s)')), 30000))
           ]) as Response;
 
           if (!res.ok) {
