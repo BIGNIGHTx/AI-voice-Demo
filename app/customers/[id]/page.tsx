@@ -31,6 +31,9 @@ interface CustomerDetail {
   district: string;
   province: string;
   postcode: string;
+  suggested_brand?: string;
+  suggested_agent_id?: string;
+  suggested_sale_channel?: string;
 }
 
 interface WarrantyItem {
@@ -47,6 +50,18 @@ interface WarrantyItem {
   sale_channel?: string;
 }
 
+interface WarrantyFormState {
+  registration_no: string;
+  brand: string;
+  model: string;
+  serial_no: string;
+  warranty_period: string;
+  purchase_date: string;
+  status: 'ACTIVE' | 'EXPIRED' | 'PENDING';
+  sale_channel: string;
+  agent_id: string;
+}
+
 export default function CustomerDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -56,32 +71,104 @@ export default function CustomerDetailPage() {
   const [warranties, setWarranties] = useState<WarrantyItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAddWarranty, setShowAddWarranty] = useState(false);
+  const [savingWarranty, setSavingWarranty] = useState(false);
+  const [warrantyForm, setWarrantyForm] = useState<WarrantyFormState>({
+    registration_no: '',
+    brand: '',
+    model: '',
+    serial_no: '',
+    warranty_period: '12 Months',
+    purchase_date: '',
+    status: 'ACTIVE',
+    sale_channel: 'Manual',
+    agent_id: 'N/A',
+  });
 
-  useEffect(() => {
-    async function fetchCustomerDetails() {
-      try {
-        const res = await fetch(`${API_BASE}/api/v1/customers/${customerId}`);
-        if (!res.ok) {
-          throw new Error(`Failed to fetch customer: ${res.status} ${res.statusText}`);
-        }
-
-        const data = await res.json();
-        setCustomer(data.customer);
-        setWarranties(data.warranties || []);
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching customer:', err);
-        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-        setError(errorMsg);
-        // ไม่ใช้ mock data - แสดง error แทน
-        setCustomer(null);
-        setWarranties([]);
-      } finally {
-        setLoading(false);
-      }
+  const loadCustomerDetails = async () => {
+    if (!customerId) {
+      return;
     }
 
-    fetchCustomerDetails();
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/customers/${encodeURIComponent(customerId)}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to fetch customer: ${res.status} ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      setCustomer(data.customer);
+      setWarranties(data.warranties || []);
+      setWarrantyForm((prev) => ({
+        ...prev,
+        brand: data?.customer?.suggested_brand || '',
+        agent_id: data?.customer?.suggested_agent_id || 'N/A',
+        sale_channel: data?.customer?.suggested_sale_channel || 'Unknown',
+      }));
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching customer:', err);
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMsg);
+      setCustomer(null);
+      setWarranties([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateWarranty = async () => {
+    if (!warrantyForm.registration_no.trim() || !warrantyForm.model.trim()) {
+      setError('กรุณากรอก Registration No. และ Model');
+      return;
+    }
+
+    if (!warrantyForm.brand.trim()) {
+      setError('ไม่พบ Brand จากผลวิเคราะห์ของลูกค้ารายนี้');
+      return;
+    }
+
+    setSavingWarranty(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/customers/${encodeURIComponent(customerId)}/warranty`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...warrantyForm,
+          purchase_date: warrantyForm.purchase_date || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `Create warranty failed: ${res.status}`);
+      }
+
+      setShowAddWarranty(false);
+      setWarrantyForm({
+        registration_no: '',
+        brand: customer?.suggested_brand || '',
+        model: '',
+        serial_no: '',
+        warranty_period: '12 Months',
+        purchase_date: '',
+        status: 'ACTIVE',
+        sale_channel: customer?.suggested_sale_channel || 'Unknown',
+        agent_id: customer?.suggested_agent_id || 'N/A',
+      });
+      await loadCustomerDetails();
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMsg);
+    } finally {
+      setSavingWarranty(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCustomerDetails();
   }, [customerId]);
 
   if (loading) {
@@ -163,8 +250,11 @@ export default function CustomerDetailPage() {
                 </div>
               </div>
             </div>
-            <button className="shrink-0 ml-4 px-6 py-2.5 bg-white border-2 border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm">
-              แก้ไขข้อมูล
+            <button
+              onClick={() => setShowAddWarranty(true)}
+              className="shrink-0 ml-4 px-6 py-2.5 bg-white border-2 border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
+            >
+              เพิ่มประกัน
             </button>
           </div>
 
@@ -298,6 +388,91 @@ export default function CustomerDetailPage() {
           </div>
         </div>
       </main>
+
+      {showAddWarranty && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl p-6 space-y-4">
+            <h3 className="text-lg font-bold text-slate-800">เพิ่มข้อมูลประกัน (Manual)</h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                placeholder="Registration No.*"
+                value={warrantyForm.registration_no}
+                onChange={(e) => setWarrantyForm({ ...warrantyForm, registration_no: e.target.value })}
+              />
+              <input
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-slate-100 text-slate-600"
+                placeholder="Brand (จาก AI)"
+                value={warrantyForm.brand}
+                readOnly
+              />
+              <input
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                placeholder="Model*"
+                value={warrantyForm.model}
+                onChange={(e) => setWarrantyForm({ ...warrantyForm, model: e.target.value })}
+              />
+              <input
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                placeholder="Serial No."
+                value={warrantyForm.serial_no}
+                onChange={(e) => setWarrantyForm({ ...warrantyForm, serial_no: e.target.value })}
+              />
+              <input
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                placeholder="Warranty Period"
+                value={warrantyForm.warranty_period}
+                onChange={(e) => setWarrantyForm({ ...warrantyForm, warranty_period: e.target.value })}
+              />
+              <input
+                type="date"
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                value={warrantyForm.purchase_date}
+                onChange={(e) => setWarrantyForm({ ...warrantyForm, purchase_date: e.target.value })}
+              />
+              <select
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                value={warrantyForm.status}
+                onChange={(e) => setWarrantyForm({ ...warrantyForm, status: e.target.value as 'ACTIVE' | 'EXPIRED' | 'PENDING' })}
+              >
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="PENDING">PENDING</option>
+                <option value="EXPIRED">EXPIRED</option>
+              </select>
+              <input
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-slate-100 text-slate-600"
+                placeholder="Sale Channel (จาก AI)"
+                value={warrantyForm.sale_channel}
+                readOnly
+              />
+              <input
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm md:col-span-2 bg-slate-100 text-slate-600"
+                placeholder="Agent ID (จาก AI)"
+                value={warrantyForm.agent_id}
+                readOnly
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowAddWarranty(false)}
+                className="px-4 py-2 rounded-lg border border-slate-300 text-slate-600"
+                disabled={savingWarranty}
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleCreateWarranty}
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold disabled:opacity-60"
+                disabled={savingWarranty || !warrantyForm.brand.trim()}
+              >
+                {savingWarranty ? 'กำลังบันทึก...' : 'บันทึกประกัน'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

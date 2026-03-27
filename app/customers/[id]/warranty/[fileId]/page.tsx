@@ -65,8 +65,13 @@ export default function WarrantyDetailPage() {
 
   useEffect(() => {
     async function fetchWarrantyDetail() {
+      if (!customerId || !fileId) return;
+
       try {
-        const res = await fetch(`${API_BASE}/api/v1/customers/${customerId}/warranty/${fileId}`);
+        const res = await fetch(
+          `${API_BASE}/api/v1/customers/${encodeURIComponent(customerId)}/warranty/${encodeURIComponent(fileId)}`,
+          { cache: 'no-store' }
+        );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         
         const data = await res.json();

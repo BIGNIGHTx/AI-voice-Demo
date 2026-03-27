@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, CloudUpload, FileText, Folder, PhoneForwarded, Users } from 'lucide-react';
+import { LayoutDashboard, CloudUpload, FileText, Folder, PhoneForwarded, Users, ShieldCheck } from 'lucide-react';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -33,6 +33,11 @@ export default function Sidebar() {
           <Link href="/files" className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${pathname.includes('/files') ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
             <FileText size={20} />
             <span>Files</span>
+          </Link>
+
+          <Link href="/warranty" className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${pathname === '/warranty' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
+            <ShieldCheck size={20} className={pathname === '/warranty' ? 'text-blue-700' : 'text-slate-500'} />
+            <span>Warranty DB</span>
           </Link>
 
           {/* ── Escalation ── */}
