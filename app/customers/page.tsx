@@ -5,7 +5,6 @@ import {
   Search,
   Users,
   Phone,
-  Mail,
   ChevronRight,
   Loader2,
   AlertCircle,
@@ -28,6 +27,10 @@ interface Customer {
   phone: string;
   email?: string;
   gender?: string;
+  agent_id?: string;
+  brand?: string;
+  product_category?: string;
+  sale_channel?: string;
   total_calls: number;
   last_call_date?: string;
   sentiment_summary?: string;
@@ -51,8 +54,9 @@ export default function CustomersPage() {
   const [totalWithoutWarranty, setTotalWithoutWarranty] = useState(0);
   const perPage = 12;
 
-  const fetchCustomers = useCallback(async () => {
-    setLoading(true);
+  const fetchCustomers = useCallback(async (silent = false) => {
+    const isSilent = typeof silent === 'boolean' ? silent : false;
+    if (!isSilent) setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({ page: page.toString(), per_page: perPage.toString() });
@@ -69,18 +73,27 @@ export default function CustomersPage() {
       setTotalWithWarranty(data.total_with_warranty || 0);
       setTotalWithoutWarranty(data.total_without_warranty || 0);
     } catch (err) {
-      // แสดง error แทนการใช้ mock data
       setError(`ไม่สามารถเชื่อมต่อ API ได้: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      setCustomers([]);
-      setTotal(0);
-      setTotalPages(1);
+      if (!isSilent) {
+        setCustomers([]);
+        setTotal(0);
+        setTotalWithWarranty(0);
+        setTotalWithoutWarranty(0);
+        setTotalPages(1);
+      }
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, [page, searchQuery, warrantyFilter]);
 
   useEffect(() => {
     fetchCustomers();
+
+    const interval = setInterval(() => {
+      fetchCustomers(true);
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, [fetchCustomers]);
 
   const getSentimentBadge = (s?: string) => {
@@ -208,16 +221,16 @@ export default function CustomersPage() {
 
           {/* Error Notice */}
           {error && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-start space-x-3">
-              <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={20} />
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start space-x-3">
+              <AlertCircle className="text-red-500 shrink-0 mt-0.5" size={20} />
               <div>
-                <p className="text-sm font-medium text-amber-800">แสดงข้อมูลตัวอย่าง (API ไม่พร้อมใช้งาน)</p>
-                <p className="text-xs text-amber-600 mt-1">{error}</p>
+                <p className="text-sm font-medium text-red-800">เชื่อมต่อ API ไม่สำเร็จ</p>
+                <p className="text-xs text-red-600 mt-1">{error}</p>
               </div>
             </div>
           )}
 
-          {/* Customer Cards Grid */}
+          {/* Customer List */}
           {loading ? (
             <div className="text-center py-20">
               <Loader2 size={40} className="animate-spin text-blue-600 mx-auto mb-4" />
@@ -231,84 +244,109 @@ export default function CustomersPage() {
             </div>
           ) : (
             <>
-              <div className="text-xs text-slate-400 mb-4 font-medium">
-                แสดง <span className="text-slate-600 font-bold">{customers.length}</span> จาก {total} รายการ
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
-                {customers.map((c) => {
-                  const badge = getSentimentBadge(c.sentiment_summary);
-                  return (
-                    <div
-                      key={c.customer_id}
-                      onClick={() => router.push(`/customers/${c.customer_id}`)}
-                      className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all cursor-pointer group p-5"
-                    >
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-start gap-3 min-w-0 flex-1 pr-2">
-                          <div className="w-12 h-12 shrink-0 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-blue-700 font-bold text-lg">
-                            {c.first_name?.[0] || '?'}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <h3 className="font-semibold text-slate-800 group-hover:text-blue-700 transition-colors truncate">
-                              {c.first_name} {c.last_name}
-                            </h3>
-                            <p className="text-xs text-slate-400 mt-0.5 truncate">ID: {c.customer_id}</p>
-                          </div>
-                        </div>
-                        <div className="flex flex-col gap-1 items-end">
-                          <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${badge.cls}`}>
-                            {badge.label}
-                          </span>
-                          {/* Call Type Badge */}
-                          {(() => {
-                            const ct = getCallTypeBadge(c.call_type);
-                            return (
-                              <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${ct.cls}`}>
-                                {ct.icon}
-                                {ct.label}
+              <section className="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-100 mb-6">
+                <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center gap-3 md:justify-between">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-800">Customer Library</h3>
+                    <p className="text-xs text-slate-500">Format เดียวกับหน้า Files แต่ยังคงรายละเอียดครบ</p>
+                  </div>
+                  <div className="text-xs text-slate-400 font-medium">
+                    แสดง <span className="text-slate-600 font-bold">{customers.length}</span> จาก {total} รายการ
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[1180px]">
+                  <thead>
+                    <tr className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                      <th className="p-4 pl-6">Customer</th>
+                      <th className="p-4">Phone</th>
+                      <th className="p-4">Agent</th>
+                      <th className="p-4">Brand</th>
+                      <th className="p-4">Product</th>
+                      <th className="p-4">Sentiment</th>
+                      <th className="p-4">Warranty</th>
+                      <th className="p-4">Call Type</th>
+                      <th className="p-4">Calls</th>
+                      <th className="p-4">Last Call</th>
+                      <th className="p-4">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {customers.map((c) => {
+                      const sentiment = getSentimentBadge(c.sentiment_summary);
+                      const callType = getCallTypeBadge(c.call_type);
+                      return (
+                        <tr
+                          key={c.customer_id}
+                          onClick={() => router.push(`/customers/${c.customer_id}`)}
+                          className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                        >
+                          <td className="p-4 pl-6">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-9 h-9 rounded-full bg-slate-50 text-slate-600 flex items-center justify-center font-bold text-sm group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                                {c.first_name?.[0] || '?'}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-slate-800 truncate">{c.first_name} {c.last_name}</p>
+                                <p className="text-[11px] text-slate-400 truncate">ID: {c.customer_id}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4 text-sm text-slate-600 whitespace-nowrap">{c.phone || '-'}</td>
+                          <td className="p-4">
+                            <p className="text-sm font-semibold text-slate-700">{c.agent_id || '-'}</p>
+                            <p className="text-[11px] text-slate-400">{c.sale_channel || '-'}</p>
+                          </td>
+                          <td className="p-4 text-sm text-slate-700 whitespace-nowrap">{c.brand || '-'}</td>
+                          <td className="p-4 text-sm text-slate-700 max-w-48 truncate">{c.product_category || '-'}</td>
+                          <td className="p-4">
+                            <span className={`px-3 py-1 rounded-full text-[11px] font-bold ${sentiment.cls}`}>
+                              {sentiment.label}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            {c.has_warranty ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                <ShieldCheck size={12} />
+                                ประกัน {c.warranty_count}
                               </span>
-                            );
-                          })()}
-                          {c.has_warranty ? (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
-                              ประกัน {c.warranty_count}
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                                ไม่มีประกัน
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-4">
+                            <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full ${callType.cls}`}>
+                              {callType.icon}
+                              {callType.label}
                             </span>
-                          ) : (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
-                              ไม่มีประกัน
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="space-y-2 text-sm text-slate-600">
-                        <div className="flex items-center gap-2">
-                          <Phone size={14} className="text-slate-400 shrink-0" />
-                          <span>{c.phone}</span>
-                        </div>
-                        {c.email && (
-                          <div className="flex items-center gap-2">
-                            <Mail size={14} className="text-slate-400 shrink-0" />
-                            <span className="truncate text-xs">{c.email}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
-                        <div>
-                          <span className="text-2xl font-bold text-slate-800">{c.total_calls}</span>
-                          <span className="text-xs text-slate-400 ml-1">ครั้งที่โทร</span>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[11px] text-slate-400">ล่าสุด</p>
-                          <p className="text-xs text-slate-600 font-medium">{formatDate(c.last_call_date)}</p>
-                        </div>
-                        <ChevronRight size={20} className="text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                            <p className="text-[10px] text-slate-400 mt-1">
+                              IN {c.call_type_counts?.inbound ?? 0} / OUT {c.call_type_counts?.outbound ?? 0}
+                            </p>
+                          </td>
+                          <td className="p-4 text-sm font-semibold text-slate-800">{c.total_calls}</td>
+                          <td className="p-4 text-sm text-slate-500 whitespace-nowrap">{formatDate(c.last_call_date)}</td>
+                          <td className="p-4">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/customers/${c.customer_id}`);
+                              }}
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors cursor-pointer"
+                              title="ดูรายละเอียด"
+                            >
+                              <ChevronRight size={18} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                </div>
+              </section>
 
               {/* Pagination */}
               {totalPages > 1 && (
