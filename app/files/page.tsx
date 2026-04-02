@@ -727,7 +727,7 @@ export default function FilesPage() {
                   <th className="p-4">Customer</th>
                   <th className="p-4">Agent ID</th>
                   <th className="p-4">Brand</th>
-                  <th className="p-4">Type</th>
+                  <th className="p-4">Call type</th>
                   <th className="p-4">Status</th>
                   <th className="p-4">Date</th>
                   <th className="p-4">Actions</th>
@@ -735,12 +735,12 @@ export default function FilesPage() {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {loading ? (
-                  <tr><td colSpan={8} className="p-12 text-center text-slate-400">
+                  <tr><td colSpan={9} className="p-12 text-center text-slate-400">
                     <RefreshCw size={24} className="animate-spin mx-auto mb-2" />
                     <p className="text-sm">กำลังโหลดข้อมูล...</p>
                   </td></tr>
                 ) : files.length === 0 ? (
-                  <tr><td colSpan={8} className="p-12 text-center text-slate-400">
+                  <tr><td colSpan={9} className="p-12 text-center text-slate-400">
                     <FileAudio size={32} className="mx-auto mb-2 opacity-50" />
                     <p className="text-sm font-medium">ไม่พบไฟล์</p>
                     <p className="text-xs mt-1">ลอง upload ไฟล์ใหม่จากหน้า Upload</p>
@@ -766,22 +766,22 @@ export default function FilesPage() {
                       <td className="p-4 text-sm font-medium text-slate-800 uppercase">{file.brand || '-'}</td>
                       <td className="p-4">
                         <span className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${
-                          String(file.sale_channel || '').toLowerCase().includes('inbound') 
+                          String(file.name || '').toLowerCase().includes('inbound') 
                             ? 'bg-blue-50 text-blue-600 border-blue-100' 
-                            : String(file.sale_channel || '').toLowerCase().includes('outbound')
+                            : String(file.name || '').toLowerCase().includes('outbound')
                               ? 'bg-orange-50 text-orange-600 border-orange-100'
                               : 'bg-slate-50 text-slate-500 border-slate-100'
                         }`}>
-                          {file.sale_channel === 'Unknown' ? '-' : file.sale_channel || '-'}
+                          {String(file.name || '').toLowerCase().includes('inbound') ? 'Inbound' : String(file.name || '').toLowerCase().includes('outbound') ? 'Outbound' : '-'}
                         </span>
                       </td>
                       <td className="p-4">
-                        <span className={`inline-flex items-center space-x-1 text-xs font-bold ${
+                        <span className={`inline-flex items-center space-x-1 text-[11px] font-bold ${
                           file.status === 'COMPLETE' ? 'text-emerald-500' : 'text-orange-500'
                         }`}>
                           {file.status === 'COMPLETE'
-                            ? <CheckCircle2 size={14} />
-                            : <RefreshCw size={14} className="animate-spin" />}
+                            ? <CheckCircle2 size={12} />
+                            : <RefreshCw size={12} className="animate-spin" />}
                           <span>{file.status}</span>
                         </span>
                       </td>

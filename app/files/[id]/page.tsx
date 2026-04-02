@@ -45,6 +45,14 @@ interface AnalysisData {
   wav2vec2_emotion: { dominant: string; scores: { positive: number; neutral: number; negative: number } };
   model_versions: { whisper: string; wav2vec2: string; llama: string };
   created_at: string;
+  serial_no?: string;
+  warranty_period?: string;
+  warranty_start_date?: string;
+  warranty_end_date?: string;
+  purchase_date?: string;
+  date_of_purchase?: string;
+  expiry_date_of_warranty?: string;
+  registrationDate?: string;
 }
 
 interface EnhancedAnalysis {
@@ -803,7 +811,7 @@ export default function FileAnalysisDetail() {
                   {analysis.transcription && analysis.transcription.length > 0 ? (
                     <div className="space-y-5">
                       {/* Agent / Customer Labels Header */}
-                      <div className="flex items-center gap-3 bg-gradient-to-r from-blue-50 to-emerald-50 border border-slate-200 rounded-xl p-3">
+                      <div className="flex items-center gap-3 bg-linear-to-r from-blue-50 to-emerald-50 border border-slate-200 rounded-xl p-3">
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 rounded-full bg-blue-600"></div>
                           <span className="text-xs font-bold text-blue-700">Agent</span>
@@ -919,6 +927,39 @@ export default function FileAnalysisDetail() {
                     </div>
 
                     <div className="col-span-2 pt-3 border-t border-slate-100">
+                      <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-2">Warranty Information</p>
+                      <div className="space-y-3 bg-blue-50/50 p-3 rounded-lg border border-blue-100">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">Serial No.</p>
+                            <p className="text-xs font-bold text-slate-800 font-mono tracking-tight">{analysis?.serial_no || '-'}</p>
+                          </div>
+                   
+                        </div>
+                        <div className="flex gap-4">
+                          <div className="flex-1">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">Start Date</p>
+                            <p className="text-xs font-bold text-slate-800">{analysis?.warranty_start_date || '-'}</p>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">End Date</p>
+                            <p className="text-xs font-bold text-slate-800">{analysis?.warranty_end_date || '-'}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-4">
+                          <div className="flex-1">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">Expiry Date</p>
+                            <p className="text-xs font-bold text-slate-800">{analysis?.expiry_date_of_warranty || '-'}</p>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">Registration Date</p>
+                            <p className="text-xs font-bold text-slate-800">{analysis?.registrationDate || '-'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="col-span-2 pt-3 border-t border-slate-100">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Analysis Date</p>
                       <p className="text-sm font-semibold text-slate-800">
                         {analysis?.created_at
@@ -995,7 +1036,7 @@ export default function FileAnalysisDetail() {
                         <div className="bg-blue-700/50 p-2 rounded-lg"><Lightbulb size={20} className="text-white" /></div>
                         <h2 className="text-lg font-bold">Key Insights</h2>
                       </div>
-                      <p className="text-sm text-blue-100 leading-relaxed">{analysis.key_insights}</p>
+                      <p className="text-sm text-blue-100 leading-relaxed whitespace-pre-wrap">{analysis.key_insights}</p>
                       {analysis.wav2vec2_emotion && (
                         <div className="mt-4 pt-3 border-t border-blue-700/50">
                           <p className="text-[10px] text-blue-300 font-bold uppercase mb-2">Wav2Vec2 Emotion Analysis</p>

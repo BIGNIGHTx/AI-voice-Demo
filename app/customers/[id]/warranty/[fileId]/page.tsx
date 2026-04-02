@@ -45,6 +45,11 @@ interface WarrantyDetail {
   ai_mode: string;
   model_version: string;
   created_at: string | null;
+  serial_no?: string;
+  warranty_start_date?: string;
+  warranty_end_date?: string;
+  expiry_date_of_warranty?: string;
+  registrationDate?: string;
 }
 
 interface CustomerInfo {
@@ -276,6 +281,11 @@ export default function WarrantyDetailPage() {
                   <InfoRow label="Upload Date" value={formatDate(warranty.upload_date)} />
                   <InfoRow label="Duration" value={formatDuration(warranty.duration)} bg />
                   <InfoRow label="File Size" value={formatFileSize(warranty.file_size)} />
+                  <InfoRow label="Serial No." value={warranty.serial_no} bg />
+                  <InfoRow label="Start Date" value={warranty.warranty_start_date} />
+                  <InfoRow label="End Date" value={warranty.warranty_end_date} bg />
+                  <InfoRow label="Expiry Date" value={warranty.expiry_date_of_warranty} />
+                  <InfoRow label="Registration Date" value={warranty.registrationDate} bg />
                 </div>
               </div>
             </div>
