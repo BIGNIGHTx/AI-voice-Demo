@@ -4,22 +4,14 @@ import Sidebar from '@/components/Sidebar';
 import {
   Search,
   RotateCw,
-  Calendar,
-  Tag,
   CheckCircle2,
   RefreshCw,
   FileAudio,
   AlertCircle,
-  Brain,
-  Key,
   Filter,
   Loader2,
-  User,
-  Star,
-  ArrowRight,
   Trash2,
   Trash,
-  PhoneForwarded,
   ExternalLink
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -39,26 +31,14 @@ interface FileRecord {
   status: string;
   date: string;
   sale_channel: string;
+  call_direction?: string;
+  call_type?: string;
+  calltype?: string;
+  call_datetime?: string;
 }
 
 interface FilterOptions {
   brands: string[];
-  topics: string[];
-}
-
-interface SearchResult {
-  audio_file_id?: string;
-  file_name?: string;
-  sentiment?: string;
-  customer_phone?: string;
-  agent_id?: string;
-  agent_name?: string;
-  topic?: string;
-  qa_score?: number;
-  call_date?: string;
-  highlight?: string;
-  summary?: string;
-  sale_channel?: string;
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -116,17 +96,12 @@ export default function FilesPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
 
-  const [query, setQuery] = useState('');
-  const [searchType, setSearchType] = useState<'semantic' | 'keyword'>('semantic');
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [filterOptions, setFilterOptions] = useState<FilterOptions>({ brands: [], topics: [] });
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({ brands: [] });
   const [loadingFilters, setLoadingFilters] = useState(false);
   const [filters, setFilters] = useState({
     brand: '',
     sentiment: '',
-    topic: '',
+    callType: '',
     dateFrom: '',
     dateTo: ''
   });
@@ -141,14 +116,32 @@ export default function FilesPage() {
     if (!isSilent) setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ page: page.toString(), per_page: perPage.toString() });
-      if (fileSearch) params.set('search', fileSearch);
-      const res = await fetch(`${API_BASE}/api/v1/audio/list?${params}`, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setFiles(data.files || []);
-      setTotalPages(data.total_pages || 1);
-      setTotal(data.total || 0);
+      const perRequest = 200;
+      const buildParams = (targetPage: number) => {
+        const params = new URLSearchParams({ page: targetPage.toString(), per_page: perRequest.toString() });
+        if (fileSearch) params.set('search', fileSearch);
+        if (filters.brand) params.set('brand', filters.brand);
+        return params;
+      };
+
+      const firstRes = await fetch(`${API_BASE}/api/v1/audio/list?${buildParams(1)}`, { cache: 'no-store' });
+      if (!firstRes.ok) throw new Error(`HTTP ${firstRes.status}`);
+
+      const firstData = await firstRes.json();
+      const totalFromApi = Number(firstData.total || 0);
+      const firstRows = getFileRows(firstData) as unknown as FileRecord[];
+      const apiTotalPages = Math.max(1, Number(firstData.total_pages || 1));
+      const collected: FileRecord[] = [...firstRows];
+
+      for (let currentPage = 2; currentPage <= apiTotalPages; currentPage += 1) {
+        const nextRes = await fetch(`${API_BASE}/api/v1/audio/list?${buildParams(currentPage)}`, { cache: 'no-store' });
+        if (!nextRes.ok) throw new Error(`HTTP ${nextRes.status}`);
+        const nextData = await nextRes.json();
+        collected.push(...(getFileRows(nextData) as unknown as FileRecord[]));
+      }
+
+      setFiles(collected);
+      setTotal(totalFromApi || collected.length);
     } catch {
       if (!isSilent) {
         setError('ไม่สามารถเชื่อมต่อกับ API ได้ — กรุณาเปิด Backend Server');
@@ -157,7 +150,7 @@ export default function FilesPage() {
     } finally { 
       if (!isSilent) setLoading(false); 
     }
-  }, [page, fileSearch]);
+  }, [fileSearch, filters.brand]);
 
   const handleDelete = async (fileId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -284,14 +277,12 @@ export default function FilesPage() {
     const loadFilterOptions = async () => {
       setLoadingFilters(true);
       try {
-        const [brandRes, topicRes, filesRes] = await Promise.allSettled([
+        const [brandRes, filesRes] = await Promise.allSettled([
           fetch(`${API_BASE}/api/v1/analytics/brand-intelligence`, { cache: 'no-store' }),
-          fetch(`${API_BASE}/api/v1/analytics/topic-distribution`, { cache: 'no-store' }),
           fetch(`${API_BASE}/api/v1/audio/list?page=1&per_page=500`, { cache: 'no-store' })
         ]);
 
         const brands = new Set<string>();
-        const topics = new Set<string>();
 
         if (brandRes.status === 'fulfilled' && brandRes.value.ok) {
           const payload = await brandRes.value.json();
@@ -300,16 +291,6 @@ export default function FilesPage() {
             if (!isObject(item)) continue;
             const brand = toText(item.brand_name ?? item.brand ?? item.name);
             if (brand) brands.add(brand.toUpperCase());
-          }
-        }
-
-        if (topicRes.status === 'fulfilled' && topicRes.value.ok) {
-          const payload = await topicRes.value.json();
-          const items = toArray(payload, ['topic_distribution', 'topics', 'data', 'items']);
-          for (const item of items) {
-            if (!isObject(item)) continue;
-            const topic = toText(item.name ?? item.topic ?? item.category);
-            if (topic) topics.add(topic);
           }
         }
 
@@ -324,11 +305,10 @@ export default function FilesPage() {
         }
 
         setFilterOptions({
-          brands: Array.from(brands).sort((a, b) => a.localeCompare(b)),
-          topics: Array.from(topics).sort((a, b) => a.localeCompare(b))
+          brands: Array.from(brands).sort((a, b) => a.localeCompare(b))
         });
       } catch {
-        setFilterOptions({ brands: [], topics: [] });
+        setFilterOptions({ brands: [] });
       } finally {
         setLoadingFilters(false);
       }
@@ -337,47 +317,75 @@ export default function FilesPage() {
     loadFilterOptions();
   }, []);
 
-  const handleSearch = async () => {
-    if (!query.trim()) return;
-
-    setSearchLoading(true);
-    setHasSearched(true);
-    try {
-      const endpoint = searchType === 'semantic'
-        ? '/api/v1/search/semantic'
-        : '/api/v1/search/keyword';
-
-      const response = await fetch(`${API_BASE}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query,
-          filters
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Search failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-      setResults(data.results || []);
-    } catch {
-      setResults([]);
-    } finally {
-      setSearchLoading(false);
-    }
-  };
-
   const clearFilters = () => {
     setFilters({
       brand: '',
       sentiment: '',
-      topic: '',
+      callType: '',
       dateFrom: '',
       dateTo: ''
     });
+    setPage(1);
   };
+
+  const getCallType = (file: FileRecord) => {
+    const source = String(
+      file.call_type || file.call_direction || file.calltype || file.sale_channel || file.name || ''
+    ).toLowerCase();
+    if (source.includes('inbound')) return 'inbound';
+    if (source.includes('outbound')) return 'outbound';
+    return 'unknown';
+  };
+
+  const getFileDateKey = (file: FileRecord) => {
+    const raw = String(file.call_datetime || file.date || '').trim();
+    if (!raw) return '';
+    return raw.slice(0, 10);
+  };
+
+  const normalizedDateFrom = filters.dateFrom && filters.dateTo
+    ? (filters.dateFrom <= filters.dateTo ? filters.dateFrom : filters.dateTo)
+    : filters.dateFrom;
+
+  const normalizedDateTo = filters.dateFrom && filters.dateTo
+    ? (filters.dateFrom <= filters.dateTo ? filters.dateTo : filters.dateFrom)
+    : filters.dateTo;
+
+  const filteredFiles = files.filter((file) => {
+    if (filters.sentiment && String(file.sentiment || '').toLowerCase() !== filters.sentiment) {
+      return false;
+    }
+
+    if (filters.callType && getCallType(file) !== filters.callType) {
+      return false;
+    }
+
+    const fileDateKey = getFileDateKey(file);
+
+    if (normalizedDateFrom && (!fileDateKey || fileDateKey < normalizedDateFrom)) {
+      return false;
+    }
+
+    if (normalizedDateTo && (!fileDateKey || fileDateKey > normalizedDateTo)) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const paginatedFiles = filteredFiles.slice((page - 1) * perPage, page * perPage);
+
+  const hasActiveFilters = Boolean(
+    fileSearch || filters.brand || filters.sentiment || filters.callType || filters.dateFrom || filters.dateTo
+  );
+
+  useEffect(() => {
+    const nextTotalPages = Math.max(1, Math.ceil(filteredFiles.length / perPage));
+    setTotalPages(nextTotalPages);
+    if (page > nextTotalPages) {
+      setPage(nextTotalPages);
+    }
+  }, [filteredFiles.length, page]);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-';
@@ -405,270 +413,101 @@ export default function FilesPage() {
             </h1>
           </div>
 
-          <div className="space-y-6 mb-8">
-            <div className="mb-2">
-              <h2 className="text-2xl font-semibold text-slate-800">Advanced Search</h2>
-              <p className="text-slate-500 text-sm">Search through call transcripts and analytics from the Files page</p>
+          <div className="mb-8 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                  <Filter size={18} />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-slate-800">Filters</h2>
+                  <p className="text-xs text-slate-500">Filter the file list by text, brand, sentiment, call type, and date</p>
+                </div>
+              </div>
+              <button
+                onClick={clearFilters}
+                className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+              >
+                Clear All
+              </button>
             </div>
 
-            <div className="search-box bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-              <div className="search-type-selector flex gap-3 mb-6">
-                <button
-                  className={`flex items-center space-x-2 px-5 py-3 rounded-xl font-bold text-sm transition-all cursor-pointer border-2 ${
-                    searchType === 'semantic'
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-                  }`}
-                  onClick={() => setSearchType('semantic')}
-                >
-                  <Brain size={18} />
-                  <span>Semantic Search</span>
-                </button>
-                <button
-                  className={`flex items-center space-x-2 px-5 py-3 rounded-xl font-bold text-sm transition-all cursor-pointer border-2 ${
-                    searchType === 'keyword'
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-                  }`}
-                  onClick={() => setSearchType('keyword')}
-                >
-                  <Key size={18} />
-                  <span>Keyword Search</span>
-                </button>
-              </div>
-
-              <div className="search-input-group flex gap-3 mb-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
+              <div className="xl:col-span-2 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input
                   type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
-                  placeholder={
-                    searchType === 'semantic'
-                      ? 'Search by meaning (e.g., "customer requested refund", "complaint about delivery")'
-                      : 'Search by keywords (e.g., "refund", "delivery", "complaint")'
-                  }
-                  className="flex-1 px-5 py-4 border-2 border-slate-200 rounded-xl text-base focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                  placeholder="Filter files by name, customer, brand, agent..."
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  value={fileSearch}
+                  onChange={(e) => { setFileSearch(e.target.value); setPage(1); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') fetchFiles(); }}
                 />
-                <button
-                  onClick={handleSearch}
-                  disabled={searchLoading || !query.trim()}
-                  className="flex items-center space-x-2 px-8 py-4 bg-blue-600 text-white rounded-xl font-bold text-base hover:bg-blue-700 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
-                >
-                  {searchLoading ? (
-                    <>
-                      <Loader2 size={20} className="animate-spin" />
-                      <span>Searching...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Search size={20} />
-                      <span>Search</span>
-                    </>
-                  )}
-                </button>
               </div>
 
-              <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                <p className="text-xs text-slate-600">
-                  <strong className="text-blue-600">Tip:</strong>{' '}
-                  {searchType === 'semantic'
-                    ? 'Semantic search understands the meaning and context of your query, even if exact words do not match.'
-                    : 'Keyword search finds exact word matches in transcripts and analysis data.'}
-                </p>
+              <select
+                value={filters.brand}
+                onChange={(e) => { setFilters({ ...filters, brand: e.target.value }); setPage(1); }}
+                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="">All Brands</option>
+                {filterOptions.brands.map((brand) => (
+                  <option key={brand} value={brand}>{brand}</option>
+                ))}
+              </select>
+
+              <select
+                value={filters.sentiment}
+                onChange={(e) => { setFilters({ ...filters, sentiment: e.target.value }); setPage(1); }}
+                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="">All Sentiments</option>
+                <option value="positive">Positive</option>
+                <option value="neutral">Neutral</option>
+                <option value="negative">Negative</option>
+              </select>
+
+              <select
+                value={filters.callType}
+                onChange={(e) => { setFilters({ ...filters, callType: e.target.value }); setPage(1); }}
+                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="">All Call Types</option>
+                <option value="inbound">Inbound</option>
+                <option value="outbound">Outbound</option>
+                <option value="unknown">Unknown</option>
+              </select>
+
+              <div className="grid grid-cols-2 gap-3 md:col-span-2 xl:col-span-2">
+                <label className="flex flex-col gap-1">
+                  <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">From Date</span>
+                  <input
+                    type="date"
+                    value={filters.dateFrom}
+                    onChange={(e) => { setFilters({ ...filters, dateFrom: e.target.value }); setPage(1); }}
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1">
+                  <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">To Date</span>
+                  <input
+                    type="date"
+                    value={filters.dateTo}
+                    onChange={(e) => { setFilters({ ...filters, dateTo: e.target.value }); setPage(1); }}
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
               </div>
             </div>
 
-            <div className="search-filters bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <Filter size={18} className="text-slate-500" />
-                  <h3 className="text-sm font-bold text-slate-700">Filters</h3>
-                </div>
-                <button
-                  onClick={clearFilters}
-                  className="text-xs text-slate-500 hover:text-slate-700 cursor-pointer font-medium"
-                >
-                  Clear All
-                </button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                <select
-                  value={filters.brand}
-                  onChange={(e) => setFilters({ ...filters, brand: e.target.value })}
-                  className="px-4 py-3 border-2 border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 bg-white cursor-pointer"
-                >
-                  <option value="">All Brands</option>
-                  {filterOptions.brands.map((brand) => (
-                    <option key={brand} value={brand}>{brand}</option>
-                  ))}
-                </select>
+            <p className="mt-3 text-[11px] text-slate-400">
+              Date filter uses the call date shown in the table. You can fill only one side, or both sides for a range.
+            </p>
 
-                <select
-                  value={filters.sentiment}
-                  onChange={(e) => setFilters({ ...filters, sentiment: e.target.value })}
-                  className="px-4 py-3 border-2 border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 bg-white cursor-pointer"
-                >
-                  <option value="">All Sentiments</option>
-                  <option value="positive">Positive</option>
-                  <option value="neutral">Neutral</option>
-                  <option value="negative">Negative</option>
-                </select>
-
-                <select
-                  value={filters.topic}
-                  onChange={(e) => setFilters({ ...filters, topic: e.target.value })}
-                  className="px-4 py-3 border-2 border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 bg-white cursor-pointer"
-                >
-                  <option value="">All Topics</option>
-                  {filterOptions.topics.map((topic) => (
-                    <option key={topic} value={topic}>{topic}</option>
-                  ))}
-                </select>
-
-                <input
-                  type="date"
-                  value={filters.dateFrom}
-                  onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-                  className="px-4 py-3 border-2 border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 cursor-pointer"
-                />
-
-                <input
-                  type="date"
-                  value={filters.dateTo}
-                  onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-                  className="px-4 py-3 border-2 border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 cursor-pointer"
-                />
-              </div>
-              {loadingFilters && (
-                <p className="text-[11px] text-slate-400 mt-3">Loading filter options from API...</p>
-              )}
-            </div>
-
-            <div className="search-results">
-              {searchLoading && (
-                <div className="text-center py-16">
-                  <Loader2 size={40} className="animate-spin text-blue-600 mx-auto mb-4" />
-                  <p className="text-slate-600 font-medium">Searching...</p>
-                </div>
-              )}
-
-              {!searchLoading && hasSearched && results.length === 0 && (
-                <div className="text-center py-16 bg-white rounded-2xl border border-slate-100">
-                  <AlertCircle size={40} className="text-slate-300 mx-auto mb-4" />
-                  <p className="text-slate-500 font-medium">No results found</p>
-                  <p className="text-slate-400 text-sm mt-2">Try adjusting your search query or filters</p>
-                </div>
-              )}
-
-              {!searchLoading && !hasSearched && (
-                <div className="text-center py-16 bg-white rounded-2xl border border-slate-100">
-                  <Search size={40} className="text-slate-300 mx-auto mb-4" />
-                  <p className="text-slate-500 font-medium">Start your search</p>
-                  <p className="text-slate-400 text-sm mt-2">Enter a query above to search through call data</p>
-                </div>
-              )}
-
-              {results.length > 0 && (
-                <>
-                  <div className="results-count mb-4">
-                    <p className="text-sm font-bold text-slate-600">
-                      Found <span className="text-blue-600">{results.length}</span> result{results.length !== 1 ? 's' : ''}
-                    </p>
-                  </div>
-
-                  <div className="space-y-4">
-                    {results.map((result, idx) => (
-                      <div key={result.audio_file_id || idx} className="result-card bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
-                        <div className="result-header flex justify-between items-start mb-3">
-                          <div className="flex items-center space-x-3">
-                            <FileAudio size={20} className="text-blue-600" />
-                            <span className="file-name text-sm font-bold text-slate-800">
-                              {result.file_name || result.audio_file_id}
-                            </span>
-                          </div>
-                          <span className={`sentiment-badge px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                            result.sentiment === 'positive' ? 'bg-green-100 text-green-700' :
-                            result.sentiment === 'negative' ? 'bg-red-100 text-red-700' :
-                            'bg-slate-100 text-slate-700'
-                          }`}>
-                            {result.sentiment || 'Unknown'}
-                          </span>
-                        </div>
-
-                        <div className="result-meta flex flex-wrap gap-4 mb-4 text-xs text-slate-500">
-                          {result.customer_phone && (
-                            <span className="flex items-center space-x-1">
-                              <User size={14} />
-                              <span>{result.customer_phone}</span>
-                            </span>
-                          )}
-                          {result.agent_id && (
-                            <span className="flex items-center space-x-1">
-                              <User size={14} />
-                              <span>ID {result.agent_id}</span>
-                            </span>
-                          )}
-                          {result.topic && (
-                            <span className="flex items-center space-x-1">
-                              <Tag size={14} />
-                              <span>{result.topic}</span>
-                            </span>
-                          )}
-                          {result.qa_score && (
-                            <span className="flex items-center space-x-1">
-                              <Star size={14} className="text-yellow-500" />
-                              <span>QA: {result.qa_score.toFixed(1)}</span>
-                            </span>
-                          )}
-                          {result.call_date && (
-                            <span className="flex items-center space-x-1">
-                              <Calendar size={14} />
-                              <span>{new Date(result.call_date).toLocaleDateString()}</span>
-                            </span>
-                          )}
-                          {result.sale_channel && (
-                            <span className={`flex items-center space-x-1 px-2 py-0.5 rounded-full border ${
-                              result.sale_channel.toLowerCase().includes('inbound') 
-                                ? 'bg-blue-50 text-blue-600 border-blue-100' 
-                                : result.sale_channel.toLowerCase().includes('outbound')
-                                  ? 'bg-orange-50 text-orange-600 border-orange-100'
-                                  : 'bg-slate-50 text-slate-500 border-slate-100'
-                            }`}>
-                              <PhoneForwarded size={12} />
-                              <span className="font-bold">{result.sale_channel === 'Unknown' ? '-' : result.sale_channel}</span>
-                            </span>
-                          )}
-                        </div>
-
-                        {result.highlight && (
-                          <div
-                            className="result-highlight bg-yellow-50 p-4 rounded-xl mb-4 text-sm text-slate-700"
-                            dangerouslySetInnerHTML={{ __html: result.highlight }}
-                          />
-                        )}
-
-                        {result.summary && (
-                          <div className="result-summary bg-slate-50 p-4 rounded-xl mb-4 text-sm text-slate-700">
-                            {result.summary}
-                          </div>
-                        )}
-
-                        <div className="result-actions flex gap-2">
-                          <button
-                            onClick={() => result.audio_file_id && router.push(`/files/${result.audio_file_id}`)}
-                            className="flex items-center space-x-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors cursor-pointer"
-                          >
-                            <span>View Details</span>
-                            <ArrowRight size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+            {loadingFilters && (
+              <p className="mt-3 text-[11px] text-slate-400">Loading filter options from API...</p>
+            )}
           </div>
 
           {/* Error */}
@@ -687,7 +526,7 @@ export default function FilesPage() {
             <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center gap-3 md:justify-between">
               <div>
                 <h3 className="text-base font-semibold text-slate-800">File Library</h3>
-                <p className="text-xs text-slate-500">Quick filter for file list only</p>
+                <p className="text-xs text-slate-500">Browse and manage analyzed call files</p>
               </div>
               <div className="flex items-center gap-2 w-full md:w-auto">
                 {files.length > 0 && (
@@ -700,17 +539,6 @@ export default function FilesPage() {
                     <span>{deletingAll ? 'Deleting...' : 'Delete All'}</span>
                   </button>
                 )}
-                <div className="flex-1 md:w-96 relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input
-                    type="text"
-                    placeholder="Filter files by name, customer, brand, agent..."
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-100 text-sm"
-                    value={fileSearch}
-                    onChange={(e) => { setFileSearch(e.target.value); setPage(1); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter') fetchFiles(); }}
-                  />
-                </div>
                 <button
                   onClick={() => fetchFiles()}
                   className="p-2.5 bg-slate-50 text-slate-500 rounded-lg border border-slate-200 hover:bg-slate-100 cursor-pointer transition-colors"
@@ -741,14 +569,14 @@ export default function FilesPage() {
                     <RefreshCw size={24} className="animate-spin mx-auto mb-2" />
                     <p className="text-sm">กำลังโหลดข้อมูล...</p>
                   </td></tr>
-                ) : files.length === 0 ? (
+                ) : filteredFiles.length === 0 ? (
                   <tr><td colSpan={10} className="p-12 text-center text-slate-400">
                     <FileAudio size={32} className="mx-auto mb-2 opacity-50" />
-                    <p className="text-sm font-medium">ไม่พบไฟล์</p>
-                    <p className="text-xs mt-1">ลอง upload ไฟล์ใหม่จากหน้า Upload</p>
+                    <p className="text-sm font-medium">ไม่พบไฟล์ที่ตรงกับตัวกรอง</p>
+                    <p className="text-xs mt-1">ลองปรับ filters หรือกด Clear All</p>
                   </td></tr>
                 ) : (
-                  files.map((file) => (
+                  paginatedFiles.map((file) => (
                     <tr key={file.file_id}
                       onClick={() => router.push(`/files/${file.file_id}`)}
                       className="hover:bg-slate-50 transition-colors cursor-pointer group">
@@ -780,13 +608,13 @@ export default function FilesPage() {
                       <td className="p-4 text-sm font-medium text-slate-800 uppercase">{file.brand || '-'}</td>
                       <td className="p-4">
                         <span className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${
-                          String(file.name || '').toLowerCase().includes('inbound') 
+                          getCallType(file) === 'inbound'
                             ? 'bg-blue-50 text-blue-600 border-blue-100' 
-                            : String(file.name || '').toLowerCase().includes('outbound')
+                            : getCallType(file) === 'outbound'
                               ? 'bg-orange-50 text-orange-600 border-orange-100'
                               : 'bg-slate-50 text-slate-500 border-slate-100'
                         }`}>
-                          {String(file.name || '').toLowerCase().includes('inbound') ? 'Inbound' : String(file.name || '').toLowerCase().includes('outbound') ? 'Outbound' : '-'}
+                          {getCallType(file) === 'inbound' ? 'Inbound' : getCallType(file) === 'outbound' ? 'Outbound' : '-'}
                         </span>
                       </td>
                       <td className="p-4">
@@ -833,7 +661,10 @@ export default function FilesPage() {
             </table>
 
             <div className="p-4 border-t border-slate-100 flex items-center justify-between text-sm text-slate-500">
-              <span>Showing <span className="font-bold text-slate-800">{files.length}</span> of {total} entries</span>
+              <span>
+                Showing <span className="font-bold text-slate-800">{paginatedFiles.length}</span> of <span className="font-bold text-slate-800">{filteredFiles.length}</span> entries
+                {hasActiveFilters ? ` (filtered from ${total})` : ''}
+              </span>
               <div className="flex space-x-2">
                 <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}
                   className="px-4 py-2 text-slate-400 cursor-pointer hover:text-slate-600 transition-colors disabled:opacity-30">PREVIOUS</button>
