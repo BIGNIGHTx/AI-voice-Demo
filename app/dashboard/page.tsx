@@ -488,9 +488,9 @@ export default function DashboardPage() {
           {/* Top Stat Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* Total Files */}
-            <div className="bg-white rounded-2xl p-6 flex items-center gap-5 shadow-[0_2px_15px_-3px_rgba(6,81,237,0.08)] border border-slate-100">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-400 to-blue-600 shadow-[0_8px_16px_-6px_rgba(37,99,235,0.4)] flex items-center justify-center text-white border-t border-white/30 shrink-0">
-                <Folder size={26} strokeWidth={2.5} />
+            <div className="bg-white rounded-2xl p-6 flex items-center gap-5 shadow-[0_2px_15px_-3px_rgba(6,81,237,0.08)] border border-slate-100 transition-transform hover:scale-[1.02]">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-white via-indigo-50/50 to-indigo-100/30 shadow-[0_4px_15px_-3px_rgba(79,70,229,0.1),inset_0_2px_4px_rgba(255,255,255,1),inset_0_-2px_6px_rgba(79,70,229,0.1)] border border-indigo-100 flex items-center justify-center shrink-0">
+                <FileAudio size={24} strokeWidth={2} className="text-indigo-500 drop-shadow-sm" />
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Total</p>
@@ -499,9 +499,9 @@ export default function DashboardPage() {
             </div>
 
             {/* Positive Analysis */}
-            <div className="bg-white rounded-2xl p-6 flex items-center gap-5 shadow-[0_2px_15px_-3px_rgba(6,81,237,0.08)] border border-slate-100">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-[0_8px_16px_-6px_rgba(16,185,129,0.4)] flex items-center justify-center text-white border-t border-white/30 shrink-0">
-                <Smile size={26} strokeWidth={2.5} />
+            <div className="bg-white rounded-2xl p-6 flex items-center gap-5 shadow-[0_2px_15px_-3px_rgba(6,81,237,0.08)] border border-slate-100 transition-transform hover:scale-[1.02]">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-white via-emerald-50/50 to-emerald-100/30 shadow-[0_4px_15px_-3px_rgba(16,185,129,0.1),inset_0_2px_4px_rgba(255,255,255,1),inset_0_-2px_6px_rgba(16,185,129,0.1)] border border-emerald-100 flex items-center justify-center shrink-0">
+                <Smile size={24} strokeWidth={2} className="text-emerald-500 drop-shadow-sm" />
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Positive</p>
@@ -510,9 +510,9 @@ export default function DashboardPage() {
             </div>
 
             {/* Processing */}
-            <div className="bg-white rounded-2xl p-6 flex items-center gap-5 shadow-[0_2px_15px_-3px_rgba(6,81,237,0.08)] border border-slate-100">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-[0_8px_16px_-6px_rgba(245,158,11,0.4)] flex items-center justify-center text-white border-t border-white/30 shrink-0">
-                <RefreshCw size={26} strokeWidth={2.5} />
+            <div className="bg-white rounded-2xl p-6 flex items-center gap-5 shadow-[0_2px_15px_-3px_rgba(6,81,237,0.08)] border border-slate-100 transition-transform hover:scale-[1.02]">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-white via-amber-50/50 to-amber-100/30 shadow-[0_4px_15px_-3px_rgba(245,158,11,0.1),inset_0_2px_4px_rgba(255,255,255,1),inset_0_-2px_6px_rgba(245,158,11,0.1)] border border-amber-100 flex items-center justify-center shrink-0">
+                <Loader2 size={24} strokeWidth={2} className="text-amber-500 animate-[spin_3s_linear_infinite] drop-shadow-sm" />
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Processing</p>
@@ -521,9 +521,9 @@ export default function DashboardPage() {
             </div>
 
             {/* Completed */}
-            <div className="bg-white rounded-2xl p-6 flex items-center gap-5 shadow-[0_2px_15px_-3px_rgba(6,81,237,0.08)] border border-slate-100">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-400 to-indigo-600 shadow-[0_8px_16px_-6px_rgba(99,102,241,0.4)] flex items-center justify-center text-white border-t border-white/30 shrink-0">
-                <CheckCircle2 size={26} strokeWidth={2.5} />
+            <div className="bg-white rounded-2xl p-6 flex items-center gap-5 shadow-[0_2px_15px_-3px_rgba(6,81,237,0.08)] border border-slate-100 transition-transform hover:scale-[1.02]">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-white via-blue-50/50 to-blue-100/30 shadow-[0_4px_15px_-3px_rgba(37,99,235,0.1),inset_0_2px_4px_rgba(255,255,255,1),inset_0_-2px_6px_rgba(37,99,235,0.1)] border border-blue-100 flex items-center justify-center shrink-0">
+                <CheckCircle2 size={24} strokeWidth={2} className="text-blue-500 drop-shadow-sm" />
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Completed</p>
