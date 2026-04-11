@@ -175,7 +175,7 @@ const normalizeAudioFiles = (payload: unknown): AudioFileRow[] =>
       sentiment: toText(item.sentiment, 'neutral').toLowerCase(),
       brand: toText(item.brand),
       status: toText(item.status, 'UNKNOWN').toUpperCase(),
-      date: toText(item.date ?? item.call_date ?? item.upload_date)
+      date: toText(item.analyzed_date ?? item.upload_date ?? item.date ?? item.call_datetime ?? item.call_date)
     };
   });
 
@@ -387,6 +387,13 @@ export default function DashboardPage() {
     [endpointStatus]
   );
 
+  const latestAvailableDate = useMemo(() => {
+    return audioFiles
+      .map((item) => toSafeDate(item.date))
+      .filter((d): d is Date => d !== null)
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+  }, [audioFiles]);
+
   const dateLabel = selectedDate.toLocaleDateString('en-US', {
     day: '2-digit',
     month: 'short',
@@ -443,7 +450,7 @@ export default function DashboardPage() {
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold text-slate-800">Voice Analytics Dashboard</h1>
-              <p className="text-slate-500 text-sm">ข้อมูลจริงจาก Backend | มุมมอง {filterType} | {dateLabel}</p>
+              <p className="text-slate-500 text-sm">ข้อมูลจริงจาก Backend | อิงตามวันที่วิเคราะห์/อัปโหลด | มุมมอง {filterType} | {dateLabel}</p>
             </div>
 
             <div className="flex items-center gap-3">
@@ -466,11 +473,11 @@ export default function DashboardPage() {
               </div>
 
               <button
-                onClick={() => setSelectedDate(new Date())}
+                onClick={() => setSelectedDate(latestAvailableDate || new Date())}
                 className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 transition-colors cursor-pointer text-slate-700"
               >
                 <Calendar size={16} className="text-slate-400" />
-                <span className="text-[13px] font-bold uppercase tracking-tight">Today</span>
+                <span className="text-[13px] font-bold uppercase tracking-tight">Latest Data</span>
               </button>
             </div>
           </div>
