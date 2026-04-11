@@ -19,7 +19,8 @@ import {
   ArrowRight,
   Trash2,
   Trash,
-  PhoneForwarded
+  PhoneForwarded,
+  ExternalLink
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
@@ -723,6 +724,7 @@ export default function FilesPage() {
               <thead>
                 <tr className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
                   <th className="p-4 pl-6">File Name</th>
+                  <th className="p-4">Auto ID</th>
                   <th className="p-4">Sentiment</th>
                   <th className="p-4">Customer</th>
                   <th className="p-4">Agent ID</th>
@@ -735,12 +737,12 @@ export default function FilesPage() {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {loading ? (
-                  <tr><td colSpan={9} className="p-12 text-center text-slate-400">
+                  <tr><td colSpan={10} className="p-12 text-center text-slate-400">
                     <RefreshCw size={24} className="animate-spin mx-auto mb-2" />
                     <p className="text-sm">กำลังโหลดข้อมูล...</p>
                   </td></tr>
                 ) : files.length === 0 ? (
-                  <tr><td colSpan={9} className="p-12 text-center text-slate-400">
+                  <tr><td colSpan={10} className="p-12 text-center text-slate-400">
                     <FileAudio size={32} className="mx-auto mb-2 opacity-50" />
                     <p className="text-sm font-medium">ไม่พบไฟล์</p>
                     <p className="text-xs mt-1">ลอง upload ไฟล์ใหม่จากหน้า Upload</p>
@@ -755,6 +757,18 @@ export default function FilesPage() {
                           <FileAudio size={16} />
                         </div>
                         <span className="font-medium text-slate-800 text-sm truncate max-w-52">{file.name}</span>
+                      </td>
+                      <td className="p-4">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/files/${file.file_id}`);
+                          }}
+                          className="font-mono text-[11px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white px-2 py-1 rounded transition-all cursor-pointer"
+                          title="View Analysis"
+                        >
+                          AUTO-{file.file_id.substring(0, 8).toUpperCase()}
+                        </button>
                       </td>
                       <td className="p-4">
                         <span className={`px-3 py-1 rounded-full text-[11px] font-bold ${getSentimentStyle(file.sentiment)}`}>
@@ -787,18 +801,30 @@ export default function FilesPage() {
                       </td>
                       <td className="p-4 text-sm text-slate-500 whitespace-nowrap">{formatDate(file.date)}</td>
                       <td className="p-4">
-                        <button
-                          onClick={(e) => handleDelete(file.file_id, e)}
-                          disabled={deleting === file.file_id}
-                          className="flex items-center justify-center p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer disabled:opacity-50 active:scale-95"
-                          title="Delete file"
-                        >
-                          {deleting === file.file_id ? (
-                            <Loader2 size={16} className="animate-spin" />
-                          ) : (
-                            <Trash size={16} />
-                          )}
-                        </button>
+                        <div className="flex items-center space-x-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/files/${file.file_id}`);
+                            }}
+                            className="flex items-center justify-center p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-all cursor-pointer active:scale-95"
+                            title="View Analysis Detail"
+                          >
+                            <ExternalLink size={16} />
+                          </button>
+                          <button
+                            onClick={(e) => handleDelete(file.file_id, e)}
+                            disabled={deleting === file.file_id}
+                            className="flex items-center justify-center p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer disabled:opacity-50 active:scale-95"
+                            title="Delete file"
+                          >
+                            {deleting === file.file_id ? (
+                              <Loader2 size={16} className="animate-spin" />
+                            ) : (
+                              <Trash size={16} />
+                            )}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))

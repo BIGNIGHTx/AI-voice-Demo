@@ -525,6 +525,14 @@ export default function FileAnalysisDetail() {
   const parsedAgentIdFromFilename = extractAgentIdFromFilename(fileData?.original_filename);
   const displayPhone = parsedPhoneFromFilename || fileData?.customer_phone || analysis?.customer_phone || '-';
   const displayAgentId = parsedAgentIdFromFilename || analysis?.agent_id || fileData?.agent_id || '-';
+  const currentFileRouteId = String(fileData?.file_id || analysis?.file_id || fileId || '');
+  const customerPhoneForWarranty = String(parsedPhoneFromFilename || fileData?.customer_phone || analysis?.customer_phone || '').trim();
+  const warrantyAutoId = currentFileRouteId
+    .substring(0, 8)
+    .toUpperCase();
+  const customerWarrantyHref = customerPhoneForWarranty && currentFileRouteId
+    ? `/customers/CUST-${customerPhoneForWarranty}/warranty/${currentFileRouteId}`
+    : '#';
 
   const enhancedCategoryKeywords = Object.values(enhancedAnalysis?.keywords?.categories || {})
     .flatMap((item) => Array.isArray(item?.matched) ? item.matched : []);
@@ -928,32 +936,36 @@ export default function FileAnalysisDetail() {
 
                     <div className="col-span-2 pt-3 border-t border-slate-100">
                       <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-2">Warranty Information</p>
-                      <div className="space-y-3 bg-blue-50/50 p-3 rounded-lg border border-blue-100">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">Serial No.</p>
-                            <p className="text-xs font-bold text-slate-800 font-mono tracking-tight">{analysis?.serial_no || '-'}</p>
+                      <div className="rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-sky-50 p-4 shadow-sm">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div className="rounded-lg border border-white/80 bg-white/80 p-3 shadow-sm">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Serial No.</p>
+                            <p className="mt-1 text-xs font-bold text-slate-800 font-mono tracking-tight break-all">{analysis?.serial_no || '-'}</p>
                           </div>
-                   
-                        </div>
-                        <div className="flex gap-4">
-                          <div className="flex-1">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">Start Date</p>
-                            <p className="text-xs font-bold text-slate-800">{analysis?.warranty_start_date || '-'}</p>
+                          <div className="rounded-lg border border-blue-200 bg-blue-600 p-3 shadow-sm">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-blue-100">Auto ID</p>
+                            <a
+                              href={customerWarrantyHref}
+                              className="mt-1 inline-flex items-center rounded-md bg-white/15 px-2.5 py-1 text-[10px] font-bold text-white transition-all hover:bg-white hover:text-blue-700 font-mono"
+                            >
+                              AUTO-{warrantyAutoId}
+                            </a>
                           </div>
-                          <div className="flex-1">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">End Date</p>
-                            <p className="text-xs font-bold text-slate-800">{analysis?.warranty_end_date || '-'}</p>
+                          <div className="rounded-lg border border-white/80 bg-white/80 p-3 shadow-sm">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Start Date</p>
+                            <p className="mt-1 text-xs font-bold text-slate-800">{analysis?.warranty_start_date || '-'}</p>
                           </div>
-                        </div>
-                        <div className="flex gap-4">
-                          <div className="flex-1">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">Expiry Date</p>
-                            <p className="text-xs font-bold text-slate-800">{analysis?.expiry_date_of_warranty || '-'}</p>
+                          <div className="rounded-lg border border-white/80 bg-white/80 p-3 shadow-sm">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Registration Date</p>
+                            <p className="mt-1 text-xs font-bold text-slate-800">{analysis?.registrationDate || '-'}</p>
                           </div>
-                          <div className="flex-1">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">Registration Date</p>
-                            <p className="text-xs font-bold text-slate-800">{analysis?.registrationDate || '-'}</p>
+                          <div className="rounded-lg border border-white/80 bg-white/80 p-3 shadow-sm">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">End Date</p>
+                            <p className="mt-1 text-xs font-bold text-slate-800">{analysis?.warranty_end_date || '-'}</p>
+                          </div>
+                          <div className="rounded-lg border border-white/80 bg-white/80 p-3 shadow-sm">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Expiry Date</p>
+                            <p className="mt-1 text-xs font-bold text-slate-800">{analysis?.expiry_date_of_warranty || '-'}</p>
                           </div>
                         </div>
                       </div>

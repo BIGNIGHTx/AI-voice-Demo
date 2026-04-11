@@ -15,6 +15,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -37,10 +38,13 @@ interface WarrantyRecord {
 }
 
 export default function WarrantyDatabasePage() {
+  const searchParams = useSearchParams();
+  const initialSearch = searchParams.get('search') || '';
+  
   const [warranties, setWarranties] = useState<WarrantyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [showAddModal, setShowAddModal] = useState(false);
   
   // Form State
