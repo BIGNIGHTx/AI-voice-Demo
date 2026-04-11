@@ -548,7 +548,20 @@ export default function FilesPage() {
               </div>
             </div>
 
-            <table className="w-full text-left border-collapse">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[1120px] table-fixed text-left border-collapse">
+              <colgroup>
+                <col style={{ width: '28%' }} />
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '10%' }} />
+                <col style={{ width: '10%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '10%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '10%' }} />
+                <col style={{ width: '6%' }} />
+              </colgroup>
               <thead>
                 <tr className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
                   <th className="p-4 pl-6">File Name</th>
@@ -563,7 +576,7 @@ export default function FilesPage() {
                   <th className="p-4">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="bg-white">
                 {loading ? (
                   <tr><td colSpan={10} className="p-12 text-center text-slate-400">
                     <RefreshCw size={24} className="animate-spin mx-auto mb-2" />
@@ -579,12 +592,14 @@ export default function FilesPage() {
                   paginatedFiles.map((file) => (
                     <tr key={file.file_id}
                       onClick={() => router.push(`/files/${file.file_id}`)}
-                      className="hover:bg-slate-50 transition-colors cursor-pointer group">
-                      <td className="p-4 pl-6 flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-slate-50 rounded flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                          <FileAudio size={16} />
+                      className="border-0 hover:bg-slate-50 transition-colors cursor-pointer group">
+                      <td className="p-4 pl-6">
+                        <div className="flex min-w-0 items-center space-x-3">
+                          <div className="w-8 h-8 shrink-0 bg-slate-50 rounded flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                            <FileAudio size={16} />
+                          </div>
+                          <span className="block truncate text-sm font-medium text-slate-800">{file.name}</span>
                         </div>
-                        <span className="font-medium text-slate-800 text-sm truncate max-w-52">{file.name}</span>
                       </td>
                       <td className="p-4">
                         <button
@@ -659,6 +674,7 @@ export default function FilesPage() {
                 )}
               </tbody>
             </table>
+            </div>
 
             <div className="p-4 border-t border-slate-100 flex items-center justify-between text-sm text-slate-500">
               <span>
