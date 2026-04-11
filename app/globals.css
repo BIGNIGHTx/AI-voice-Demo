@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: var(--font-montserrat), var(--font-sukhumvit), sans-serif;
+  --font-sans: var(--font-montserrat), var(--font-sarabun), sans-serif;
 }
 
 body {
-  font-family: var(--font-montserrat), var(--font-sukhumvit), sans-serif;
+  font-family: var(--font-montserrat), var(--font-sarabun), sans-serif;
 }
 
 /* ═══════════════════════════════════════════════════════════

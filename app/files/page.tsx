@@ -16,7 +16,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -37,6 +37,18 @@ interface FileRecord {
   calltype?: string;
   call_datetime?: string;
   upload_date?: string;
+  server_file_id?: string;
+  is_local_upload?: boolean;
+  local_upload_error?: string;
+}
+
+interface LocalUpload {
+  temp_id: string;
+  server_file_id?: string;
+  name: string;
+  created_at: string;
+  status: 'UPLOADING' | 'PROCESSING' | 'ERROR';
+  error?: string;
 }
 
 interface FilterOptions {
@@ -88,10 +100,47 @@ const yieldToMain = async () => {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 };
 
+const UPLOAD_ACCEPT = '.mp3,.wav,.m4a,.aac,.ogg,.flac,.wma,.opus';
+
+const buildFilesSignature = (items: FileRecord[], totalCount: number): string => (
+  `${totalCount}::${items.map((file) => [
+    file.file_id,
+    file.name,
+    file.status,
+    file.sentiment,
+    file.brand,
+    file.date,
+    file.upload_date || ''
+  ].join('~')).join('|')}`
+);
+
+const toOptimisticFileRecord = (upload: LocalUpload): FileRecord => ({
+  file_id: upload.temp_id,
+  server_file_id: upload.server_file_id,
+  name: upload.name,
+  customer: '-',
+  agent: '-',
+  agent_name: '',
+  brand: '-',
+  product: '',
+  sentiment: '-',
+  status: upload.status,
+  date: upload.created_at,
+  sale_channel: '-',
+  call_direction: 'Unknown',
+  call_type: 'Unknown',
+  calltype: 'unknown',
+  call_datetime: upload.created_at,
+  upload_date: upload.created_at,
+  is_local_upload: true,
+  local_upload_error: upload.error,
+});
+
 export default function FilesPage() {
   const router = useRouter();
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [localUploads, setLocalUploads] = useState<LocalUpload[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [fileSearch, setFileSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -111,12 +160,63 @@ export default function FilesPage() {
 
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+  const filesRef = useRef<FileRecord[]>([]);
+  const latestFetchIdRef = useRef(0);
+  const filesSignatureRef = useRef('');
 
   const perPage = 10;
 
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
+
+  const commitServerFiles = useCallback((nextFiles: FileRecord[], nextTotal: number) => {
+    const nextSignature = buildFilesSignature(nextFiles, nextTotal);
+
+    if (filesSignatureRef.current !== nextSignature) {
+      filesSignatureRef.current = nextSignature;
+      setFiles(nextFiles);
+    }
+
+    setTotal((prev) => (prev === nextTotal ? prev : nextTotal));
+  }, []);
+
+  const resetServerFiles = useCallback((nextFiles: FileRecord[], nextTotal: number) => {
+    filesSignatureRef.current = buildFilesSignature(nextFiles, nextTotal);
+    setFiles(nextFiles);
+    setTotal(nextTotal);
+  }, []);
+
+  const getUploadErrorMessage = useCallback(async (response: Response) => {
+    try {
+      const payload: unknown = await response.json();
+      if (isObject(payload)) {
+        const detail = toText(payload.detail);
+        if (detail) return detail;
+
+        const message = toText(payload.message);
+        if (message) return message;
+      }
+    } catch {
+      // ignore JSON parse failure and fall back to HTTP status
+    }
+
+    return `HTTP ${response.status}`;
+  }, []);
+
   const fetchFiles = useCallback(async (silent = false) => {
+    const fetchId = latestFetchIdRef.current + 1;
+    latestFetchIdRef.current = fetchId;
+
     const isSilent = typeof silent === 'boolean' ? silent : false;
-    if (!isSilent) setLoading(true);
+    const hasVisibleFiles = filesRef.current.length > 0;
+    const shouldBlockTable = !isSilent && !hasVisibleFiles;
+
+    if (shouldBlockTable) {
+      setLoading(true);
+    }
+
     setError(null);
     try {
       const perRequest = 200;
@@ -136,29 +236,163 @@ export default function FilesPage() {
       const apiTotalPages = Math.max(1, Number(firstData.total_pages || 1));
       const collected: FileRecord[] = [...firstRows];
 
-      for (let currentPage = 2; currentPage <= apiTotalPages; currentPage += 1) {
-        const nextRes = await fetch(`${API_BASE}/api/v1/audio/list?${buildParams(currentPage)}`, { cache: 'no-store' });
-        if (!nextRes.ok) throw new Error(`HTTP ${nextRes.status}`);
-        const nextData = await nextRes.json();
-        collected.push(...(getFileRows(nextData) as unknown as FileRecord[]));
+      if (shouldBlockTable && fetchId === latestFetchIdRef.current) {
+        commitServerFiles(firstRows, totalFromApi || firstRows.length);
+        setLoading(false);
       }
 
-      setFiles(collected);
-      setTotal(totalFromApi || collected.length);
+      if (apiTotalPages > 1) {
+        const nextPages = Array.from({ length: apiTotalPages - 1 }, (_, index) => index + 2);
+        const remainingResults = await Promise.all(
+          nextPages.map(async (currentPage) => {
+            const nextRes = await fetch(`${API_BASE}/api/v1/audio/list?${buildParams(currentPage)}`, { cache: 'no-store' });
+            if (!nextRes.ok) throw new Error(`HTTP ${nextRes.status}`);
+            const nextData = await nextRes.json();
+            return getFileRows(nextData) as unknown as FileRecord[];
+          })
+        );
+
+        for (const rows of remainingResults) {
+          collected.push(...rows);
+        }
+      }
+
+      if (fetchId !== latestFetchIdRef.current) {
+        return;
+      }
+
+      commitServerFiles(collected, totalFromApi || collected.length);
     } catch {
       if (!isSilent) {
         setError('ไม่สามารถเชื่อมต่อกับ API ได้ — กรุณาเปิด Backend Server');
-        setFiles([]);
+        if (!hasVisibleFiles) {
+          resetServerFiles([], 0);
+        }
       }
-    } finally { 
-      if (!isSilent) setLoading(false); 
+    } finally {
+      if (shouldBlockTable && fetchId === latestFetchIdRef.current) {
+        setLoading(false);
+      }
     }
-  }, [fileSearch, filters.brand]);
+  }, [commitServerFiles, fileSearch, filters.brand, resetServerFiles]);
+
+  useEffect(() => {
+    if (files.length === 0) return;
+
+    const serverIds = new Set(files.map((file) => file.file_id));
+    setLocalUploads((prev) => {
+      const next = prev.filter((upload) => (
+        !upload.server_file_id || !serverIds.has(upload.server_file_id)
+      ));
+
+      return next.length === prev.length ? prev : next;
+    });
+  }, [files]);
+
+  const handleUploadButtonClick = () => {
+    uploadInputRef.current?.click();
+  };
+
+  const startAutoAnalysis = useCallback(async (fileId: string) => {
+    const response = await fetch(`${API_BASE}/api/v1/ai/analyze/${fileId}`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error(await getUploadErrorMessage(response));
+    }
+
+    await response.json().catch(() => null);
+  }, [getUploadErrorMessage]);
+
+  const handleUploadSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files || []);
+    event.target.value = '';
+
+    if (selectedFiles.length === 0) return;
+
+    setPage(1);
+    setError(null);
+
+    const batchBase = Date.now();
+    const uploads = selectedFiles.map((file, index) => ({
+      temp_id: `local-upload-${batchBase}-${index}`,
+      name: file.name,
+      created_at: new Date(batchBase + index).toISOString(),
+      status: 'UPLOADING' as const,
+    }));
+
+    setLocalUploads((prev) => [...uploads, ...prev]);
+
+    for (let index = 0; index < selectedFiles.length; index += 1) {
+      const selectedFile = selectedFiles[index];
+      const upload = uploads[index];
+      let serverFileId = '';
+
+      try {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+
+        const response = await fetch(`${API_BASE}/api/v1/audio/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(await getUploadErrorMessage(response));
+        }
+
+        const payload: unknown = await response.json().catch(() => null);
+        serverFileId = isObject(payload) ? toText(payload.file_id) : '';
+
+        if (!serverFileId) {
+          throw new Error('อัปโหลดสำเร็จ แต่ไม่พบ file_id จากระบบ');
+        }
+
+        await startAutoAnalysis(serverFileId);
+
+        setLocalUploads((prev) => prev.map((item) => (
+          item.temp_id === upload.temp_id
+            ? {
+                ...item,
+                status: 'PROCESSING',
+                server_file_id: serverFileId || undefined,
+                error: undefined,
+              }
+            : item
+        )));
+
+        void fetchFiles(true);
+      } catch (uploadError: unknown) {
+        const baseMessage = uploadError instanceof Error ? uploadError.message : 'อัปโหลดไฟล์ไม่สำเร็จ';
+        const message = serverFileId
+          ? `อัปโหลดแล้ว แต่เริ่มวิเคราะห์อัตโนมัติไม่สำเร็จ: ${baseMessage}`
+          : baseMessage;
+
+        if (serverFileId) {
+          setError(message);
+        }
+
+        setLocalUploads((prev) => prev.map((item) => (
+          item.temp_id === upload.temp_id
+            ? {
+                ...item,
+                status: 'ERROR',
+                server_file_id: serverFileId || item.server_file_id,
+                error: message,
+              }
+            : item
+        )));
+      }
+    }
+
+    void fetchFiles(true);
+  };
 
   const handleDelete = async (fileId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm('ต้องการลบไฟล์นี้จริงหรือไม่?')) return;
-    
+
     setDeleting(fileId);
     try {
       const res = await fetch(`${API_BASE}/api/v1/audio/delete/${fileId}`, { method: 'DELETE' });
@@ -233,8 +467,7 @@ export default function FilesPage() {
         const verifyData = await verifyRes.json();
         const remaining = getFileRows(verifyData).length;
         if (remaining === 0) {
-          setFiles([]);
-          setTotal(0);
+          resetServerFiles([], 0);
           setTotalPages(1);
           setPage(1);
         }
@@ -254,7 +487,7 @@ export default function FilesPage() {
     } finally {
       setDeletingAll(false);
     }
-  }, [fetchFiles]);
+  }, [fetchFiles, resetServerFiles]);
 
   const handleDeleteAll = () => {
     if (!confirm(`ต้องการลบไฟล์ทั้งหมด ${total} ไฟล์จริงหรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้!`)) return;
@@ -265,14 +498,14 @@ export default function FilesPage() {
     }, 0);
   };
 
-  useEffect(() => { 
-    fetchFiles(); 
-    
+  useEffect(() => {
+    fetchFiles();
+
     // Auto-refresh file list every 5 seconds
     const interval = setInterval(() => {
       fetchFiles(true);
     }, 5000);
-    
+
     return () => clearInterval(interval);
   }, [fetchFiles]);
 
@@ -361,7 +594,20 @@ export default function FilesPage() {
     ? (filters.dateFrom <= filters.dateTo ? filters.dateTo : filters.dateFrom)
     : filters.dateTo;
 
-  const filteredFiles = files.filter((file) => {
+  const serverFileIds = new Set(files.map((file) => file.file_id));
+
+  const optimisticFiles = localUploads
+    .filter((upload) => upload.status === 'ERROR' || !upload.server_file_id || !serverFileIds.has(upload.server_file_id))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .map(toOptimisticFileRecord);
+
+  const displayTotal = total + optimisticFiles.length;
+
+  const filteredFiles = [...optimisticFiles, ...files].filter((file) => {
+    if (file.is_local_upload) {
+      return true;
+    }
+
     if (filters.sentiment && String(file.sentiment || '').toLowerCase() !== filters.sentiment) {
       return false;
     }
@@ -413,6 +659,14 @@ export default function FilesPage() {
 
   const getAutoIdLabel = (fileId: string) => `AUTO-${fileId.slice(0, 8).toUpperCase()}`;
 
+  const getFileAutoIdLabel = (file: FileRecord) => {
+    if (file.is_local_upload) {
+      return file.status === 'ERROR' ? 'UPLOAD-ERR' : 'UPLOADING';
+    }
+
+    return getAutoIdLabel(file.file_id);
+  };
+
   const getSentimentStyle = (s: string) => {
     switch (s?.toUpperCase()) {
       case 'POSITIVE': return 'bg-emerald-50 text-emerald-600';
@@ -421,15 +675,47 @@ export default function FilesPage() {
     }
   };
 
+  const getStatusTone = (status: string) => {
+    switch (String(status || '').toUpperCase()) {
+      case 'COMPLETE':
+        return 'complete';
+      case 'ERROR':
+        return 'error';
+      case 'UPLOADING':
+        return 'uploading';
+      default:
+        return 'processing';
+    }
+  };
+
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
       <Sidebar />
       <main className="flex-1 p-6 overflow-auto">
         <div className="max-w-full mx-auto">
-          <div className="flex justify-between items-center mb-8">
-            <h1 className="text-2xl font-semibold text-slate-800 flex items-center gap-2">
-              <span className="text-blue-600"><FileAudio size={24} /></span> Files
-            </h1>
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+            <div className="flex items-center gap-5">
+              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-white via-indigo-50/50 to-indigo-100/20 shadow-[0_4px_15px_-3px_rgba(99,102,241,0.1),inset_0_2px_4px_rgba(255,255,255,1),inset_0_-2px_6px_rgba(99,102,241,0.1)] border border-indigo-100 flex items-center justify-center shrink-0">
+                <FileAudio size={26} strokeWidth={1.5} className="text-indigo-600 drop-shadow-sm" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Files Library</h1>
+                <p className="text-slate-400 text-sm font-medium">จัดการและตรวจสอบไฟล์เสียงทั้งหมดที่ถูกประมวลผล</p>
+              </div>
+            </div>
+
+            <div className="flex gap-8">
+              <div className="text-right">
+                <div className="text-3xl font-black text-slate-800 tracking-tight">{displayTotal.toLocaleString()}</div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">รายการไฟล์ทั้งหมด</div>
+              </div>
+              <div className="w-px h-10 bg-slate-200"></div>
+              <div className="text-right">
+                <div className="text-3xl font-black text-indigo-600 tracking-tight">{filteredFiles.length.toLocaleString()}</div>
+                <div className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">ตามตัวเลือกตัวกรอง</div>
+              </div>
+            </div>
           </div>
 
           <div className="mb-8 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
@@ -444,8 +730,16 @@ export default function FilesPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <input
+                  ref={uploadInputRef}
+                  type="file"
+                  multiple
+                  accept={UPLOAD_ACCEPT}
+                  className="hidden"
+                  onChange={handleUploadSelection}
+                />
                 <button
-                  onClick={() => router.push('/upload')}
+                  onClick={handleUploadButtonClick}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-800"
                 >
                   <CloudUpload size={16} />
@@ -605,156 +899,199 @@ export default function FilesPage() {
             </div>
 
             <div className="w-full">
-            <table className="w-full table-fixed text-left border-collapse">
-              <thead>
-                <tr className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                  <th className="w-[22%] px-3 py-3.5 pl-5">File Name</th>
-                  <th className="hidden 2xl:table-cell w-[10%] px-3 py-3.5">Auto ID</th>
-                  <th className="w-[9%] px-3 py-3.5">Sentiment</th>
-                  <th className="w-[12%] px-3 py-3.5">Customer</th>
-                  <th className="hidden xl:table-cell w-[7%] px-3 py-3.5">Agent ID</th>
-                  <th className="w-[8%] px-3 py-3.5">Brand</th>
-                  <th className="w-[8%] px-3 py-3.5">Call type</th>
-                  <th className="hidden xl:table-cell w-[7%] px-3 py-3.5">Status</th>
-                  <th className="hidden lg:table-cell w-[7%] px-3 py-3.5">Date</th>
-                  <th className="w-[9%] px-3 py-3.5 pr-5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white">
-                {loading ? (
-                  <tr><td colSpan={10} className="p-12 text-center text-slate-400">
-                    <RefreshCw size={24} className="animate-spin mx-auto mb-2" />
-                    <p className="text-sm">กำลังโหลดข้อมูล...</p>
-                  </td></tr>
-                ) : filteredFiles.length === 0 ? (
-                  <tr><td colSpan={10} className="p-12 text-center text-slate-400">
-                    <FileAudio size={32} className="mx-auto mb-2 opacity-50" />
-                    <p className="text-sm font-medium">ไม่พบไฟล์ที่ตรงกับตัวกรอง</p>
-                    <p className="text-xs mt-1">ลองปรับ filters หรือกด Clear All</p>
-                  </td></tr>
-                ) : (
-                  paginatedFiles.map((file) => (
-                    <tr key={file.file_id}
-                      onClick={() => router.push(`/files/${file.file_id}`)}
-                      className="border-0 hover:bg-slate-50 transition-colors cursor-pointer group">
-                      <td className="px-3 py-3 pl-5 align-middle">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-slate-50 text-slate-400 transition-colors group-hover:bg-blue-50 group-hover:text-blue-600">
-                            <FileAudio size={16} />
-                          </div>
-                          <div className="min-w-0">
-                            <span className="block truncate text-sm font-medium text-slate-800" title={file.name}>{file.name}</span>
-                            <span className="mt-1 block truncate text-[10px] text-slate-400 2xl:hidden" title={getAutoIdLabel(file.file_id)}>
-                              {getAutoIdLabel(file.file_id)}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="hidden 2xl:table-cell px-3 py-3 align-middle">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/files/${file.file_id}`);
-                          }}
-                          className="rounded bg-blue-50 px-2 py-1 font-mono text-[10px] font-bold text-blue-600 transition-all hover:bg-blue-600 hover:text-white cursor-pointer"
-                          title="View Analysis"
-                        >
-                          {getAutoIdLabel(file.file_id)}
-                        </button>
-                      </td>
-                      <td className="px-3 py-3 align-middle">
-                        <span className={`inline-flex max-w-full truncate rounded-full px-2.5 py-1 text-[10px] font-bold ${getSentimentStyle(file.sentiment)}`}>
-                          {file.sentiment}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 align-middle">
-                        <div className="min-w-0">
-                          <span className="block truncate text-sm text-slate-600" title={file.customer || '-'}>{file.customer || '-'}</span>
-                          <span className="mt-1 block truncate text-[10px] text-slate-400 xl:hidden" title={`Agent: ${file.agent || '-'}`}>
-                            Agent: {file.agent || '-'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="hidden xl:table-cell px-3 py-3 text-sm text-slate-600 align-middle">ID {file.agent || '-'}</td>
-                      <td className="px-3 py-3 align-middle">
-                        <div className="min-w-0">
-                          <span className="block truncate text-sm font-medium uppercase text-slate-800" title={file.brand || '-'}>{file.brand || '-'}</span>
-                          <span className="mt-1 block truncate text-[10px] text-slate-400 xl:hidden" title={file.status || '-'}>
-                            {file.status || '-'}
-                          </span>
-                          <span className="mt-1 block truncate text-[10px] text-slate-400 lg:hidden" title={formatDate(file.date)}>
-                            {formatDate(file.date)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 align-middle">
-                        <span className={`inline-flex max-w-full truncate rounded-lg border px-2 py-1 text-[10px] font-bold ${
-                           getCallType(file) === 'inbound'
-                             ? 'bg-blue-50 text-blue-600 border-blue-100' 
-                             : getCallType(file) === 'outbound'
-                               ? 'bg-orange-50 text-orange-600 border-orange-100'
-                               : 'bg-slate-50 text-slate-500 border-slate-100'
-                        }`}>
-                          {getCallType(file) === 'inbound' ? 'Inbound' : getCallType(file) === 'outbound' ? 'Outbound' : '-'}
-                        </span>
-                      </td>
-                      <td className="hidden xl:table-cell px-3 py-3 align-middle">
-                        <span className={`inline-flex items-center space-x-1 text-[11px] font-bold ${
-                          file.status === 'COMPLETE' ? 'text-emerald-500' : 'text-orange-500'
-                        }`}>
-                          {file.status === 'COMPLETE'
-                            ? <CheckCircle2 size={12} />
-                            : <RefreshCw size={12} className="animate-spin" />}
-                          <span>{file.status}</span>
-                        </span>
-                      </td>
-                      <td className="hidden lg:table-cell px-3 py-3 text-sm text-slate-500 whitespace-nowrap align-middle">{formatDate(file.date)}</td>
-                      <td className="px-3 py-3 align-middle">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
+              <table className="w-full table-fixed text-left border-collapse">
+                <thead>
+                  <tr className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                    <th className="w-[22%] px-3 py-3.5 pl-5">File Name</th>
+                    <th className="hidden 2xl:table-cell w-[10%] px-3 py-3.5">Auto ID</th>
+                    <th className="w-[9%] px-3 py-3.5">Sentiment</th>
+                    <th className="w-[12%] px-3 py-3.5">Customer</th>
+                    <th className="hidden xl:table-cell w-[7%] px-3 py-3.5">Agent ID</th>
+                    <th className="w-[8%] px-3 py-3.5">Brand</th>
+                    <th className="w-[8%] px-3 py-3.5">Call type</th>
+                    <th className="hidden xl:table-cell w-[7%] px-3 py-3.5">Status</th>
+                    <th className="hidden lg:table-cell w-[7%] px-3 py-3.5">Date</th>
+                    <th className="w-[9%] px-3 py-3.5 pr-5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white">
+                  {loading && filteredFiles.length === 0 ? (
+                    <tr><td colSpan={10} className="p-12 text-center text-slate-400">
+                      <RefreshCw size={24} className="animate-spin mx-auto mb-2" />
+                      <p className="text-sm">กำลังโหลดข้อมูล...</p>
+                    </td></tr>
+                  ) : filteredFiles.length === 0 ? (
+                    <tr><td colSpan={10} className="p-12 text-center text-slate-400">
+                      <FileAudio size={32} className="mx-auto mb-2 opacity-50" />
+                      <p className="text-sm font-medium">ไม่พบไฟล์ที่ตรงกับตัวกรอง</p>
+                      <p className="text-xs mt-1">ลองปรับ filters หรือกด Clear All</p>
+                    </td></tr>
+                  ) : (
+                    paginatedFiles.map((file) => {
+                      const isLocalUpload = Boolean(file.is_local_upload);
+                      const canOpenFile = !isLocalUpload;
+                      const autoIdLabel = getFileAutoIdLabel(file);
+                      const statusTone = getStatusTone(file.status);
+
+                      return (
+                        <tr
+                          key={file.file_id}
+                          onClick={() => {
+                            if (canOpenFile) {
                               router.push(`/files/${file.file_id}`);
-                            }}
-                            className="flex items-center justify-center rounded-lg p-1.5 text-blue-600 transition-all hover:bg-blue-100 cursor-pointer active:scale-95"
-                            title="View Analysis Detail"
-                          >
-                            <ExternalLink size={16} />
-                          </button>
-                          <button
-                            onClick={(e) => handleDelete(file.file_id, e)}
-                            disabled={deleting === file.file_id}
-                            className="flex items-center justify-center rounded-lg p-1.5 text-red-500 transition-all hover:bg-red-50 cursor-pointer disabled:opacity-50 active:scale-95"
-                            title="Delete file"
-                          >
-                            {deleting === file.file_id ? (
-                              <Loader2 size={16} className="animate-spin" />
+                            }
+                          }}
+                          className={`border-0 transition-colors ${canOpenFile ? 'cursor-pointer group hover:bg-slate-50' : 'bg-blue-50/20'}`}
+                        >
+                          <td className="px-3 py-3 pl-5 align-middle">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded ${canOpenFile
+                                ? 'bg-slate-50 text-slate-400 transition-colors group-hover:bg-blue-50 group-hover:text-blue-600'
+                                : 'bg-blue-50 text-blue-600'
+                                }`}>
+                                <FileAudio size={16} />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="block truncate text-sm font-medium text-slate-800" title={file.name}>{file.name}</span>
+                                <span className="mt-1 block truncate text-[10px] text-slate-400 2xl:hidden" title={autoIdLabel}>
+                                  {autoIdLabel}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="hidden 2xl:table-cell px-3 py-3 align-middle">
+                            {canOpenFile ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  router.push(`/files/${file.file_id}`);
+                                }}
+                                className="rounded bg-blue-50 px-2 py-1 font-mono text-[10px] font-bold text-blue-600 transition-all hover:bg-blue-600 hover:text-white cursor-pointer"
+                                title="View Analysis"
+                              >
+                                {autoIdLabel}
+                              </button>
                             ) : (
-                              <Trash size={16} />
+                              <span className="rounded bg-blue-50 px-2 py-1 font-mono text-[10px] font-bold text-blue-600">
+                                {autoIdLabel}
+                              </span>
                             )}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                          </td>
+                          <td className="px-3 py-3 align-middle">
+                            <span className={`inline-flex max-w-full truncate rounded-full px-2.5 py-1 text-[10px] font-bold ${getSentimentStyle(file.sentiment)}`}>
+                              {file.sentiment}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 align-middle">
+                            <div className="min-w-0">
+                              <span className="block truncate text-sm text-slate-600" title={file.customer || '-'}>{file.customer || '-'}</span>
+                              {file.local_upload_error ? (
+                                <span className="mt-1 block truncate text-[10px] text-red-500" title={file.local_upload_error}>
+                                  {file.local_upload_error}
+                                </span>
+                              ) : (
+                                <span className="mt-1 block truncate text-[10px] text-slate-400 xl:hidden" title={`Agent: ${file.agent || '-'}`}>
+                                  Agent: {file.agent || '-'}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="hidden xl:table-cell px-3 py-3 text-sm text-slate-600 align-middle">ID {file.agent || '-'}</td>
+                          <td className="px-3 py-3 align-middle">
+                            <div className="min-w-0">
+                              <span className="block truncate text-sm font-medium uppercase text-slate-800" title={file.brand || '-'}>{file.brand || '-'}</span>
+                              <span className="mt-1 block truncate text-[10px] text-slate-400 xl:hidden" title={file.status || '-'}>
+                                {file.status || '-'}
+                              </span>
+                              <span className="mt-1 block truncate text-[10px] text-slate-400 lg:hidden" title={formatDate(file.date)}>
+                                {formatDate(file.date)}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 align-middle">
+                            <span className={`inline-flex max-w-full truncate rounded-lg border px-2 py-1 text-[10px] font-bold ${getCallType(file) === 'inbound'
+                              ? 'bg-blue-50 text-blue-600 border-blue-100'
+                              : getCallType(file) === 'outbound'
+                                ? 'bg-orange-50 text-orange-600 border-orange-100'
+                                : 'bg-slate-50 text-slate-500 border-slate-100'
+                              }`}>
+                              {getCallType(file) === 'inbound' ? 'Inbound' : getCallType(file) === 'outbound' ? 'Outbound' : '-'}
+                            </span>
+                          </td>
+                          <td className="hidden xl:table-cell px-3 py-3 align-middle">
+                            <span className={`inline-flex items-center space-x-1 text-[11px] font-bold ${statusTone === 'complete'
+                              ? 'text-emerald-500'
+                              : statusTone === 'error'
+                                ? 'text-red-500'
+                                : statusTone === 'uploading'
+                                  ? 'text-blue-600'
+                                  : 'text-orange-500'
+                              }`}>
+                              {statusTone === 'complete' ? (
+                                <CheckCircle2 size={12} />
+                              ) : statusTone === 'error' ? (
+                                <AlertCircle size={12} />
+                              ) : statusTone === 'uploading' ? (
+                                <Loader2 size={12} className="animate-spin" />
+                              ) : (
+                                <RefreshCw size={12} className="animate-spin" />
+                              )}
+                              <span>{file.status}</span>
+                            </span>
+                          </td>
+                          <td className="hidden lg:table-cell px-3 py-3 text-sm text-slate-500 whitespace-nowrap align-middle">{formatDate(file.date)}</td>
+                          <td className="px-3 py-3 align-middle">
+                            {canOpenFile ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/files/${file.file_id}`);
+                                  }}
+                                  className="flex items-center justify-center rounded-lg p-1.5 text-blue-600 transition-all hover:bg-blue-100 cursor-pointer active:scale-95"
+                                  title="View Analysis Detail"
+                                >
+                                  <ExternalLink size={16} />
+                                </button>
+                                <button
+                                  onClick={(e) => handleDelete(file.file_id, e)}
+                                  disabled={deleting === file.file_id}
+                                  className="flex items-center justify-center rounded-lg p-1.5 text-red-500 transition-all hover:bg-red-50 cursor-pointer disabled:opacity-50 active:scale-95"
+                                  title="Delete file"
+                                >
+                                  {deleting === file.file_id ? (
+                                    <Loader2 size={16} className="animate-spin" />
+                                  ) : (
+                                    <Trash size={16} />
+                                  )}
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-right text-[10px] font-medium text-slate-400">
+                                {statusTone === 'error' ? 'Upload failed' : 'Waiting...'}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
 
             <div className="flex flex-col gap-3 border-t border-slate-100 p-4 text-sm text-slate-500 lg:flex-row lg:items-center lg:justify-between">
               <span>
                 Showing <span className="font-bold text-slate-800">{paginatedFiles.length}</span> of <span className="font-bold text-slate-800">{filteredFiles.length}</span> entries
-                {hasActiveFilters ? ` (filtered from ${total})` : ''}
+                {hasActiveFilters ? ` (filtered from ${displayTotal})` : ''}
               </span>
               <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                 <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}
                   className="px-3 py-2 text-slate-400 cursor-pointer transition-colors hover:text-slate-600 disabled:opacity-30">PREVIOUS</button>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                   <button key={p} onClick={() => setPage(p)}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center font-medium cursor-pointer transition-colors ${
-                      p === page ? 'bg-blue-700 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'
-                    }`}>{p}</button>
+                    className={`w-8 h-8 rounded-full flex items-center justify-center font-medium cursor-pointer transition-colors ${p === page ? 'bg-blue-700 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'
+                      }`}>{p}</button>
                 ))}
                 <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}
                   className="px-3 py-2 text-slate-600 font-medium transition-colors hover:text-slate-800 cursor-pointer disabled:opacity-30">NEXT</button>

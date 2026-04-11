@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { Montserrat } from "next/font/google";
-import localFont from "next/font/local";
+import { Montserrat, Sarabun } from "next/font/google";
 import "./globals.css";
 import Chatbot from '@/components/Chatbot';
 
@@ -10,9 +9,10 @@ const montserrat = Montserrat({
   display: "swap",
 });
 
-const sukhumvit = localFont({
-  src: "./font/SukhumvitSet-Medium.ttf",
-  variable: "--font-sukhumvit",
+const sarabun = Sarabun({
+  weight: ["100", "200", "300", "400", "500", "600", "700", "800"],
+  subsets: ["thai", "latin"],
+  variable: "--font-sarabun",
   display: "swap",
 });
 
@@ -27,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="th" className={`${montserrat.variable} ${sukhumvit.variable}`}>
+    <html lang="th" className={`${montserrat.variable} ${sarabun.variable}`}>
       <body className="font-sans antialiased">
         {children}
         <Chatbot />

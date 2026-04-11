@@ -2,7 +2,7 @@
 
 import Sidebar from '@/components/Sidebar';
 import { FileUp, Music, X, ArrowRight, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
-import { useState, useRef, DragEvent } from 'react';
+import { useState, useRef, DragEvent, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -26,6 +26,29 @@ export default function UploadPage() {
 
   const getErrorMessage = (error: unknown): string =>
     error instanceof Error ? error.message : 'Upload failed';
+
+  const getApiErrorMessage = useCallback(async (response: Response) => {
+    try {
+      const payload: unknown = await response.json();
+      if (payload && typeof payload === 'object') {
+        const detail = typeof (payload as { detail?: unknown }).detail === 'string'
+          ? (payload as { detail: string }).detail.trim()
+          : '';
+
+        if (detail) return detail;
+
+        const message = typeof (payload as { message?: unknown }).message === 'string'
+          ? (payload as { message: string }).message.trim()
+          : '';
+
+        if (message) return message;
+      }
+    } catch {
+      // ignore JSON parse failure and fall back to HTTP status
+    }
+
+    return `HTTP ${response.status}`;
+  }, []);
 
   const formatSize = (bytes: number) => {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -77,13 +100,15 @@ export default function UploadPage() {
     fileInputRef.current?.click();
   };
 
-  const processUpload = async () => {
+  const processUpload = useCallback(async () => {
     if (queue.length === 0 || isProcessing) return;
     setIsProcessing(true);
 
     for (let i = 0; i < queue.length; i++) {
       const item = queue[i];
       if (item.status !== 'pending') continue;
+
+      let serverFileId = '';
 
       // Update status to uploading
       setQueue(prev => prev.map(f => f.id === item.id ? { ...f, status: 'uploading' as const } : f));
@@ -99,21 +124,46 @@ export default function UploadPage() {
           body: formData,
         });
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        await res.json().catch(() => null);
+        if (!res.ok) throw new Error(await getApiErrorMessage(res));
+
+        const payload: unknown = await res.json().catch(() => null);
+        serverFileId = payload && typeof payload === 'object' && typeof (payload as { file_id?: unknown }).file_id === 'string'
+          ? (payload as { file_id: string }).file_id.trim()
+          : '';
+
+        if (!serverFileId) {
+          throw new Error('Upload succeeded but no file_id was returned');
+        }
+
+        const analysisRes = await fetch(`${API_BASE}/api/v1/ai/analyze/${serverFileId}`, {
+          method: 'POST',
+        });
+
+        if (!analysisRes.ok) throw new Error(await getApiErrorMessage(analysisRes));
+        await analysisRes.json().catch(() => null);
 
         setQueue(prev => prev.map(f =>
           f.id === item.id ? { ...f, status: 'done' as const } : f
         ));
       } catch (err: unknown) {
+        const baseMessage = getErrorMessage(err);
+        const errorMessage = serverFileId
+          ? `Upload complete but auto analysis failed: ${baseMessage}`
+          : baseMessage;
+
         setQueue(prev => prev.map(f =>
-          f.id === item.id ? { ...f, status: 'error' as const, error: getErrorMessage(err) } : f
+          f.id === item.id ? { ...f, status: 'error' as const, error: errorMessage } : f
         ));
       }
     }
 
     setIsProcessing(false);
-  };
+  }, [getApiErrorMessage, isProcessing, queue]);
+
+  useEffect(() => {
+    if (isProcessing || !queue.some((item) => item.status === 'pending')) return;
+    void processUpload();
+  }, [isProcessing, processUpload, queue]);
 
   const allDone = queue.length > 0 && queue.every(f => f.status === 'done' || f.status === 'error');
   const doneCount = queue.filter(f => f.status === 'done').length;
@@ -143,7 +193,10 @@ export default function UploadPage() {
               multiple
               accept=".mp3,.wav,.m4a,.aac,.ogg,.flac,.wma,.opus"
               className="hidden"
-              onChange={(e) => addFiles(e.target.files)}
+              onChange={(e) => {
+                addFiles(e.target.files);
+                e.target.value = '';
+              }}
             />
             <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-110 ${
               isDragging ? 'bg-blue-100 text-blue-700 scale-110' : 'bg-blue-50 text-blue-700'
@@ -197,11 +250,11 @@ export default function UploadPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-slate-800 truncate">{item.name}</p>
-                      <p className="text-[10px] text-slate-400">
-                        {item.status === 'done' ? '✓ Uploaded' :
-                         item.status === 'error' ? `✗ ${item.error || 'Failed'}` :
-                         item.status === 'uploading' ? 'Uploading...' :
-                         `${item.size} • ${item.name.split('.').pop()?.toUpperCase()}`}
+                       <p className="text-[10px] text-slate-400">
+                         {item.status === 'done' ? '✓ Upload complete, analysis started' :
+                          item.status === 'error' ? `✗ ${item.error || 'Failed'}` :
+                          item.status === 'uploading' ? 'Uploading...' :
+                          `${item.size} • ${item.name.split('.').pop()?.toUpperCase()}`}
                       </p>
                     </div>
                     {item.status === 'pending' && (
@@ -234,11 +287,11 @@ export default function UploadPage() {
                 {isProcessing ? (
                   <>
                     <Loader2 size={20} className="animate-spin" />
-                    <span>Uploading...</span>
+                    <span>Uploading and analyzing...</span>
                   </>
                 ) : (
                   <>
-                    <span>Process Upload</span>
+                    <span>Process Upload Now</span>
                     <ArrowRight size={20} />
                   </>
                 )}

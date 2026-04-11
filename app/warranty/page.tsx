@@ -15,7 +15,6 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -38,13 +37,10 @@ interface WarrantyRecord {
 }
 
 export default function WarrantyDatabasePage() {
-  const searchParams = useSearchParams();
-  const initialSearch = searchParams.get('search') || '';
-  
   const [warranties, setWarranties] = useState<WarrantyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(initialSearch);
+  const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   
   // Form State
@@ -80,6 +76,24 @@ export default function WarrantyDatabasePage() {
   useEffect(() => {
     fetchWarranties();
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const initialSearch = new URLSearchParams(window.location.search).get('search') || '';
+    setSearchTerm(initialSearch);
+  }, []);
+
+  // Auto-refresh when there are pending items
+  useEffect(() => {
+    const hasPending = warranties.some(w => !w.qdrant_synced);
+    if (!hasPending) return;
+
+    const interval = setInterval(() => {
+      fetchWarranties();
+    }, 5000); // Polling every 5 seconds if pending
+
+    return () => clearInterval(interval);
+  }, [warranties]);
 
   const handleSync = async () => {
     if (syncing) return;
