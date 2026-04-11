@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, CloudUpload, FileText, Folder, PhoneForwarded, Users, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, FileText, Folder, PhoneForwarded, Users, ShieldCheck } from 'lucide-react';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -25,10 +25,6 @@ export default function Sidebar() {
           <Link href="/customers" className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${pathname.includes('/customers') ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
             <Users size={20} />
             <span>Customers</span>
-          </Link>
-          <Link href="/upload" className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${pathname === '/upload' ? 'bg-blue-700 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>
-            <CloudUpload size={20} />
-            <span>Upload File</span>
           </Link>
           <Link href="/files" className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${pathname.includes('/files') ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
             <FileText size={20} />

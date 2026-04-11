@@ -144,40 +144,42 @@ export default function WarrantyDatabasePage() {
       <Sidebar />
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-white border-b border-slate-200 px-8 py-5 flex items-center justify-between shadow-sm z-10">
-          <div>
-            <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-              <ShieldCheck className="text-blue-600" size={28} />
-              Warranty Database
-            </h1>
-            <p className="text-sm text-slate-500 font-medium">จัดการข้อมูลการรับประกันสินค้าและการซิงค์ RAG</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={handleSync}
-              disabled={syncing}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all border-2 ${
-                syncing 
-                ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed' 
-                : 'bg-white text-blue-600 border-blue-100 hover:border-blue-600 hover:bg-blue-50'
-              }`}
-            >
-              <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
-              {syncing ? 'กำลังซิงค์...' : 'ซิงค์กับ Qdrant'}
-            </button>
-            <button 
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
-            >
-              <Plus size={20} />
-              เพิ่มข้อมูลใหม่
-            </button>
+        <header className="bg-white border-b border-slate-200 px-6 py-5 shadow-sm z-10">
+          <div className="max-w-full mx-auto flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+                <ShieldCheck className="text-blue-600" size={28} />
+                Warranty Database
+              </h1>
+              <p className="text-sm text-slate-500 font-medium">จัดการข้อมูลการรับประกันสินค้าและการซิงค์ RAG</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={handleSync}
+                disabled={syncing}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all border-2 ${
+                  syncing 
+                  ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed' 
+                  : 'bg-white text-blue-600 border-blue-100 hover:border-blue-600 hover:bg-blue-50'
+                }`}
+              >
+                <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
+                {syncing ? 'กำลังซิงค์...' : 'ซิงค์กับ Qdrant'}
+              </button>
+              <button 
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+              >
+                <Plus size={20} />
+                เพิ่มข้อมูลใหม่
+              </button>
+            </div>
           </div>
         </header>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-8">
-          <div className="max-w-7xl mx-auto space-y-6">
+        <div className="flex-1 overflow-auto p-6">
+          <div className="max-w-full mx-auto space-y-6">
             
             {/* Stats & Search */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

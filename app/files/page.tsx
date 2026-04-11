@@ -9,6 +9,7 @@ import {
   FileAudio,
   AlertCircle,
   Filter,
+  CloudUpload,
   Loader2,
   Trash2,
   Trash,
@@ -35,6 +36,7 @@ interface FileRecord {
   call_type?: string;
   calltype?: string;
   call_datetime?: string;
+  upload_date?: string;
 }
 
 interface FilterOptions {
@@ -103,7 +105,8 @@ export default function FilesPage() {
     sentiment: '',
     callType: '',
     dateFrom: '',
-    dateTo: ''
+    dateTo: '',
+    uploadDate: ''
   });
 
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -323,7 +326,8 @@ export default function FilesPage() {
       sentiment: '',
       callType: '',
       dateFrom: '',
-      dateTo: ''
+      dateTo: '',
+      uploadDate: ''
     });
     setPage(1);
   };
@@ -339,6 +343,12 @@ export default function FilesPage() {
 
   const getFileDateKey = (file: FileRecord) => {
     const raw = String(file.call_datetime || file.date || '').trim();
+    if (!raw) return '';
+    return raw.slice(0, 10);
+  };
+
+  const getUploadDateKey = (file: FileRecord) => {
+    const raw = String(file.upload_date || '').trim();
     if (!raw) return '';
     return raw.slice(0, 10);
   };
@@ -370,13 +380,20 @@ export default function FilesPage() {
       return false;
     }
 
+    if (filters.uploadDate) {
+      const uploadDateKey = getUploadDateKey(file);
+      if (!uploadDateKey || uploadDateKey !== filters.uploadDate) {
+        return false;
+      }
+    }
+
     return true;
   });
 
   const paginatedFiles = filteredFiles.slice((page - 1) * perPage, page * perPage);
 
   const hasActiveFilters = Boolean(
-    fileSearch || filters.brand || filters.sentiment || filters.callType || filters.dateFrom || filters.dateTo
+    fileSearch || filters.brand || filters.sentiment || filters.callType || filters.dateFrom || filters.dateTo || filters.uploadDate
   );
 
   useEffect(() => {
@@ -393,6 +410,8 @@ export default function FilesPage() {
       return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     } catch { return dateStr; }
   };
+
+  const getAutoIdLabel = (fileId: string) => `AUTO-${fileId.slice(0, 8).toUpperCase()}`;
 
   const getSentimentStyle = (s: string) => {
     switch (s?.toUpperCase()) {
@@ -421,68 +440,91 @@ export default function FilesPage() {
                 </div>
                 <div>
                   <h2 className="text-base font-semibold text-slate-800">Filters</h2>
-                  <p className="text-xs text-slate-500">Filter the file list by text, brand, sentiment, call type, and date</p>
+                  <p className="text-xs text-slate-500">Filter the file list by text, brand, sentiment, call type, call date, and upload date</p>
                 </div>
               </div>
-              <button
-                onClick={clearFilters}
-                className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
-              >
-                Clear All
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => router.push('/upload')}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-800"
+                >
+                  <CloudUpload size={16} />
+                  <span>Upload File</span>
+                </button>
+                <button
+                  onClick={clearFilters}
+                  className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                >
+                  Clear All
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
-              <div className="xl:col-span-2 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Filter files by name, customer, brand, agent..."
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                  value={fileSearch}
-                  onChange={(e) => { setFileSearch(e.target.value); setPage(1); }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') fetchFiles(); }}
-                />
-              </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12">
+              <label className="xl:col-span-4 flex flex-col gap-1">
+                <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Search</span>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="Filter files by name, customer, brand, agent..."
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                    value={fileSearch}
+                    onChange={(e) => { setFileSearch(e.target.value); setPage(1); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') fetchFiles(); }}
+                  />
+                </div>
+              </label>
 
-              <select
-                value={filters.brand}
-                onChange={(e) => { setFilters({ ...filters, brand: e.target.value }); setPage(1); }}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
-              >
-                <option value="">All Brands</option>
-                {filterOptions.brands.map((brand) => (
-                  <option key={brand} value={brand}>{brand}</option>
-                ))}
-              </select>
+              <label className="xl:col-span-2 flex flex-col gap-1">
+                <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Brand</span>
+                <select
+                  value={filters.brand}
+                  onChange={(e) => { setFilters({ ...filters, brand: e.target.value }); setPage(1); }}
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="">All Brands</option>
+                  {filterOptions.brands.map((brand) => (
+                    <option key={brand} value={brand}>{brand}</option>
+                  ))}
+                </select>
+              </label>
 
-              <select
-                value={filters.sentiment}
-                onChange={(e) => { setFilters({ ...filters, sentiment: e.target.value }); setPage(1); }}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
-              >
-                <option value="">All Sentiments</option>
-                <option value="positive">Positive</option>
-                <option value="neutral">Neutral</option>
-                <option value="negative">Negative</option>
-              </select>
+              <label className="xl:col-span-2 flex flex-col gap-1">
+                <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Sentiment</span>
+                <select
+                  value={filters.sentiment}
+                  onChange={(e) => { setFilters({ ...filters, sentiment: e.target.value }); setPage(1); }}
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="">All Sentiments</option>
+                  <option value="positive">Positive</option>
+                  <option value="neutral">Neutral</option>
+                  <option value="negative">Negative</option>
+                </select>
+              </label>
 
-              <select
-                value={filters.callType}
-                onChange={(e) => { setFilters({ ...filters, callType: e.target.value }); setPage(1); }}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
-              >
-                <option value="">All Call Types</option>
-                <option value="inbound">Inbound</option>
-                <option value="outbound">Outbound</option>
-                <option value="unknown">Unknown</option>
-              </select>
+              <label className="xl:col-span-2 flex flex-col gap-1">
+                <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Call Type</span>
+                <select
+                  value={filters.callType}
+                  onChange={(e) => { setFilters({ ...filters, callType: e.target.value }); setPage(1); }}
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="">All Call Types</option>
+                  <option value="inbound">Inbound</option>
+                  <option value="outbound">Outbound</option>
+                  <option value="unknown">Unknown</option>
+                </select>
+              </label>
 
-              <div className="grid grid-cols-2 gap-3 md:col-span-2 xl:col-span-2">
+              <div className="grid grid-cols-1 gap-3 md:col-span-2 xl:col-span-8 xl:grid-cols-3">
                 <label className="flex flex-col gap-1">
                   <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">From Date</span>
                   <input
                     type="date"
+                    lang="en-GB"
+                    placeholder="dd/mm/yyyy"
                     value={filters.dateFrom}
                     onChange={(e) => { setFilters({ ...filters, dateFrom: e.target.value }); setPage(1); }}
                     className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
@@ -493,8 +535,22 @@ export default function FilesPage() {
                   <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">To Date</span>
                   <input
                     type="date"
+                    lang="en-GB"
+                    placeholder="dd/mm/yyyy"
                     value={filters.dateTo}
                     onChange={(e) => { setFilters({ ...filters, dateTo: e.target.value }); setPage(1); }}
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1">
+                  <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Upload Date</span>
+                  <input
+                    type="date"
+                    lang="en-GB"
+                    placeholder="dd/mm/yyyy"
+                    value={filters.uploadDate}
+                    onChange={(e) => { setFilters({ ...filters, uploadDate: e.target.value }); setPage(1); }}
                     className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                   />
                 </label>
@@ -502,7 +558,7 @@ export default function FilesPage() {
             </div>
 
             <p className="mt-3 text-[11px] text-slate-400">
-              Date filter uses the call date shown in the table. You can fill only one side, or both sides for a range.
+              From/To uses the call date shown in the table. Upload Date filters by the day the audio file was uploaded.
             </p>
 
             {loadingFilters && (
@@ -548,32 +604,20 @@ export default function FilesPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-            <table className="w-full min-w-[1120px] table-fixed text-left border-collapse">
-              <colgroup>
-                <col style={{ width: '28%' }} />
-                <col style={{ width: '12%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '8%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '8%' }} />
-                <col style={{ width: '8%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '6%' }} />
-              </colgroup>
+            <div className="w-full">
+            <table className="w-full table-fixed text-left border-collapse">
               <thead>
                 <tr className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                  <th className="p-4 pl-6">File Name</th>
-                  <th className="p-4">Auto ID</th>
-                  <th className="p-4">Sentiment</th>
-                  <th className="p-4">Customer</th>
-                  <th className="p-4">Agent ID</th>
-                  <th className="p-4">Brand</th>
-                  <th className="p-4">Call type</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4">Date</th>
-                  <th className="p-4">Actions</th>
+                  <th className="w-[22%] px-3 py-3.5 pl-5">File Name</th>
+                  <th className="hidden 2xl:table-cell w-[10%] px-3 py-3.5">Auto ID</th>
+                  <th className="w-[9%] px-3 py-3.5">Sentiment</th>
+                  <th className="w-[12%] px-3 py-3.5">Customer</th>
+                  <th className="hidden xl:table-cell w-[7%] px-3 py-3.5">Agent ID</th>
+                  <th className="w-[8%] px-3 py-3.5">Brand</th>
+                  <th className="w-[8%] px-3 py-3.5">Call type</th>
+                  <th className="hidden xl:table-cell w-[7%] px-3 py-3.5">Status</th>
+                  <th className="hidden lg:table-cell w-[7%] px-3 py-3.5">Date</th>
+                  <th className="w-[9%] px-3 py-3.5 pr-5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white">
@@ -593,46 +637,68 @@ export default function FilesPage() {
                     <tr key={file.file_id}
                       onClick={() => router.push(`/files/${file.file_id}`)}
                       className="border-0 hover:bg-slate-50 transition-colors cursor-pointer group">
-                      <td className="p-4 pl-6">
-                        <div className="flex min-w-0 items-center space-x-3">
-                          <div className="w-8 h-8 shrink-0 bg-slate-50 rounded flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                      <td className="px-3 py-3 pl-5 align-middle">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-slate-50 text-slate-400 transition-colors group-hover:bg-blue-50 group-hover:text-blue-600">
                             <FileAudio size={16} />
                           </div>
-                          <span className="block truncate text-sm font-medium text-slate-800">{file.name}</span>
+                          <div className="min-w-0">
+                            <span className="block truncate text-sm font-medium text-slate-800" title={file.name}>{file.name}</span>
+                            <span className="mt-1 block truncate text-[10px] text-slate-400 2xl:hidden" title={getAutoIdLabel(file.file_id)}>
+                              {getAutoIdLabel(file.file_id)}
+                            </span>
+                          </div>
                         </div>
                       </td>
-                      <td className="p-4">
+                      <td className="hidden 2xl:table-cell px-3 py-3 align-middle">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             router.push(`/files/${file.file_id}`);
                           }}
-                          className="font-mono text-[11px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white px-2 py-1 rounded transition-all cursor-pointer"
+                          className="rounded bg-blue-50 px-2 py-1 font-mono text-[10px] font-bold text-blue-600 transition-all hover:bg-blue-600 hover:text-white cursor-pointer"
                           title="View Analysis"
                         >
-                          AUTO-{file.file_id.substring(0, 8).toUpperCase()}
+                          {getAutoIdLabel(file.file_id)}
                         </button>
                       </td>
-                      <td className="p-4">
-                        <span className={`px-3 py-1 rounded-full text-[11px] font-bold ${getSentimentStyle(file.sentiment)}`}>
+                      <td className="px-3 py-3 align-middle">
+                        <span className={`inline-flex max-w-full truncate rounded-full px-2.5 py-1 text-[10px] font-bold ${getSentimentStyle(file.sentiment)}`}>
                           {file.sentiment}
                         </span>
                       </td>
-                      <td className="p-4 text-sm text-slate-600">{file.customer}</td>
-                      <td className="p-4 text-sm text-slate-600">ID {file.agent || '-'}</td>
-                      <td className="p-4 text-sm font-medium text-slate-800 uppercase">{file.brand || '-'}</td>
-                      <td className="p-4">
-                        <span className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${
-                          getCallType(file) === 'inbound'
-                            ? 'bg-blue-50 text-blue-600 border-blue-100' 
-                            : getCallType(file) === 'outbound'
-                              ? 'bg-orange-50 text-orange-600 border-orange-100'
-                              : 'bg-slate-50 text-slate-500 border-slate-100'
+                      <td className="px-3 py-3 align-middle">
+                        <div className="min-w-0">
+                          <span className="block truncate text-sm text-slate-600" title={file.customer || '-'}>{file.customer || '-'}</span>
+                          <span className="mt-1 block truncate text-[10px] text-slate-400 xl:hidden" title={`Agent: ${file.agent || '-'}`}>
+                            Agent: {file.agent || '-'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="hidden xl:table-cell px-3 py-3 text-sm text-slate-600 align-middle">ID {file.agent || '-'}</td>
+                      <td className="px-3 py-3 align-middle">
+                        <div className="min-w-0">
+                          <span className="block truncate text-sm font-medium uppercase text-slate-800" title={file.brand || '-'}>{file.brand || '-'}</span>
+                          <span className="mt-1 block truncate text-[10px] text-slate-400 xl:hidden" title={file.status || '-'}>
+                            {file.status || '-'}
+                          </span>
+                          <span className="mt-1 block truncate text-[10px] text-slate-400 lg:hidden" title={formatDate(file.date)}>
+                            {formatDate(file.date)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 align-middle">
+                        <span className={`inline-flex max-w-full truncate rounded-lg border px-2 py-1 text-[10px] font-bold ${
+                           getCallType(file) === 'inbound'
+                             ? 'bg-blue-50 text-blue-600 border-blue-100' 
+                             : getCallType(file) === 'outbound'
+                               ? 'bg-orange-50 text-orange-600 border-orange-100'
+                               : 'bg-slate-50 text-slate-500 border-slate-100'
                         }`}>
                           {getCallType(file) === 'inbound' ? 'Inbound' : getCallType(file) === 'outbound' ? 'Outbound' : '-'}
                         </span>
                       </td>
-                      <td className="p-4">
+                      <td className="hidden xl:table-cell px-3 py-3 align-middle">
                         <span className={`inline-flex items-center space-x-1 text-[11px] font-bold ${
                           file.status === 'COMPLETE' ? 'text-emerald-500' : 'text-orange-500'
                         }`}>
@@ -642,15 +708,15 @@ export default function FilesPage() {
                           <span>{file.status}</span>
                         </span>
                       </td>
-                      <td className="p-4 text-sm text-slate-500 whitespace-nowrap">{formatDate(file.date)}</td>
-                      <td className="p-4">
-                        <div className="flex items-center space-x-1">
+                      <td className="hidden lg:table-cell px-3 py-3 text-sm text-slate-500 whitespace-nowrap align-middle">{formatDate(file.date)}</td>
+                      <td className="px-3 py-3 align-middle">
+                        <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               router.push(`/files/${file.file_id}`);
                             }}
-                            className="flex items-center justify-center p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-all cursor-pointer active:scale-95"
+                            className="flex items-center justify-center rounded-lg p-1.5 text-blue-600 transition-all hover:bg-blue-100 cursor-pointer active:scale-95"
                             title="View Analysis Detail"
                           >
                             <ExternalLink size={16} />
@@ -658,7 +724,7 @@ export default function FilesPage() {
                           <button
                             onClick={(e) => handleDelete(file.file_id, e)}
                             disabled={deleting === file.file_id}
-                            className="flex items-center justify-center p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer disabled:opacity-50 active:scale-95"
+                            className="flex items-center justify-center rounded-lg p-1.5 text-red-500 transition-all hover:bg-red-50 cursor-pointer disabled:opacity-50 active:scale-95"
                             title="Delete file"
                           >
                             {deleting === file.file_id ? (
@@ -676,14 +742,14 @@ export default function FilesPage() {
             </table>
             </div>
 
-            <div className="p-4 border-t border-slate-100 flex items-center justify-between text-sm text-slate-500">
+            <div className="flex flex-col gap-3 border-t border-slate-100 p-4 text-sm text-slate-500 lg:flex-row lg:items-center lg:justify-between">
               <span>
                 Showing <span className="font-bold text-slate-800">{paginatedFiles.length}</span> of <span className="font-bold text-slate-800">{filteredFiles.length}</span> entries
                 {hasActiveFilters ? ` (filtered from ${total})` : ''}
               </span>
-              <div className="flex space-x-2">
+              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                 <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}
-                  className="px-4 py-2 text-slate-400 cursor-pointer hover:text-slate-600 transition-colors disabled:opacity-30">PREVIOUS</button>
+                  className="px-3 py-2 text-slate-400 cursor-pointer transition-colors hover:text-slate-600 disabled:opacity-30">PREVIOUS</button>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                   <button key={p} onClick={() => setPage(p)}
                     className={`w-8 h-8 rounded-full flex items-center justify-center font-medium cursor-pointer transition-colors ${
@@ -691,7 +757,7 @@ export default function FilesPage() {
                     }`}>{p}</button>
                 ))}
                 <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}
-                  className="px-4 py-2 text-slate-600 font-medium hover:text-slate-800 transition-colors cursor-pointer disabled:opacity-30">NEXT</button>
+                  className="px-3 py-2 text-slate-600 font-medium transition-colors hover:text-slate-800 cursor-pointer disabled:opacity-30">NEXT</button>
               </div>
             </div>
           </section>

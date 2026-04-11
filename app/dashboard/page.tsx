@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import {
+  Folder,
+  MoreHorizontal,
   FileAudio,
   Smile,
   Meh,
@@ -19,7 +21,7 @@ import {
   Loader2,
   TriangleAlert
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -443,30 +445,31 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden text-slate-800">
+    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-800">
       <Sidebar />
       <main className="flex-1 p-6 overflow-auto">
-        <div className="max-w-7xl mx-auto space-y-6">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div className="max-w-full mx-auto space-y-6">
+
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
             <div>
               <h1 className="text-2xl font-bold text-slate-800">Voice Analytics Dashboard</h1>
               <p className="text-slate-500 text-sm">ข้อมูลจริงจาก Backend | อิงตามวันที่วิเคราะห์/อัปโหลด | มุมมอง {filterType} | {dateLabel}</p>
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="flex bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden text-[13px]">
+              <div className="flex bg-white border border-slate-200 rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] overflow-hidden text-[13px]">
                 {(['Day', 'Month', 'Year'] as FilterType[]).map((type) => (
                   <button
                     key={type}
                     onClick={() => setFilterType(type)}
-                    className={`px-4 py-2 font-bold transition-colors cursor-pointer ${filterType === type ? 'text-blue-600 bg-blue-50' : 'text-slate-500 hover:bg-slate-50'} ${type !== 'Year' ? 'border-r border-slate-100' : ''}`}
+                    className={`px-4 py-2 font-bold transition-colors cursor-pointer ${filterType === type ? 'text-[#54657E] bg-slate-100' : 'text-slate-500 hover:bg-slate-50'} ${type !== 'Year' ? 'border-r border-slate-100' : ''}`}
                   >
                     {type}
                   </button>
                 ))}
               </div>
 
-              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2 py-1">
+              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2 py-1 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]">
                 <button onClick={() => moveDate(-1)} className="px-2 py-1 text-slate-500 hover:text-slate-700 cursor-pointer">-</button>
                 <span className="text-xs font-bold text-slate-700 min-w-[120px] text-center">{dateLabel}</span>
                 <button onClick={() => moveDate(1)} className="px-2 py-1 text-slate-500 hover:text-slate-700 cursor-pointer">+</button>
@@ -474,7 +477,7 @@ export default function DashboardPage() {
 
               <button
                 onClick={() => setSelectedDate(latestAvailableDate || new Date())}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 transition-colors cursor-pointer text-slate-700"
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] hover:bg-slate-50 transition-colors cursor-pointer text-slate-700"
               >
                 <Calendar size={16} className="text-slate-400" />
                 <span className="text-[13px] font-bold uppercase tracking-tight">Latest Data</span>
@@ -482,27 +485,56 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { label: 'Total Files', value: totalFiles, icon: FileAudio, color: 'text-blue-600', bg: 'bg-blue-50' },
-              { label: 'Positive Analysis', value: positiveCount, icon: Smile, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-              { label: 'Processing', value: processingCount, icon: RefreshCw, color: 'text-orange-600', bg: 'bg-orange-50' },
-              { label: 'Completed', value: totalFiles - processingCount, icon: CheckCircle2, color: 'text-blue-600', bg: 'bg-blue-50' }
-            ].map((stat, i) => (
-              <div key={i} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 transition-all duration-300">
-                <div className={`${stat.bg} ${stat.color} w-10 h-10 rounded-xl flex items-center justify-center mb-4`}>
-                  <stat.icon size={20} />
-                </div>
-                <div>
-                  <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">{stat.label}</p>
-                  <p className="text-2xl font-bold text-slate-800 mt-1">{stat.value}</p>
-                </div>
+          {/* Top Stat Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Total Files */}
+            <div className="bg-white rounded-2xl p-6 flex items-center gap-5 shadow-[0_2px_15px_-3px_rgba(6,81,237,0.08)] border border-slate-100">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-400 to-blue-600 shadow-[0_8px_16px_-6px_rgba(37,99,235,0.4)] flex items-center justify-center text-white border-t border-white/30 shrink-0">
+                <Folder size={26} strokeWidth={2.5} />
               </div>
-            ))}
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Total</p>
+                <h3 className="text-3xl font-extrabold text-slate-800">{totalFiles}</h3>
+              </div>
+            </div>
+
+            {/* Positive Analysis */}
+            <div className="bg-white rounded-2xl p-6 flex items-center gap-5 shadow-[0_2px_15px_-3px_rgba(6,81,237,0.08)] border border-slate-100">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-[0_8px_16px_-6px_rgba(16,185,129,0.4)] flex items-center justify-center text-white border-t border-white/30 shrink-0">
+                <Smile size={26} strokeWidth={2.5} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Positive</p>
+                <h3 className="text-3xl font-extrabold text-slate-800">{positiveCount}</h3>
+              </div>
+            </div>
+
+            {/* Processing */}
+            <div className="bg-white rounded-2xl p-6 flex items-center gap-5 shadow-[0_2px_15px_-3px_rgba(6,81,237,0.08)] border border-slate-100">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-[0_8px_16px_-6px_rgba(245,158,11,0.4)] flex items-center justify-center text-white border-t border-white/30 shrink-0">
+                <RefreshCw size={26} strokeWidth={2.5} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Processing</p>
+                <h3 className="text-3xl font-extrabold text-slate-800">{processingCount}</h3>
+              </div>
+            </div>
+
+            {/* Completed */}
+            <div className="bg-white rounded-2xl p-6 flex items-center gap-5 shadow-[0_2px_15px_-3px_rgba(6,81,237,0.08)] border border-slate-100">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-400 to-indigo-600 shadow-[0_8px_16px_-6px_rgba(99,102,241,0.4)] flex items-center justify-center text-white border-t border-white/30 shrink-0">
+                <CheckCircle2 size={26} strokeWidth={2.5} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Completed</p>
+                <h3 className="text-3xl font-extrabold text-slate-800">{totalFiles - processingCount}</h3>
+              </div>
+            </div>
           </div>
 
+          {/* Alert for Fetch Errors */}
           {failedEndpoints.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]">
               <div className="flex items-center gap-2 mb-2">
                 <TriangleAlert size={16} className="text-amber-600" />
                 <p className="text-sm font-bold text-amber-800">บาง endpoint โหลดไม่สำเร็จ</p>
@@ -517,165 +549,301 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-              <h3 className="font-bold text-slate-800 mb-6 flex items-center">
-                <BarChart3 size={18} className="mr-2 text-blue-600" /> Sentiment Analysis Distribution
-              </h3>
-              <div className="space-y-6">
-                {sentimentData.map((data, i) => (
-                  <div key={i}>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-semibold text-slate-700 flex items-center">
-                        <data.icon size={16} className="mr-2 text-slate-400" /> {data.label} ({data.count} Files)
-                      </span>
-                      <span className="text-sm font-bold text-slate-800">{data.percentage}%</span>
+          {/* Second Row: Distributions */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Sentiment Analysis Distribution */}
+            <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] lg:col-span-2">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-semibold text-lg flex items-center gap-2">
+                  <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-blue-500 to-indigo-600 shadow-sm"></div>
+                  Sentiment Analysis Distribution
+                </h3>
+                <MoreHorizontal className="text-slate-400" size={20} />
+              </div>
+
+              <div className="space-y-4">
+                {sentimentData.map((data, i) => {
+                  let barColor = '';
+                  let textColor = '';
+                  if (data.label === 'Positive') {
+                    barColor = 'bg-emerald-500';
+                    textColor = 'text-emerald-500';
+                  } else if (data.label === 'Negative') {
+                    barColor = 'bg-red-500';
+                    textColor = 'text-red-500';
+                  } else {
+                    barColor = 'bg-[#54657E]';
+                    textColor = 'text-[#54657E]';
+                  }
+
+                  const Icon = data.icon;
+
+                  return (
+                    <div key={i} className="flex items-center gap-4">
+                      <div className="flex flex-col items-center justify-center w-16">
+                        <div className="w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center bg-white shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] mb-1">
+                          <Icon size={18} className={textColor} />
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{data.label}</span>
+                      </div>
+
+                      <div className="flex-1 flex items-center pb-3">
+                        <div className="w-full bg-slate-100/50 rounded-lg h-8 relative flex items-center">
+                          <div
+                            className={`${barColor} h-full rounded-lg transition-all duration-700 flex items-center px-4 min-w-[2rem] shadow-sm`}
+                            style={{ width: `${Math.max(data.percentage, 5)}%` }}
+                          >
+                            <span className="text-sm font-bold text-white z-10">{data.count}</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                      <div className={`${data.color} h-full rounded-full transition-all duration-700 ease-out`} style={{ width: `${data.percentage}%` }} />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-              <h3 className="font-bold text-slate-800 mb-6 flex items-center">
-                <Tag size={18} className="mr-2 text-orange-500" /> Files by Brand
+            {/* Topic Distribution */}
+            <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]">
+              <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-purple-500 to-pink-600 shadow-sm"></div>
+                Topic Distribution
               </h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="relative h-[160px] flex justify-center items-center">
+                {topicDistribution.length > 0 ? (
+                  <>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={topicDistribution}
+                          innerRadius={45}
+                          outerRadius={70}
+                          dataKey="value"
+                          stroke="none"
+                        >
+                          {topicDistribution.map((entry, index) => {
+                            const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
+                            return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                          })}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="bg-white rounded-full px-3 py-1 text-sm font-bold shadow-sm">
+                        {topicDistribution.reduce((sum, d) => sum + d.value, 0)} Total
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-slate-400 text-sm">No Data</div>
+                )}
+              </div>
+
+              <div className="mt-4 space-y-2 text-xs h-24 overflow-y-auto pr-2">
+                {topicDistribution.map((topic, idx) => {
+                  const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
+                  const total = topicDistribution.reduce((sum, d) => sum + d.value, 0);
+                  const percentage = total > 0 ? Math.round((topic.value / total) * 100) : 0;
+                  return (
+                    <div key={idx} className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: colors[idx % colors.length] }}></div>
+                      <span className="text-slate-600 truncate flex-1">{topic.name}</span>
+                      <span className="text-slate-400 font-medium">({percentage}%)</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Third Row: Brand Info */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Files by Brand */}
+            <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] overflow-hidden">
+              <h3 className="font-semibold text-lg mb-6 flex items-center gap-2">
+                <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-orange-400 to-amber-600 shadow-sm"></div>
+                Files by Brand
+              </h3>
+              <div className="grid grid-cols-2 gap-4 max-h-[220px] overflow-y-auto pr-1">
                 {brandDistribution.length > 0 ? (
                   brandDistribution.map((brand, i) => (
-                    <div key={i} className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center transition-all">
-                      <span className="text-sm font-bold text-slate-700 uppercase">{brand.name}</span>
-                      <span className="bg-white px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-bold text-blue-600">{brand.count}</span>
+                    <div key={i} className="bg-[#F8FAFC] rounded-lg p-6 text-center border border-slate-100">
+                      <p className="text-xs font-bold text-slate-500 tracking-wider mb-2 uppercase truncate">{brand.name}</p>
+                      <h4 className="text-3xl font-bold text-slate-800 mb-1">{brand.count}</h4>
+                      <p className="text-xs text-slate-400">Recordings</p>
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-slate-400 col-span-2">No files in this range.</p>
+                  <div className="col-span-2 text-center text-slate-400 text-sm py-8">No files data available</div>
+                )}
+              </div>
+            </div>
+
+            {/* Brand Intelligence */}
+            <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]">
+              <h3 className="font-semibold text-lg mb-6 flex items-center gap-2">
+                <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-emerald-400 to-teal-600 shadow-sm"></div>
+                Brand Intelligence
+              </h3>
+              <div className="space-y-4 max-h-[220px] overflow-y-auto pr-1">
+                {brandIntelligence.length > 0 ? (
+                  brandIntelligence.map((brand, idx) => {
+                    const pointColors = ['bg-blue-500', 'bg-indigo-500', 'bg-emerald-500', 'bg-purple-500', 'bg-amber-500'];
+                    const neutralMentions = brand.total_mentions - brand.positive_mentions - brand.negative_mentions;
+
+                    return (
+                      <div key={idx} className="flex items-center justify-between bg-[#F8FAFC] p-4 rounded-lg border border-slate-100">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-1.5 h-1.5 rounded-full ${pointColors[idx % pointColors.length]}`}></div>
+                          <span className="font-medium text-slate-700 uppercase">{brand.brand_name}</span>
+                        </div>
+                        <div className="flex items-center gap-4 text-xs font-bold tracking-wide">
+                          <span className="text-emerald-500">+{brand.positive_mentions}</span>
+                          <span className="text-red-500">-{brand.negative_mentions}</span>
+                          <span className="text-[#54657E]">={Math.max(0, neutralMentions)}</span>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center text-slate-400 text-sm py-8">No brand data available</div>
                 )}
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-              <h3 className="font-bold text-slate-800 mb-6 flex items-center">
-                <Trophy size={18} className="mr-2 text-yellow-600" /> Agent Performance Leaderboard
+          {/* Fourth Row: Leaderboard */}
+          <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-yellow-400 to-yellow-600 shadow-sm"></div>
+                Agent Performance Leaderboard
               </h3>
-              {agentPerformance.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-slate-100">
-                        <th className="text-left py-3 px-2 text-xs font-bold text-slate-500 uppercase">Rank</th>
-                        <th className="text-left py-3 px-2 text-xs font-bold text-slate-500 uppercase">Agent</th>
-                        <th className="text-left py-3 px-2 text-xs font-bold text-slate-500 uppercase">QA Score</th>
-                        <th className="text-left py-3 px-2 text-xs font-bold text-slate-500 uppercase">CSAT</th>
-                        <th className="text-left py-3 px-2 text-xs font-bold text-slate-500 uppercase">Calls</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {agentPerformance.slice(0, 10).map((agent, idx) => (
-                        <tr key={`${agent.agent_id}-${idx}`} className={`border-b border-slate-50 ${idx < 3 ? 'bg-yellow-50' : ''}`}>
-                          <td className="py-3 px-2 text-sm font-bold text-slate-700">{idx === 0 ? '1' : idx === 1 ? '2' : idx === 2 ? '3' : `#${idx + 1}`}</td>
-                          <td className="py-3 px-2 text-sm font-semibold text-slate-800">{agent.agent_name || agent.agent_id}</td>
-                          <td className="py-3 px-2 text-sm text-slate-700">{agent.avg_qa_score.toFixed(1)}</td>
-                          <td className="py-3 px-2 text-sm text-slate-700">{agent.avg_csat_score.toFixed(1)}</td>
-                          <td className="py-3 px-2 text-sm text-slate-600">{agent.total_calls}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center py-8 text-slate-400 text-sm">No agent performance data available</div>
-              )}
+              <button className="text-sm text-slate-500 font-medium hover:text-blue-600 transition-colors">
+                View All Reports
+              </button>
             </div>
 
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-              <h3 className="font-bold text-slate-800 mb-6 flex items-center">
-                <Building2 size={18} className="mr-2 text-blue-600" /> Brand Intelligence
-              </h3>
-              {brandIntelligence.length > 0 ? (
-                <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                  {brandIntelligence.map((brand, idx) => (
-                    <div key={`${brand.brand_name}-${idx}`} className="brand-item p-4 bg-slate-50 rounded-xl border border-slate-100">
-                      <div className="brand-header flex justify-between items-center mb-2">
-                        <span className="brand-name text-sm font-bold text-slate-800 uppercase">{brand.brand_name}</span>
-                        <span className={`brand-sentiment text-lg ${
-                          (brand.avg_sentiment_score || 0) > 0 ? 'text-green-600' :
-                          (brand.avg_sentiment_score || 0) < 0 ? 'text-red-600' : 'text-slate-400'
-                        }`}>
-                          {(brand.avg_sentiment_score || 0) > 0 ? ':+)' : (brand.avg_sentiment_score || 0) < 0 ? ':-(' : ':|'}
-                        </span>
-                      </div>
-                      <div className="brand-stats flex gap-4 text-xs">
-                        <span className="text-slate-600"><strong className="text-slate-800">{brand.total_mentions}</strong> mentions</span>
-                        <span className="text-green-600">+{brand.positive_mentions}</span>
-                        <span className="text-red-600">-{brand.negative_mentions}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-slate-400 text-sm">No brand intelligence data available</div>
-              )}
+            <div className="w-full overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="text-xs text-slate-400 font-bold uppercase tracking-wider border-b border-slate-100">
+                    <th className="pb-4 px-4 w-20">Rank</th>
+                    <th className="pb-4 px-4">Agent Name</th>
+                    <th className="pb-4 px-4 w-40">QA Score</th>
+                    <th className="pb-4 px-4 w-32">CSAT</th>
+                    <th className="pb-4 px-4 w-24">Calls</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {agentPerformance.length > 0 ? (
+                    agentPerformance.slice(0, 5).map((agent, idx) => {
+                      const RankNum = idx + 1;
+                      const initial = (agent.agent_name || agent.agent_id).slice(0, 2).toUpperCase();
+                      const avatarColors = [
+                        'bg-blue-100 text-blue-600',
+                        'bg-emerald-100 text-emerald-600',
+                        'bg-amber-100 text-amber-600',
+                        'bg-purple-100 text-purple-600',
+                        'bg-rose-100 text-rose-600'
+                      ];
+
+                      return (
+                        <tr key={idx} className="group hover:bg-slate-50 transition-colors">
+                          <td className="py-4 px-4 font-medium text-slate-500">
+                            {RankNum < 10 ? `0${RankNum}` : RankNum}
+                          </td>
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${avatarColors[idx % avatarColors.length]}`}>
+                                {initial}
+                              </div>
+                              <span className="font-medium">{agent.agent_name || agent.agent_id}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-3">
+                              <span className="font-bold">{((agent.avg_qa_score / 10) * 100).toFixed(0)}%</span>
+                              <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-[#54657E] rounded-full transition-all" style={{ width: `${(agent.avg_qa_score / 10) * 100}%` }}></div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 font-medium">{agent.avg_csat_score.toFixed(1)}/5.0</td>
+                          <td className="py-4 px-4 text-slate-500">{agent.total_calls}</td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="text-center py-6 text-slate-400 text-sm">No agent data available</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-              <h3 className="font-bold text-slate-800 mb-6 flex items-center">
-                <TrendingUp size={18} className="mr-2 text-green-600" /> Sentiment Trends (7 Days)
+          {/* Fifth Row: Trends */}
+          <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] mb-10">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-blue-400 to-cyan-500 shadow-sm"></div>
+                Sentiment Trends (7 Days)
               </h3>
-              {trends.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={trends}>
-                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip />
-                    <Legend />
-                    <Line type="monotone" dataKey="positive_calls" stroke="#22c55e" name="Positive" strokeWidth={2} />
-                    <Line type="monotone" dataKey="negative_calls" stroke="#ef4444" name="Negative" strokeWidth={2} />
-                    <Line type="monotone" dataKey="neutral_calls" stroke="#9ca3af" name="Neutral" strokeWidth={2} />
+              <div className="flex items-center gap-4 text-xs font-medium text-slate-500">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-[#54657E]"></div>
+                  <span>Total Calls</span>
+                </div>
+              </div>
+            </div>
+
+            {trends.length > 0 ? (
+              <div className="h-[200px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#54657E" stopOpacity={0.1} />
+                        <stop offset="95%" stopColor="#54657E" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis
+                      dataKey="date"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fill: '#94a3b8' }}
+                      dy={10}
+                    />
+                    <YAxis
+                      hide={true}
+                    />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      labelStyle={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b', marginBottom: '8px' }}
+                    />
+                    <Line
+                      type="monotone"
+                      // using total calls as value to match the single trend line UI request
+                      dataKey={(row) => Number(row.positive_calls) + Number(row.negative_calls) + Number(row.neutral_calls)}
+                      name="Total Calls"
+                      stroke="#54657E"
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: '#fff', stroke: '#54657E', strokeWidth: 2 }}
+                      activeDot={{ r: 5 }}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
-              ) : (
-                <div className="text-center py-12 text-slate-400 text-sm">No trends data available</div>
-              )}
-            </div>
-
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-              <h3 className="font-bold text-slate-800 mb-6 flex items-center">
-                <BarChart3 size={18} className="mr-2 text-purple-600" /> Topic Distribution
-              </h3>
-              {topicDistribution.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={topicDistribution}
-                      cx="50%"
-                      cy="50%"
-                      dataKey="value"
-                      nameKey="name"
-                      labelLine={false}
-                      label={({ name, percent }: { name?: string; percent?: number }) => `${name || '-'} ${((percent || 0) * 100).toFixed(0)}%`}
-                      outerRadius={100}
-                      fill="#8884d8"
-                    >
-                      {topicDistribution.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="text-center py-12 text-slate-400 text-sm">No topic distribution data available</div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="h-[200px] w-full flex items-center justify-center text-slate-400 text-sm">
+                No trend data available for this range
+              </div>
+            )}
           </div>
+
         </div>
       </main>
     </div>

@@ -185,7 +185,7 @@ export default function EscalationPage() {
     <div className="flex h-screen bg-slate-50 overflow-hidden text-slate-800">
       <Sidebar />
       <main className="flex-1 p-6 overflow-auto">
-        <div className="max-w-7xl mx-auto space-y-6">
+        <div className="max-w-full mx-auto space-y-6">
 
           {/* ── Header ── */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
