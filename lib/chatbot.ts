@@ -24,10 +24,22 @@ interface TopicSearchResult {
   createdAt: string;
 }
 
+interface EnrichedTopicSearchResult extends TopicSearchResult {
+  autoId: string;
+  serialNo: string;
+}
+
 interface TopicSearchResponse {
   total: number;
   results: TopicSearchResult[];
 }
+
+interface WarrantyMeta {
+  autoId: string;
+  serialNo: string;
+}
+
+const customerWarrantyCache = new Map<string, Promise<Map<string, { autoId: string; serialNo: string }>>>();
 
 const TOPIC_OVERVIEW_KEYWORDS = [
   'topic distribution',
@@ -95,6 +107,23 @@ const extractPhoneNumber = (value: string): string | null => {
   return match ? match[0] : null;
 };
 
+const extractRegistrationNumber = (value: string): string | null => {
+  const match = String(value || '').toUpperCase().match(/(?<![A-Z0-9])AUTO[\s_-]?([A-F0-9]{8})(?![A-Z0-9])/);
+  return match ? `AUTO-${match[1]}` : null;
+};
+
+const extractSerialNumber = (value: string): string | null => {
+  const directMatch = String(value || '').match(/(?<![A-Z0-9])(SN[A-Z0-9._/-]{3,})(?![A-Z0-9])/i);
+  if (directMatch) {
+    return directMatch[1].trim().toUpperCase();
+  }
+
+  const keywordMatch = String(value || '').match(
+    /(?:serial(?:\s*no\.?|\s*number)?|s\/n|(?:หมายเลข\s*)?ซีเรียล|(?:หมายเลข\s*)?ซีเรียลนัมเบอร์)[\s:=#-]*([A-Za-z0-9][A-Za-z0-9._/-]{2,})/i
+  );
+  return keywordMatch ? keywordMatch[1].trim().toUpperCase() : null;
+};
+
 const cleanSummary = (value: string): string =>
   String(value || '')
     .replace(/<mark[^>]*>/gi, '')
@@ -106,6 +135,18 @@ const truncateText = (value: string, maxLength = 220): string => {
   const text = cleanSummary(value);
   if (text.length <= maxLength) return text;
   return `${text.slice(0, maxLength - 3).trim()}...`;
+};
+
+const containsValue = (text: string, value: string): boolean => {
+  const normalizedText = compactText(text);
+  const normalizedValue = compactText(value);
+  return !!normalizedValue && normalizedText.includes(normalizedValue);
+};
+
+const buildAutoId = (fileId: string): string => {
+  const normalized = String(fileId || '').trim();
+  if (!normalized) return '-';
+  return `AUTO-${normalized.slice(0, 8).toUpperCase()}`;
 };
 
 const buildTopicAliases = (topicName: string): string[] => {
@@ -200,6 +241,48 @@ const extractAnswerText = (payload: unknown): string => {
   return '';
 };
 
+const extractWarrantyMeta = (payload: unknown): WarrantyMeta | null => {
+  if (!isObject(payload) || !isObject(payload.data)) return null;
+
+  const warranty = isObject(payload.data.warranty) ? payload.data.warranty : null;
+  const callHistory = isObject(payload.data.call_history) ? payload.data.call_history : null;
+
+  const autoId = toText(
+    warranty?.registration_no ?? callHistory?.registration_no,
+    '-'
+  );
+  const serialNo = toText(
+    warranty?.serial_no ?? payload.data.serial_no,
+    '-'
+  );
+
+  if ((!autoId || autoId === '-') && (!serialNo || serialNo === '-')) {
+    return null;
+  }
+
+  return {
+    autoId: autoId || '-',
+    serialNo: serialNo || '-',
+  };
+};
+
+const appendWarrantyMeta = (answerText: string, meta: WarrantyMeta | null): string => {
+  if (!meta) return answerText;
+
+  const lines: string[] = [];
+
+  if (meta.autoId !== '-' && !containsValue(answerText, meta.autoId)) {
+    lines.push(`🆔 Auto ID: ${meta.autoId}`);
+  }
+
+  if (meta.serialNo !== '-' && !containsValue(answerText, meta.serialNo)) {
+    lines.push(`🔢 Serial No.: ${meta.serialNo}`);
+  }
+
+  if (!lines.length) return answerText;
+  return `${answerText}\n${lines.join('\n')}`;
+};
+
 const parseTopicDistribution = (payload: unknown): TopicDistributionItem[] => {
   const topics: TopicDistributionItem[] = [];
 
@@ -249,6 +332,88 @@ const parseSearchResults = (payload: unknown): TopicSearchResponse => {
   return { total, results };
 };
 
+const fetchCustomerWarrantyLookup = async (phone: string): Promise<Map<string, { autoId: string; serialNo: string }>> => {
+  const normalizedPhone = String(phone || '').trim();
+  if (!normalizedPhone) return new Map();
+
+  const cached = customerWarrantyCache.get(normalizedPhone);
+  if (cached) {
+    return cached;
+  }
+
+  const lookupPromise = (async () => {
+    const payload = await fetchJson(
+      `${API_BASE}/api/v1/customers/${encodeURIComponent(`CUST-${normalizedPhone}`)}`
+    );
+
+    const lookup = new Map<string, { autoId: string; serialNo: string }>();
+    for (const item of toArray(payload, ['warranties'])) {
+      if (!isObject(item)) continue;
+
+      const fileId = toText(item.file_id);
+      if (!fileId) continue;
+
+      lookup.set(fileId, {
+        autoId: toText(item.registration_no, buildAutoId(fileId)),
+        serialNo: toText(item.serial_no, '-'),
+      });
+    }
+
+    return lookup;
+  })();
+
+  customerWarrantyCache.set(normalizedPhone, lookupPromise);
+  return lookupPromise;
+};
+
+const enrichTopicSearchResults = async (
+  results: TopicSearchResult[]
+): Promise<EnrichedTopicSearchResult[]> => {
+  const phones = Array.from(
+    new Set(
+      results
+        .map((item) => item.customerPhone)
+        .filter((phone) => phone && phone !== '-')
+    )
+  );
+
+  const lookups = new Map<string, Map<string, { autoId: string; serialNo: string }>>();
+  await Promise.all(
+    phones.map(async (phone) => {
+      lookups.set(phone, await fetchCustomerWarrantyLookup(phone));
+    })
+  );
+
+  return results.map((item) => {
+    const metadata = lookups.get(item.customerPhone)?.get(item.fileId);
+    return {
+      ...item,
+      autoId: metadata?.autoId || buildAutoId(item.fileId),
+      serialNo: metadata?.serialNo || '-',
+    };
+  });
+};
+
+const filterEnrichedTopicResults = (
+  results: EnrichedTopicSearchResult[],
+  registrationNo: string | null,
+  serialNo: string | null
+): EnrichedTopicSearchResult[] => {
+  if (!registrationNo && !serialNo) return results;
+
+  return results.filter((item) => {
+    if (registrationNo && compactText(item.autoId) === compactText(registrationNo)) {
+      return true;
+    }
+
+    if (serialNo && compactText(item.serialNo) === compactText(serialNo)) {
+      return true;
+    }
+
+    return false;
+  });
+};
+
 const formatTopicOverview = (topics: TopicDistributionItem[]): string => {
   if (!topics.length) {
     return 'ยังไม่พบข้อมูล Topic Distribution ในระบบตอนนี้';
@@ -268,19 +433,29 @@ const formatTopicOverview = (topics: TopicDistributionItem[]): string => {
 const formatTopicMatches = (
   topic: TopicDistributionItem,
   searchResponse: TopicSearchResponse,
+  enrichedResults: EnrichedTopicSearchResult[],
   phone: string | null
 ): string => {
-  if (!searchResponse.results.length) {
+  const displayTotal = enrichedResults.length !== searchResponse.results.length
+    ? enrichedResults.length
+    : (searchResponse.total || enrichedResults.length);
+
+  if (!enrichedResults.length) {
     return phone
       ? `ไม่พบข้อมูลของลูกค้า ${phone} ในหัวข้อ "${topic.name}"`
       : `ไม่พบข้อมูลลูกค้าที่อยู่ในหัวข้อ "${topic.name}"`;
   }
 
   if (phone) {
-    const lines = [`พบ ${searchResponse.total || searchResponse.results.length} รายการของลูกค้า ${phone} ในหัวข้อ "${topic.name}"`];
+    const lines = [`พบ ${displayTotal} รายการของลูกค้า ${phone} ในหัวข้อ "${topic.name}"`];
 
-    searchResponse.results.slice(0, 5).forEach((item, index) => {
-      lines.push(`- เคส ${index + 1}: ${item.brand} | ${item.sentiment} | Agent ${item.agentId}`);
+    enrichedResults.slice(0, 5).forEach((item, index) => {
+      lines.push(`- เคส ${index + 1}`);
+      lines.push(`• แบรนด์: ${item.brand}`);
+      lines.push(`• Sentiment: ${item.sentiment}`);
+      lines.push(`• Agent: ${item.agentId}`);
+      lines.push(`• Auto ID: ${item.autoId}`);
+      lines.push(`• Serial No.: ${item.serialNo}`);
       if (item.summary) {
         lines.push(`สรุป: ${truncateText(item.summary)}`);
       }
@@ -289,38 +464,46 @@ const formatTopicMatches = (
     return lines.join('\n');
   }
 
-  const grouped = new Map<string, TopicSearchResult[]>();
-  for (const item of searchResponse.results) {
+  const grouped = new Map<string, EnrichedTopicSearchResult[]>();
+  for (const item of enrichedResults) {
     const key = item.customerPhone || item.fileId;
     const bucket = grouped.get(key) || [];
     bucket.push(item);
     grouped.set(key, bucket);
   }
 
-  const lines = [`พบ ${searchResponse.total || searchResponse.results.length} รายการในหัวข้อ "${topic.name}" จาก ${grouped.size} ลูกค้า`];
+  const lines = [`พบ ${displayTotal} รายการในหัวข้อ "${topic.name}" จาก ${grouped.size} ลูกค้า`];
 
   Array.from(grouped.entries()).slice(0, 5).forEach(([customerPhone, items]) => {
     const latest = items[0];
-    lines.push(`- ลูกค้า ${customerPhone}: ${items.length} เคส | ${latest.brand} | Agent ${latest.agentId}`);
+    lines.push(`- ลูกค้า ${customerPhone}: ${items.length} เคส`);
+    lines.push(`• แบรนด์: ${latest.brand}`);
+    lines.push(`• Agent: ${latest.agentId}`);
+    lines.push(`• Auto ID: ${latest.autoId}`);
+    lines.push(`• Serial No.: ${latest.serialNo}`);
     if (latest.summary) {
       lines.push(`สรุปล่าสุด: ${truncateText(latest.summary)}`);
     }
   });
 
-  if (searchResponse.total > searchResponse.results.length) {
+  if (displayTotal === searchResponse.results.length && searchResponse.total > searchResponse.results.length) {
     lines.push(`และยังมีอีก ${searchResponse.total - searchResponse.results.length} รายการ`);
   }
 
   return lines.join('\n');
 };
 
-const formatCustomerTopicOverview = (phone: string, searchResponse: TopicSearchResponse): string => {
-  if (!searchResponse.results.length) {
+const formatCustomerTopicOverview = (
+  phone: string,
+  searchResponse: TopicSearchResponse,
+  enrichedResults: EnrichedTopicSearchResult[]
+): string => {
+  if (!enrichedResults.length) {
     return `ยังไม่พบข้อมูลหัวข้อของลูกค้า ${phone}`;
   }
 
-  const grouped = new Map<string, TopicSearchResult[]>();
-  for (const item of searchResponse.results) {
+  const grouped = new Map<string, EnrichedTopicSearchResult[]>();
+  for (const item of enrichedResults) {
     const key = item.topic || 'ไม่ระบุหัวข้อ';
     const bucket = grouped.get(key) || [];
     bucket.push(item);
@@ -335,6 +518,8 @@ const formatCustomerTopicOverview = (phone: string, searchResponse: TopicSearchR
     .forEach(([topicName, items]) => {
       const latest = items[0];
       lines.push(`- ${topicName}: ${items.length} เคส`);
+      lines.push(`• Auto ID: ${latest.autoId}`);
+      lines.push(`• Serial No.: ${latest.serialNo}`);
       if (latest.summary) {
         lines.push(`สรุปล่าสุด: ${truncateText(latest.summary)}`);
       }
@@ -376,6 +561,8 @@ const fetchTopicSearch = async (params: { phone?: string | null; topic?: string 
 
 const tryTopicReply = async (question: string): Promise<string | null> => {
   const phone = extractPhoneNumber(question);
+  const registrationNo = extractRegistrationNumber(question);
+  const serialNo = extractSerialNumber(question);
   const topics = await fetchTopicDistribution();
   if (!topics.length) return null;
 
@@ -385,15 +572,31 @@ const tryTopicReply = async (question: string): Promise<string | null> => {
   if (phone && !matchedTopic && topicOverviewQuestion) {
     const searchResponse = await fetchTopicSearch({ phone });
     if (searchResponse) {
-      return formatCustomerTopicOverview(phone, searchResponse);
+      const enrichedResults = await enrichTopicSearchResults(searchResponse.results);
+      return formatCustomerTopicOverview(phone, searchResponse, enrichedResults);
     }
   }
 
   if (matchedTopic) {
     const searchResponse = await fetchTopicSearch({ phone, topic: matchedTopic.name });
     if (searchResponse) {
-      return formatTopicMatches(matchedTopic, searchResponse, phone);
+      const enrichedResults = filterEnrichedTopicResults(
+        await enrichTopicSearchResults(searchResponse.results),
+        registrationNo,
+        serialNo
+      );
+
+      if (!enrichedResults.length && (registrationNo || serialNo)) {
+        return null;
+      }
+
+      return formatTopicMatches(matchedTopic, searchResponse, enrichedResults, phone);
     }
+
+    if (registrationNo || serialNo) {
+      return null;
+    }
+
     return phone
       ? `ไม่พบข้อมูลของลูกค้า ${phone} ในหัวข้อ "${matchedTopic.name}"`
       : `ไม่พบข้อมูลลูกค้าที่อยู่ในหัวข้อ "${matchedTopic.name}"`;
@@ -418,15 +621,25 @@ const requestWarrantyReply = async (question: string): Promise<string> => {
     return CHATBOT_FALLBACK_MESSAGE;
   }
 
-  return answerText;
+  return appendWarrantyMeta(answerText, extractWarrantyMeta(payload));
 };
 
 export const getChatbotReply = async (question: string): Promise<string> => {
   const normalizedQuestion = String(question || '').trim();
   if (!normalizedQuestion) return CHATBOT_FALLBACK_MESSAGE;
 
+  const phone = extractPhoneNumber(normalizedQuestion);
+  const registrationNo = extractRegistrationNumber(normalizedQuestion);
+  const serialNo = extractSerialNumber(normalizedQuestion);
+
   const topicReply = await tryTopicReply(normalizedQuestion);
   if (topicReply) {
+    if (phone || registrationNo || serialNo) {
+      const warrantyReply = await requestWarrantyReply(normalizedQuestion);
+      if (warrantyReply !== CHATBOT_FALLBACK_MESSAGE) {
+        return `${warrantyReply}\n\n${topicReply}`;
+      }
+    }
     return topicReply;
   }
 
