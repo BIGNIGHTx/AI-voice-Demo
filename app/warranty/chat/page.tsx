@@ -5,25 +5,68 @@ import {
   SendHorizonal, 
   Bot, 
   User, 
-  ShieldCheck, 
-  RefreshCw, 
-  ExternalLink, 
   ArrowLeft,
-  Search
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+import { getChatbotReply } from '@/lib/chatbot';
 
 interface Message {
   role: 'user' | 'bot';
   text: string;
 }
 
+const normalizeForDedup = (line: string): string => {
+  const trimmed = line.trim().toLowerCase();
+  return trimmed
+    .replace(/^((📌|📝)\s*)+/u, '')
+    .replace(/^💡\s*key insights:\s*/i, '')
+    .replace(/^💬\s*หัวข้อที่สนทนา:\s*/i, '')
+    .replace(/^💬\s*อารมณ์โดยรวม:\s*/i, '')
+    .replace(/^📊\s*คะแนน:\s*/i, '')
+    .replace(/^🛡️\s*ข้อมูลประกัน:\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const formatBotMessage = (text: string): string[] => {
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const formatted: string[] = [];
+  const seen = new Set<string>();
+
+  for (const line of lines) {
+    if (line.startsWith('📝') && line.includes('|')) {
+      const chunks = line
+        .split('|')
+        .map((chunk) => chunk.trim())
+        .filter(Boolean);
+
+      for (const chunk of chunks) {
+        const key = normalizeForDedup(chunk);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        formatted.push(chunk);
+      }
+      continue;
+    }
+
+    const key = normalizeForDedup(line);
+    if (!key || seen.has(key)) continue;
+
+    seen.add(key);
+    formatted.push(line);
+  }
+
+  return formatted;
+};
+
 export default function WarrantyChatPage() {
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'bot', text: 'สวัสดีครับ ผมเป็น AI ผู้ช่วยตรวจสอบข้อมูลการรับประกันสินค้า คุณสามารถสอบถามข้อมูลลูกค้าหรือรายละเอียดประกันได้เลยครับ เช่น "หาข้อมูลประกันของลูกค้าเบอร์ 0812345678" หรือ "ขอดูรายการประกันแบรนด์ LOTUS ทั้งหมด"' }
+    { role: 'bot', text: 'สวัสดีครับ ผมเป็น AI ผู้ช่วยตรวจสอบข้อมูลการรับประกันและข้อมูลตามหัวข้อ Topic Distribution คุณสามารถถามได้ เช่น "หาข้อมูลประกันของลูกค้าเบอร์ 0812345678" หรือ "ลูกค้าคนไหนขอคืนเงิน"' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -44,22 +87,12 @@ export default function WarrantyChatPage() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/api/v1/warranty/query`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: userMsg })
-      });
-      
-      if (!res.ok) throw new Error('API Error');
-      
-      const data = await res.json();
-      // Handle response - supporting both old and new formats
-      const botResponse = typeof data === 'string' ? data : (data.answer || data.output || JSON.stringify(data, null, 2));
+      const botResponse = await getChatbotReply(userMsg);
       
       setMessages(prev => [...prev, { role: 'bot', text: botResponse }]);
     } catch (error) {
       console.error('Chat Error:', error);
-      setMessages(prev => [...prev, { role: 'bot', text: 'ขออภัยครับ เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์' }]);
+      setMessages(prev => [...prev, { role: 'bot', text: 'ขออภัย ไม่สามารถตอบคำถามนี้ได้ในขณะนี้' }]);
     } finally {
       setLoading(false);
     }
@@ -111,7 +144,23 @@ export default function WarrantyChatPage() {
                       ? 'bg-white border border-slate-200 text-slate-700 rounded-tl-none'
                       : 'bg-blue-600 text-white rounded-tr-none'
                   }`}>
-                    {m.text}
+                    {m.role === 'bot' ? (
+                      <div className="space-y-2">
+                        {formatBotMessage(m.text).map((line, lineIndex) => {
+                          const isSectionTitle = line.endsWith(':');
+                          return (
+                            <p
+                              key={`${i}-${lineIndex}`}
+                              className={isSectionTitle ? 'pt-1 font-semibold text-slate-800' : 'text-slate-700'}
+                            >
+                              {line}
+                            </p>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      m.text
+                    )}
                   </div>
                   <div className={`mt-1.5 px-2 text-[10px] font-bold text-slate-400 uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity ${
                     m.role === 'user' ? 'text-right' : 'text-left'

@@ -354,11 +354,11 @@ export default function FilesPage() {
         setLocalUploads((prev) => prev.map((item) => (
           item.temp_id === upload.temp_id
             ? {
-                ...item,
-                status: 'PROCESSING',
-                server_file_id: serverFileId || undefined,
-                error: undefined,
-              }
+              ...item,
+              status: 'PROCESSING',
+              server_file_id: serverFileId || undefined,
+              error: undefined,
+            }
             : item
         )));
 
@@ -376,11 +376,11 @@ export default function FilesPage() {
         setLocalUploads((prev) => prev.map((item) => (
           item.temp_id === upload.temp_id
             ? {
-                ...item,
-                status: 'ERROR',
-                server_file_id: serverFileId || item.server_file_id,
-                error: message,
-              }
+              ...item,
+              status: 'ERROR',
+              server_file_id: serverFileId || item.server_file_id,
+              error: message,
+            }
             : item
         )));
       }

@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Bot, User, Loader2 } from 'lucide-react';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+import { MessageCircle, X, Send, Bot, Loader2 } from 'lucide-react';
+import { getChatbotReply } from '@/lib/chatbot';
 
 interface Message {
   id: string;
@@ -11,13 +10,61 @@ interface Message {
   text: string;
 }
 
+const normalizeForDedup = (line: string): string => {
+  const trimmed = line.trim().toLowerCase();
+  return trimmed
+    .replace(/^((📌|📝)\s*)+/u, '')
+    .replace(/^💡\s*key insights:\s*/i, '')
+    .replace(/^💬\s*หัวข้อที่สนทนา:\s*/i, '')
+    .replace(/^💬\s*อารมณ์โดยรวม:\s*/i, '')
+    .replace(/^📊\s*คะแนน:\s*/i, '')
+    .replace(/^🛡️\s*ข้อมูลประกัน:\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const formatAiMessage = (text: string): string[] => {
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const formatted: string[] = [];
+  const seen = new Set<string>();
+
+  for (const line of lines) {
+    if (line.startsWith('📝') && line.includes('|')) {
+      const chunks = line
+        .split('|')
+        .map((chunk) => chunk.trim())
+        .filter(Boolean);
+
+      for (const chunk of chunks) {
+        const key = normalizeForDedup(chunk);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        formatted.push(chunk);
+      }
+      continue;
+    }
+
+    const key = normalizeForDedup(line);
+    if (!key || seen.has(key)) continue;
+
+    seen.add(key);
+    formatted.push(line);
+  }
+
+  return formatted;
+};
+
 export default function Chatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
       role: 'ai',
-      text: 'Hello there, this is the AI chat that you can have. Ask anything! 😊'
+      text: 'สวัสดีครับ ถามข้อมูลประกัน ข้อมูลลูกค้า หรือถามตามหัวข้อจาก Topic Distribution ได้เลย เช่น "ลูกค้าคนไหนขอคืนเงิน"'
     }
   ]);
   const [input, setInput] = useState('');
@@ -39,45 +86,22 @@ export default function Chatbot() {
 
     const userText = input.trim();
     setInput('');
-    
+
     // Add user message
     const newMessage: Message = { id: Date.now().toString(), role: 'user', text: userText };
     setMessages(prev => [...prev, newMessage]);
     setIsLoading(true);
 
     try {
-      // Call Qdrant / RAG backend
-      const res = await fetch(`${API_BASE}/api/v1/warranty/query`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: userText })
-      });
-
-      if (!res.ok) {
-        throw new Error('API Error');
-      }
-
-      const data = await res.json();
-      
-      // Extract answer from n8n or local DB format
-      let aiResponseText = data.output || data.answer || data.message || data.text;
-      
-      if (!aiResponseText) {
-        // Fallback for n8n format
-        if (Array.isArray(data) && data.length > 0 && data[0].output) {
-            aiResponseText = data[0].output;
-        } else {
-            aiResponseText = 'ขออภัย ไม่สามารถดึงข้อมูลจากระบบได้ในขณะนี้';
-        }
-      }
+      const aiResponseText = await getChatbotReply(userText);
 
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: aiResponseText }]);
     } catch (error) {
       console.error("Chat Error:", error);
-      setMessages(prev => [...prev, { 
-        id: Date.now().toString(), 
-        role: 'ai', 
-        text: 'ขออภัย เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์ กรุณาลองใหม่อีกครั้ง' 
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'ai',
+        text: 'ขออภัย ไม่สามารถตอบคำถามนี้ได้ในขณะนี้'
       }]);
     } finally {
       setIsLoading(false);
@@ -120,7 +144,7 @@ export default function Chatbot() {
                 <p className="text-emerald-500 text-[11px] font-medium leading-none mt-1">Online</p>
               </div>
             </div>
-            <button 
+            <button
               onClick={() => setIsOpen(false)}
               className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
             >
@@ -131,16 +155,23 @@ export default function Chatbot() {
           {/* Messages Area */}
           <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50/50 scroll-smooth">
             {messages.map((msg) => (
-              <div 
-                key={msg.id} 
+              <div
+                key={msg.id}
                 className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
-                  msg.role === 'user' 
-                    ? 'bg-blue-600 text-white rounded-br-sm shadow-md shadow-blue-600/20' 
+                <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${msg.role === 'user'
+                    ? 'bg-blue-600 text-white rounded-br-sm shadow-md shadow-blue-600/20'
                     : 'bg-white text-slate-700 rounded-bl-sm shadow-sm border border-slate-100'
-                }`}>
-                  <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                  }`}>
+                  {msg.role === 'ai' ? (
+                    <div className="space-y-1.5">
+                      {formatAiMessage(msg.text).map((line, index) => (
+                        <p key={`${msg.id}-${index}`} className="leading-relaxed text-slate-700">{line}</p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                  )}
                 </div>
               </div>
             ))}
@@ -175,7 +206,7 @@ export default function Chatbot() {
               </button>
             </div>
             <div className="text-center mt-3">
-               <span className="text-[10px] text-slate-400 font-medium">Powered by Asyntai</span>
+              <span className="text-[10px] text-slate-400 font-medium">Powered by Asyntai</span>
             </div>
           </div>
           <style>{`
