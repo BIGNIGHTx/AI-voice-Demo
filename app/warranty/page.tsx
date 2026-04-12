@@ -14,9 +14,10 @@ import {
   User,
   ExternalLink
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const ITEMS_PER_PAGE = 10;
 
 interface WarrantyRecord {
   registration_no: string;
@@ -42,6 +43,8 @@ export default function WarrantyDatabasePage() {
   const [syncing, setSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const warrantiesRef = useRef<WarrantyRecord[]>([]);
   
   // Form State
   const [formData, setFormData] = useState({
@@ -60,22 +63,48 @@ export default function WarrantyDatabasePage() {
     status: 'Active'
   });
 
-  const fetchWarranties = async () => {
-    setLoading(true);
+  const fetchWarranties = async ({ silent = false, onlyOnCompletion = false }: { silent?: boolean; onlyOnCompletion?: boolean } = {}) => {
+    if (!silent) {
+      setLoading(true);
+    }
+
     try {
       const res = await fetch(`${API_BASE}/api/v1/warranty/list`, { cache: 'no-store' });
       const data = await res.json();
-      setWarranties(data.warranties || []);
+      const nextWarranties = data.warranties || [];
+
+      if (onlyOnCompletion) {
+        const previousByRegistration = new Map(
+          warrantiesRef.current.map((item) => [item.registration_no, item.qdrant_synced])
+        );
+
+        const hasCompletedAnalysis = nextWarranties.some((item: WarrantyRecord) => {
+          const previousSynced = previousByRegistration.get(item.registration_no);
+          return previousSynced === false && item.qdrant_synced;
+        });
+
+        if (hasCompletedAnalysis) {
+          setWarranties(nextWarranties);
+        }
+      } else {
+        setWarranties(nextWarranties);
+      }
     } catch (error) {
       console.error('Failed to fetch warranties:', error);
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     fetchWarranties();
   }, []);
+
+  useEffect(() => {
+    warrantiesRef.current = warranties;
+  }, [warranties]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -89,7 +118,7 @@ export default function WarrantyDatabasePage() {
     if (!hasPending) return;
 
     const interval = setInterval(() => {
-      fetchWarranties();
+      fetchWarranties({ silent: true, onlyOnCompletion: true });
     }, 5000); // Polling every 5 seconds if pending
 
     return () => clearInterval(interval);
@@ -152,6 +181,24 @@ export default function WarrantyDatabasePage() {
     w.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     w.customer_phone.includes(searchTerm)
   );
+
+  const totalPages = Math.max(1, Math.ceil(filteredWarranties.length / ITEMS_PER_PAGE));
+  const paginatedWarranties = filteredWarranties.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+  const pageStart = filteredWarranties.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
+  const pageEnd = Math.min(currentPage * ITEMS_PER_PAGE, filteredWarranties.length);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
@@ -249,7 +296,7 @@ export default function WarrantyDatabasePage() {
                         <p className="text-slate-400 font-bold">ไม่พบข้อมูลการรับประกัน</p>
                       </td>
                     </tr>
-                  ) : filteredWarranties.map((w) => (
+                  ) : paginatedWarranties.map((w) => (
                     <tr key={w.registration_no} className="hover:bg-slate-50/50 transition-colors group">
                       <td className="px-6 py-5">
                         <span className="font-bold text-slate-800 block">{w.registration_no}</span>
@@ -292,6 +339,41 @@ export default function WarrantyDatabasePage() {
                   ))}
                 </tbody>
               </table>
+
+              {!loading && filteredWarranties.length > 0 && (
+                <div className="flex flex-col gap-3 border-t border-slate-100 px-6 py-4 md:flex-row md:items-center md:justify-between">
+                  <p className="text-sm text-slate-500">
+                    แสดง {pageStart}-{pageEnd} จาก {filteredWarranties.length} รายการ
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
+                      disabled={currentPage === 1}
+                      className={`rounded-xl border px-4 py-2 text-sm font-bold transition-all ${
+                        currentPage === 1
+                          ? 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-600'
+                      }`}
+                    >
+                      ก่อนหน้า
+                    </button>
+                    <div className="min-w-[84px] text-center text-sm font-bold text-slate-600">
+                      หน้า {currentPage}/{totalPages}
+                    </div>
+                    <button
+                      onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                      className={`rounded-xl border px-4 py-2 text-sm font-bold transition-all ${
+                        currentPage === totalPages
+                          ? 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-600'
+                      }`}
+                    >
+                      หน้าถัดไป
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

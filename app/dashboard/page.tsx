@@ -11,10 +11,6 @@ import {
   Frown,
   CheckCircle2,
   RefreshCw,
-  BarChart3,
-  Tag,
-  Calendar,
-  Trophy,
   Building2,
   TrendingUp,
   AlertCircle,
@@ -26,7 +22,28 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1'];
+const BRAND_TONES = [
+  {
+    badge: 'border-orange-200 bg-orange-100 text-orange-700',
+    bar: 'from-orange-400 to-amber-500'
+  },
+  {
+    badge: 'border-sky-200 bg-sky-100 text-sky-700',
+    bar: 'from-sky-400 to-blue-500'
+  },
+  {
+    badge: 'border-emerald-200 bg-emerald-100 text-emerald-700',
+    bar: 'from-emerald-400 to-teal-500'
+  },
+  {
+    badge: 'border-rose-200 bg-rose-100 text-rose-700',
+    bar: 'from-rose-400 to-pink-500'
+  },
+  {
+    badge: 'border-violet-200 bg-violet-100 text-violet-700',
+    bar: 'from-violet-400 to-indigo-500'
+  }
+];
 
 type FilterType = 'Day' | 'Month' | 'Year';
 
@@ -382,8 +399,22 @@ export default function DashboardPage() {
       const brand = item.brand || 'UNKNOWN';
       counter.set(brand, (counter.get(brand) || 0) + 1);
     }
-    return Array.from(counter.entries()).map(([name, count]) => ({ name, count }));
+    return Array.from(counter.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   }, [filteredAudioFiles]);
+
+  const brandSummary = useMemo(() => {
+    const totalFiles = brandDistribution.reduce((sum, brand) => sum + brand.count, 0);
+    const topBrand = brandDistribution[0];
+
+    return {
+      totalFiles,
+      totalBrands: brandDistribution.length,
+      topBrand,
+      topBrandShare: totalFiles > 0 && topBrand ? Math.round((topBrand.count / totalFiles) * 100) : 0
+    };
+  }, [brandDistribution]);
 
   const failedEndpoints = useMemo(
     () => Object.entries(endpointStatus).filter(([, status]) => !status.ok),
@@ -672,19 +703,60 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Files by Brand */}
             <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] overflow-hidden">
-              <h3 className="font-semibold text-lg mb-6 flex items-center gap-2">
-                <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-orange-400 to-amber-600 shadow-sm"></div>
-                Files by Brand
-              </h3>
-              <div className="grid grid-cols-2 gap-4 max-h-[220px] overflow-y-auto pr-1">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 className="font-semibold text-lg flex items-center gap-2">
+                    <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-orange-400 to-amber-600 shadow-sm"></div>
+                    Files by Brand
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">Sorted by volume with a tighter layout so every brand is easier to scan.</p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs font-medium">
+                  <div className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-orange-700">
+                    <Building2 size={13} />
+                    {brandSummary.totalBrands} Brands
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-600">
+                    <Folder size={13} />
+                    {brandSummary.totalFiles.toLocaleString()} Files
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 max-h-[280px] overflow-y-auto pr-1 md:grid-cols-2">
                 {brandDistribution.length > 0 ? (
-                  brandDistribution.map((brand, i) => (
-                    <div key={i} className="bg-[#F8FAFC] rounded-lg p-6 text-center border border-slate-100">
-                      <p className="text-xs font-bold text-slate-500 tracking-wider mb-2 uppercase truncate">{brand.name}</p>
-                      <h4 className="text-3xl font-bold text-slate-800 mb-1">{brand.count}</h4>
-                      <p className="text-xs text-slate-400">Recordings</p>
-                    </div>
-                  ))
+                  brandDistribution.map((brand, i) => {
+                    const tone = BRAND_TONES[i % BRAND_TONES.length];
+                    const share = brandSummary.totalFiles > 0 ? Math.round((brand.count / brandSummary.totalFiles) * 100) : 0;
+                    const relativeWidth = brandSummary.topBrand ? Math.max((brand.count / brandSummary.topBrand.count) * 100, 12) : 0;
+
+                    return (
+                      <div key={brand.name} className="rounded-xl border border-slate-200/80 bg-gradient-to-r from-white via-orange-50/40 to-amber-50/50 p-3 shadow-sm shadow-orange-100/30">
+                        <div className="flex items-start gap-3">
+                          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-xs font-bold ${tone.badge}`}>
+                            {String(i + 1).padStart(2, '0')}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">{brand.name}</p>
+                                <p className="mt-1 text-[11px] text-slate-400">{share}% of visible recordings</p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="text-xl font-bold leading-none text-slate-800">{brand.count.toLocaleString()}</p>
+                                <p className="mt-1 text-[11px] font-medium text-slate-400">files</p>
+                              </div>
+                            </div>
+                            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white ring-1 ring-orange-100">
+                              <div
+                                className={`h-full rounded-full bg-gradient-to-r ${tone.bar}`}
+                                style={{ width: `${relativeWidth}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
                 ) : (
                   <div className="col-span-2 text-center text-slate-400 text-sm py-8">No files data available</div>
                 )}
