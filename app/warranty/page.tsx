@@ -1,14 +1,14 @@
 'use client';
 
 import Sidebar from '@/components/Sidebar';
-import { 
-  ShieldCheck, 
-  Search, 
-  Plus, 
-  RefreshCw, 
-  CheckCircle2, 
-  XCircle, 
-  Clock, 
+import {
+  ShieldCheck,
+  Search,
+  Plus,
+  RefreshCw,
+  CheckCircle2,
+  XCircle,
+  Clock,
   Package,
   Phone,
   User,
@@ -45,7 +45,7 @@ export default function WarrantyDatabasePage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const warrantiesRef = useRef<WarrantyRecord[]>([]);
-  
+
   // Form State
   const [formData, setFormData] = useState({
     registration_no: '',
@@ -148,23 +148,23 @@ export default function WarrantyDatabasePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
-      
+
       if (res.ok) {
         setShowAddModal(false);
         setFormData({
-            registration_no: '',
-            customer_name: '',
-            customer_phone: '',
-            brand: '',
-            category: '',
-            size: '',
-            serial_no: '',
-            warranty_period: '',
-            date_of_purchase: '',
-            date_of_delivery: '',
-            purchase_channel: '',
-            order_number: '',
-            status: 'Active'
+          registration_no: '',
+          customer_name: '',
+          customer_phone: '',
+          brand: '',
+          category: '',
+          size: '',
+          serial_no: '',
+          warranty_period: '',
+          date_of_purchase: '',
+          date_of_delivery: '',
+          purchase_channel: '',
+          order_number: '',
+          status: 'Active'
         });
         fetchWarranties();
       } else {
@@ -176,7 +176,7 @@ export default function WarrantyDatabasePage() {
     }
   };
 
-  const filteredWarranties = warranties.filter(w => 
+  const filteredWarranties = warranties.filter(w =>
     w.registration_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
     w.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     w.customer_phone.includes(searchTerm)
@@ -215,19 +215,18 @@ export default function WarrantyDatabasePage() {
               <p className="text-sm text-slate-500 font-medium">จัดการข้อมูลการรับประกันสินค้าและการซิงค์ RAG</p>
             </div>
             <div className="flex items-center gap-3">
-              <button 
+              <button
                 onClick={handleSync}
                 disabled={syncing}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all border-2 ${
-                  syncing 
-                  ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed' 
-                  : 'bg-white text-blue-600 border-blue-100 hover:border-blue-600 hover:bg-blue-50'
-                }`}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all border-2 ${syncing
+                    ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed'
+                    : 'bg-white text-blue-600 border-blue-100 hover:border-blue-600 hover:bg-blue-50'
+                  }`}
               >
                 <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
                 {syncing ? 'กำลังซิงค์...' : 'ซิงค์กับ Qdrant'}
               </button>
-              <button 
+              <button
                 onClick={() => setShowAddModal(true)}
                 className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
               >
@@ -241,7 +240,7 @@ export default function WarrantyDatabasePage() {
         {/* Content */}
         <div className="flex-1 overflow-auto p-6">
           <div className="max-w-full mx-auto space-y-6">
-            
+
             {/* Stats & Search */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-6">
@@ -259,8 +258,8 @@ export default function WarrantyDatabasePage() {
 
               <div className="relative w-full md:w-96">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="ค้นหาตามชื่อ, เบอร์ หรือเลขทะเบียน..."
                   className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all shadow-sm"
                   value={searchTerm}
@@ -281,7 +280,7 @@ export default function WarrantyDatabasePage() {
                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="">
                   {loading ? (
                     <tr>
                       <td colSpan={5} className="py-20 text-center">
@@ -349,11 +348,10 @@ export default function WarrantyDatabasePage() {
                     <button
                       onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
                       disabled={currentPage === 1}
-                      className={`rounded-xl border px-4 py-2 text-sm font-bold transition-all ${
-                        currentPage === 1
+                      className={`rounded-xl border px-4 py-2 text-sm font-bold transition-all ${currentPage === 1
                           ? 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300'
                           : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-600'
-                      }`}
+                        }`}
                     >
                       ก่อนหน้า
                     </button>
@@ -363,11 +361,10 @@ export default function WarrantyDatabasePage() {
                     <button
                       onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
                       disabled={currentPage === totalPages}
-                      className={`rounded-xl border px-4 py-2 text-sm font-bold transition-all ${
-                        currentPage === totalPages
+                      className={`rounded-xl border px-4 py-2 text-sm font-bold transition-all ${currentPage === totalPages
                           ? 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300'
                           : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-600'
-                      }`}
+                        }`}
                     >
                       หน้าถัดไป
                     </button>
@@ -386,36 +383,36 @@ export default function WarrantyDatabasePage() {
                 <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
                   <Plus className="text-blue-600" /> เพิ่มข้อมูลการรับประกัน
                 </h2>
-                <button 
+                <button
                   onClick={() => setShowAddModal(false)}
                   className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white text-slate-400 hover:text-red-500 transition-all border border-transparent hover:border-slate-200"
                 >
                   <XCircle size={24} />
                 </button>
               </div>
-              
+
               <form onSubmit={handleSubmit} className="p-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Registration No */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">เลขทะเบียนรับประกัน</label>
-                    <input 
+                    <input
                       required
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       value={formData.registration_no}
-                      onChange={e => setFormData({...formData, registration_no: e.target.value})}
+                      onChange={e => setFormData({ ...formData, registration_no: e.target.value })}
                     />
                   </div>
                   {/* Order Number */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">เลขที่ใบสั่งซื้อ</label>
-                    <input 
+                    <input
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       value={formData.order_number}
-                      onChange={e => setFormData({...formData, order_number: e.target.value})}
+                      onChange={e => setFormData({ ...formData, order_number: e.target.value })}
                     />
                   </div>
-                  
+
                   <div className="md:col-span-2 border-t border-slate-100 my-2 pt-2">
                     <p className="text-[10px] font-black text-blue-600 uppercase tracking-[2px] mb-4">ข้อมูลลูกค้า</p>
                   </div>
@@ -423,21 +420,21 @@ export default function WarrantyDatabasePage() {
                   {/* Customer Name */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">ชื่อลูกค้า</label>
-                    <input 
+                    <input
                       required
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       value={formData.customer_name}
-                      onChange={e => setFormData({...formData, customer_name: e.target.value})}
+                      onChange={e => setFormData({ ...formData, customer_name: e.target.value })}
                     />
                   </div>
                   {/* Customer Phone */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">เบอร์โทรศัพท์</label>
-                    <input 
+                    <input
                       required
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       value={formData.customer_phone}
-                      onChange={e => setFormData({...formData, customer_phone: e.target.value})}
+                      onChange={e => setFormData({ ...formData, customer_phone: e.target.value })}
                     />
                   </div>
 
@@ -448,51 +445,51 @@ export default function WarrantyDatabasePage() {
                   {/* Brand */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">แบรนด์</label>
-                    <input 
+                    <input
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       value={formData.brand}
-                      onChange={e => setFormData({...formData, brand: e.target.value})}
+                      onChange={e => setFormData({ ...formData, brand: e.target.value })}
                     />
                   </div>
                   {/* Category */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">ประเภทสินค้า</label>
-                    <input 
+                    <input
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       value={formData.category}
-                      onChange={e => setFormData({...formData, category: e.target.value})}
+                      onChange={e => setFormData({ ...formData, category: e.target.value })}
                     />
                   </div>
                   {/* Serial */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Serial Number</label>
-                    <input 
+                    <input
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       value={formData.serial_no}
-                      onChange={e => setFormData({...formData, serial_no: e.target.value})}
+                      onChange={e => setFormData({ ...formData, serial_no: e.target.value })}
                     />
                   </div>
                   {/* Purchase Date */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">วันที่สั่งซื้อ</label>
-                    <input 
+                    <input
                       type="date"
                       className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       value={formData.date_of_purchase}
-                      onChange={e => setFormData({...formData, date_of_purchase: e.target.value})}
+                      onChange={e => setFormData({ ...formData, date_of_purchase: e.target.value })}
                     />
                   </div>
                 </div>
 
                 <div className="mt-10 flex gap-4">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setShowAddModal(false)}
                     className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-100 rounded-2xl transition-all"
                   >
                     ยกเลิก
                   </button>
-                  <button 
+                  <button
                     type="submit"
                     className="flex-[2] py-3 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100"
                   >
