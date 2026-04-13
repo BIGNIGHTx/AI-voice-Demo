@@ -5,12 +5,19 @@ import {
   ChevronLeft,
   ShieldCheck,
   CheckCircle2,
-  FileAudio
+  FileAudio,
+  ImagePlus
 } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+interface WarrantyImage {
+  image_id: string;
+  original_filename: string;
+  url: string;
+}
 
 // ประกาศ Types สำหรับข้อมูลจริงจาก AI
 interface WarrantyDetail {
@@ -50,6 +57,9 @@ interface WarrantyDetail {
   warranty_end_date?: string;
   expiry_date_of_warranty?: string;
   registrationDate?: string;
+  status?: string;
+  warranty_source?: string;
+  images?: WarrantyImage[];
 }
 
 interface CustomerInfo {
@@ -123,7 +133,7 @@ export default function WarrantyDetailPage() {
             <p className="text-slate-500 mb-4">{error || 'Warranty not found'}</p>
             <button 
               onClick={() => router.push(`/customers/${customerId}`)}
-              className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all"
+              className="cursor-pointer rounded-xl bg-blue-600 px-6 py-2.5 font-semibold text-white transition-all hover:bg-blue-700"
             >
               กลับไปหน้าลูกค้า
             </button>
@@ -134,7 +144,7 @@ export default function WarrantyDetailPage() {
   }
 
   const SectionTitle = ({ title }: { title: string }) => (
-    <h3 className="text-lg font-bold text-slate-800 mb-6 pb-2 border-b-2 border-slate-100 uppercase tracking-wide">
+    <h3 className="mb-4 border-b border-slate-100 pb-2 text-base font-semibold uppercase tracking-[0.18em] text-slate-800">
       {title}
     </h3>
   );
@@ -145,9 +155,9 @@ export default function WarrantyDetailPage() {
     const displayValue = isMissing ? '-' : value;
     
     return (
-      <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 py-3 px-4 ${bg ? 'bg-slate-50 rounded-lg' : ''}`}>
-        <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider">{label}</div>
-        <div className="min-h-[20px] md:col-span-2 text-sm font-bold text-slate-800 break-words">{displayValue}</div>
+      <div className={`grid grid-cols-1 gap-2 px-3 py-2.5 sm:grid-cols-[150px_minmax(0,1fr)] sm:gap-4 ${bg ? 'rounded-xl bg-slate-50' : ''}`}>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</div>
+        <div className="min-h-[20px] text-sm font-semibold text-slate-800 break-words">{displayValue}</div>
       </div>
     );
   };
@@ -189,6 +199,11 @@ export default function WarrantyDetailPage() {
   };
 
   const sentimentBadge = getSentimentBadge(warranty.sentiment);
+  const getApiAssetUrl = (url?: string | null) => {
+    if (!url) return '';
+    if (/^https?:\/\//i.test(url)) return url;
+    return `${API_BASE}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden text-sm">
@@ -196,72 +211,72 @@ export default function WarrantyDetailPage() {
       <main className="flex-1 overflow-auto">
         
         {/* Top Navbar / Breadcrumb */}
-        <div className="bg-white border-b border-slate-200 px-8 py-4 sticky top-0 z-10 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-3">
             <button 
               onClick={() => router.push(`/customers/${customerId}`)}
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-slate-100 text-slate-600 transition-colors hover:bg-slate-200"
             >
               <ChevronLeft size={18} />
             </button>
-            <div className="text-sm font-medium text-slate-500 flex items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-500 sm:text-sm">
               <span className="hover:text-blue-600 cursor-pointer" onClick={() => router.push('/customers')}>Customers</span>
               <span>/</span>
-              <span className="hover:text-blue-600 cursor-pointer" onClick={() => router.push(`/customers/${customerId}`)}>{customer.phone}</span>
+              <span className="truncate hover:text-blue-600 cursor-pointer" onClick={() => router.push(`/customers/${customerId}`)}>{customer.phone}</span>
               <span>/</span>
-              <span className="text-slate-800 font-bold">Analysis Detail</span>
+              <span className="truncate font-semibold text-slate-800">Analysis Detail</span>
             </div>
           </div>
           
-          <div className="text-xs text-slate-400">
+          <div className="hidden text-[11px] text-slate-400 lg:block">
             {warranty.created_at && `Created On ${formatDate(warranty.created_at)}`}
           </div>
         </div>
 
-        <div className="p-8 max-w-6xl mx-auto space-y-8">
+        <div className="mx-auto max-w-5xl space-y-5 px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
           
           {/* Header & Actions */}
-          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${sentimentBadge.cls}`}>
-                <ShieldCheck size={32} />
+          <div className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:flex-row md:items-center sm:p-6">
+            <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${sentimentBadge.cls} sm:h-12 sm:w-12`}>
+                <ShieldCheck size={24} />
               </div>
-              <div>
-                <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+              <div className="min-w-0">
+                <h1 className="flex flex-wrap items-center gap-2 text-xl font-bold tracking-tight text-slate-800 sm:text-2xl">
                   {warranty.brand || 'ข้อมูลการวิเคราะห์'}
                   {warranty.product_category && (
-                    <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full uppercase tracking-wider">
+                    <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-700">
                       {warranty.product_category}
                     </span>
                   )}
-                  <span className={`px-3 py-1 ${sentimentBadge.cls} text-xs font-bold rounded-full uppercase tracking-wider flex items-center gap-1`}>
+                  <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${sentimentBadge.cls}`}>
                     <CheckCircle2 size={12} /> {sentimentBadge.label}
                   </span>
                 </h1>
-                <p className="text-slate-500 text-sm mt-1 flex items-center gap-2">
-                  <FileAudio size={14} className="text-blue-500"/> ถอดความจากไฟล์เสียง (AI Analysis): 
-                  <span className="font-bold text-blue-600 cursor-pointer hover:underline" onClick={() => router.push(`/files/${fileId}`)}>{fileId.slice(0, 20)}...</span>
+                <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                  <FileAudio size={14} className="text-blue-500" /> ถอดความจากไฟล์เสียง:
+                  <span className="cursor-pointer font-semibold text-blue-600 hover:underline" onClick={() => router.push(`/files/${fileId}`)}>{fileId.slice(0, 18)}...</span>
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 border-t md:border-t-0 pt-4 md:pt-0 border-slate-100">
+            <div className="flex items-center gap-3 border-t border-slate-100 pt-4 md:border-t-0 md:pt-0">
               <button 
                 onClick={() => router.push(`/files/${fileId}`)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg font-bold shadow-md shadow-blue-200 transition-colors"
+                className="flex cursor-pointer items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
               >
                 <FileAudio size={16} /> ดูไฟล์เสียง
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             
             {/* AI Analysis Information */}
-            <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm col-span-1 lg:col-span-2">
+            <div className="col-span-1 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2 sm:p-6">
               <SectionTitle title="AI Analysis Results" />
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-2">
+              <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
                 <div className="space-y-1">
                   <InfoRow label="Brand" value={warranty.brand} bg />
                   <InfoRow label="Product Category" value={warranty.product_category} />
@@ -290,11 +305,33 @@ export default function WarrantyDetailPage() {
               </div>
             </div>
 
+            {warranty.images && warranty.images.length > 0 && (
+              <div className="col-span-1 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2 sm:p-6">
+                <SectionTitle title="Warranty Images" />
+                <div className="mb-4 flex items-center gap-2 text-sm text-slate-500">
+                  <ImagePlus size={16} className="text-blue-500" />
+                  รูปที่อัปโหลดจากหน้า Customer Detail
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {warranty.images.map((image) => (
+                    <div key={image.image_id} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                      <img
+                        src={getApiAssetUrl(image.url)}
+                        alt={image.original_filename || 'Warranty image'}
+                        className="h-48 w-full object-cover"
+                      />
+                      <p className="truncate px-4 py-3 text-sm font-medium text-slate-600">{image.original_filename || 'Warranty image'}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Summary */}
             {warranty.summary && (
-              <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm col-span-1 lg:col-span-2">
+              <div className="col-span-1 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2 sm:p-6">
                 <SectionTitle title="Summary" />
-                <div className="bg-slate-50 p-6 rounded-xl border border-slate-100">
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 sm:p-5">
                   <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{warranty.summary}</p>
                 </div>
               </div>
@@ -302,14 +339,14 @@ export default function WarrantyDetailPage() {
 
             {/* Keywords */}
             {warranty.keywords && (
-              <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                 <SectionTitle title="Keywords" />
                 <div className="flex flex-wrap gap-2">
                   {(() => {
                     try {
                       const keywords = JSON.parse(warranty.keywords);
                       return Array.isArray(keywords) ? keywords.map((kw: string, i: number) => (
-                        <span key={i} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">
+                        <span key={i} className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
                           {kw}
                         </span>
                       )) : <p className="text-slate-500 text-sm">No keywords</p>;
@@ -323,14 +360,14 @@ export default function WarrantyDetailPage() {
 
             {/* Action Items */}
             {warranty.action_items && (
-              <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                 <SectionTitle title="Action Items" />
                 <div className="space-y-2">
                   {(() => {
                     try {
                       const actions = JSON.parse(warranty.action_items);
                       return Array.isArray(actions) ? actions.map((action: string, i: number) => (
-                        <div key={i} className="flex items-start gap-2 p-3 bg-slate-50 rounded-lg">
+                        <div key={i} className="flex items-start gap-2 rounded-lg bg-slate-50 p-3">
                           <CheckCircle2 size={16} className="text-blue-600 shrink-0 mt-0.5" />
                           <span className="text-sm text-slate-700">{action}</span>
                         </div>
@@ -345,9 +382,9 @@ export default function WarrantyDetailPage() {
 
             {/* Transcript */}
             {warranty.full_transcript && (
-              <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm col-span-1 lg:col-span-2">
+              <div className="col-span-1 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2 sm:p-6">
                 <SectionTitle title="Full Transcript" />
-                <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 max-h-96 overflow-y-auto">
+                <div className="max-h-80 overflow-y-auto rounded-xl border border-slate-100 bg-slate-50 p-4 sm:p-5">
                   <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap font-mono">{warranty.full_transcript}</p>
                 </div>
               </div>
