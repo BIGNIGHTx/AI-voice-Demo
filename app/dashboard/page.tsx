@@ -12,13 +12,12 @@ import {
   CheckCircle2,
   RefreshCw,
   Building2,
-  TrendingUp,
   AlertCircle,
   Loader2,
   TriangleAlert,
   LayoutDashboard
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -53,13 +52,6 @@ interface AudioFileRow {
   brand: string;
   status: string;
   date: string;
-}
-
-interface TrendRow {
-  date: string;
-  positive_calls: number;
-  negative_calls: number;
-  neutral_calls: number;
 }
 
 interface TopicRow {
@@ -199,24 +191,6 @@ const normalizeAudioFiles = (payload: unknown): AudioFileRow[] =>
     };
   });
 
-const normalizeTrends = (payload: unknown): TrendRow[] =>
-  toArray(payload, ['trends', 'data', 'items']).map((item, index) => {
-    if (!isObject(item)) {
-      return {
-        date: `Day ${index + 1}`,
-        positive_calls: 0,
-        negative_calls: 0,
-        neutral_calls: 0
-      };
-    }
-    return {
-      date: toText(item.date ?? item.day ?? item.label, `Day ${index + 1}`),
-      positive_calls: toNum(item.positive_calls ?? item.positive ?? item.pos),
-      negative_calls: toNum(item.negative_calls ?? item.negative ?? item.neg),
-      neutral_calls: toNum(item.neutral_calls ?? item.neutral)
-    };
-  });
-
 const normalizeTopics = (payload: unknown): TopicRow[] =>
   toArray(payload, ['topic_distribution', 'topics', 'data', 'items']).map((item, index) => {
     if (!isObject(item)) {
@@ -268,10 +242,25 @@ const normalizeBrands = (payload: unknown): BrandRow[] =>
     };
   });
 
-const sameMonth = (value: Date, target: Date) =>
-  value.getFullYear() === target.getFullYear() && value.getMonth() === target.getMonth();
+const getReferenceDate = (type: FilterType, source = new Date()) => {
+  const year = source.getUTCFullYear();
+  const month = source.getUTCMonth();
+  const day = source.getUTCDate();
 
-const sameYear = (value: Date, target: Date) => value.getFullYear() === target.getFullYear();
+  if (type === 'Year') return new Date(Date.UTC(year, 0, 1));
+  if (type === 'Month') return new Date(Date.UTC(year, month, 1));
+  return new Date(Date.UTC(year, month, day));
+};
+
+const sameDay = (value: Date, target: Date) =>
+  value.getUTCFullYear() === target.getUTCFullYear() &&
+  value.getUTCMonth() === target.getUTCMonth() &&
+  value.getUTCDate() === target.getUTCDate();
+
+const sameMonth = (value: Date, target: Date) =>
+  value.getUTCFullYear() === target.getUTCFullYear() && value.getUTCMonth() === target.getUTCMonth();
+
+const sameYear = (value: Date, target: Date) => value.getUTCFullYear() === target.getUTCFullYear();
 
 const toSafeDate = (value: string): Date | null => {
   if (!value) return null;
@@ -279,14 +268,47 @@ const toSafeDate = (value: string): Date | null => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
+const formatDateLabel = (value: Date, type: FilterType) => {
+  if (type === 'Year') {
+    return value.toLocaleDateString('en-US', {
+      year: 'numeric',
+      timeZone: 'UTC'
+    });
+  }
+
+  if (type === 'Month') {
+    return value.toLocaleDateString('en-US', {
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC'
+    });
+  }
+
+  return value.toLocaleDateString('en-US', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC'
+  });
+};
+
+const shiftSelectedDate = (value: Date, type: FilterType, delta: number) => {
+  const year = value.getUTCFullYear();
+  const month = value.getUTCMonth();
+  const day = value.getUTCDate();
+
+  if (type === 'Year') return new Date(Date.UTC(year + delta, 0, 1));
+  if (type === 'Month') return new Date(Date.UTC(year, month + delta, 1));
+  return new Date(Date.UTC(year, month, day + delta));
+};
+
 export default function DashboardPage() {
   const [filterType, setFilterType] = useState<FilterType>('Day');
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => getReferenceDate('Day'));
 
   const [audioFiles, setAudioFiles] = useState<AudioFileRow[]>([]);
   const [agentPerformance, setAgentPerformance] = useState<AgentRow[]>([]);
   const [brandIntelligence, setBrandIntelligence] = useState<BrandRow[]>([]);
-  const [trends, setTrends] = useState<TrendRow[]>([]);
   const [topicDistribution, setTopicDistribution] = useState<TopicRow[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -303,40 +325,28 @@ export default function DashboardPage() {
           '/api/v1/audio/list',
           '/api/v1/analytics/agent-performance',
           '/api/v1/analytics/brand-intelligence',
-          '/api/v1/analytics/trends',
           '/api/v1/analytics/topic-distribution'
         ];
 
-        const [filesResult, agentResult, brandResult, trendsResult, topicResult] = await Promise.allSettled([
+        const [filesResult, agentResult, brandResult, topicResult] = await Promise.allSettled([
           fetchAllAudioFiles(),
           fetchJson(`${API_BASE}/api/v1/analytics/agent-performance`),
           fetchJson(`${API_BASE}/api/v1/analytics/brand-intelligence`),
-          fetchJson(`${API_BASE}/api/v1/analytics/trends`),
           fetchJson(`${API_BASE}/api/v1/analytics/topic-distribution`)
         ]);
 
-        setEndpointStatus(normalizeEndpointStatuses(endpointNames, [filesResult, agentResult, brandResult, trendsResult, topicResult]));
+        setEndpointStatus(normalizeEndpointStatuses(endpointNames, [filesResult, agentResult, brandResult, topicResult]));
 
         const allFiles = filesResult.status === 'fulfilled' ? filesResult.value : [];
         const normalizedFiles = normalizeAudioFiles({ files: allFiles });
         setAudioFiles(normalizedFiles);
 
-        const dated = normalizedFiles
-          .map((item) => toSafeDate(item.date))
-          .filter((d): d is Date => d !== null)
-          .sort((a, b) => b.getTime() - a.getTime());
-
-        if (dated.length > 0) {
-          setSelectedDate(dated[0]);
-        }
-
         setAgentPerformance(normalizeAgents(agentResult.status === 'fulfilled' ? agentResult.value : []));
         setBrandIntelligence(normalizeBrands(brandResult.status === 'fulfilled' ? brandResult.value : []));
-        setTrends(normalizeTrends(trendsResult.status === 'fulfilled' ? trendsResult.value : []));
         setTopicDistribution(normalizeTopics(topicResult.status === 'fulfilled' ? topicResult.value : []));
 
-        const failedCount = [filesResult, agentResult, brandResult, trendsResult, topicResult].filter(r => r.status === 'rejected').length;
-        if (failedCount === 5) {
+        const failedCount = [filesResult, agentResult, brandResult, topicResult].filter(r => r.status === 'rejected').length;
+        if (failedCount === 4) {
           throw new Error('All endpoints failed');
         }
       } catch {
@@ -352,9 +362,9 @@ export default function DashboardPage() {
   const filteredAudioFiles = useMemo(() => {
     return audioFiles.filter((item) => {
       const d = toSafeDate(item.date);
-      if (!d) return true;
+      if (!d) return false;
       if (filterType === 'Day') {
-        return d.toDateString() === selectedDate.toDateString();
+        return sameDay(d, selectedDate);
       }
       if (filterType === 'Month') {
         return sameMonth(d, selectedDate);
@@ -421,25 +431,41 @@ export default function DashboardPage() {
     [endpointStatus]
   );
 
-  const latestAvailableDate = useMemo(() => {
-    return audioFiles
-      .map((item) => toSafeDate(item.date))
-      .filter((d): d is Date => d !== null)
-      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
-  }, [audioFiles]);
+  const visibleBrandIntelligence = useMemo(() => {
+    if (audioFiles.length === 0) return brandIntelligence;
 
-  const dateLabel = selectedDate.toLocaleDateString('en-US', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  });
+    const counter = new Map<string, BrandRow>();
+
+    for (const item of filteredAudioFiles) {
+      const brandName = item.brand || 'UNKNOWN';
+      const existing = counter.get(brandName) ?? {
+        brand_name: brandName,
+        total_mentions: 0,
+        positive_mentions: 0,
+        negative_mentions: 0
+      };
+
+      existing.total_mentions += 1;
+      if (item.sentiment === 'positive') existing.positive_mentions += 1;
+      if (item.sentiment === 'negative') existing.negative_mentions += 1;
+
+      counter.set(brandName, existing);
+    }
+
+    return Array.from(counter.values()).sort(
+      (a, b) => b.total_mentions - a.total_mentions || a.brand_name.localeCompare(b.brand_name)
+    );
+  }, [audioFiles, brandIntelligence, filteredAudioFiles]);
+
+  const dateLabel = formatDateLabel(selectedDate, filterType);
+
+  const handleFilterTypeChange = (type: FilterType) => {
+    setFilterType(type);
+    setSelectedDate(getReferenceDate(type));
+  };
 
   const moveDate = (delta: number) => {
-    const next = new Date(selectedDate);
-    if (filterType === 'Day') next.setDate(next.getDate() + delta);
-    if (filterType === 'Month') next.setMonth(next.getMonth() + delta);
-    if (filterType === 'Year') next.setFullYear(next.getFullYear() + delta);
-    setSelectedDate(next);
+    setSelectedDate((current) => shiftSelectedDate(current, filterType, delta));
   };
 
   if (loading) {
@@ -504,7 +530,7 @@ export default function DashboardPage() {
                 {(['Day', 'Month', 'Year'] as FilterType[]).map((type) => (
                   <button
                     key={type}
-                    onClick={() => setFilterType(type)}
+                    onClick={() => handleFilterTypeChange(type)}
                     className={`px-4 py-2 font-bold transition-colors cursor-pointer ${filterType === type ? 'text-indigo-600 bg-indigo-50/50' : 'text-slate-500 hover:bg-slate-50'} ${type !== 'Year' ? 'border-r border-slate-100' : ''}`}
                   >
                     {type}
@@ -519,9 +545,9 @@ export default function DashboardPage() {
               </div>
 
               <button
-                onClick={() => setSelectedDate(latestAvailableDate || new Date())}
+                onClick={() => setSelectedDate(getReferenceDate(filterType))}
                 className="flex items-center justify-center w-10 h-10 bg-white border border-slate-200 rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] hover:bg-indigo-50 transition-colors cursor-pointer text-slate-400 hover:text-indigo-600"
-                title="Latest Data"
+                title="Current Period"
               >
                 <RefreshCw size={18} />
               </button>
@@ -770,8 +796,8 @@ export default function DashboardPage() {
                 Brand Intelligence
               </h3>
               <div className="space-y-4 max-h-[220px] overflow-y-auto pr-1">
-                {brandIntelligence.length > 0 ? (
-                  brandIntelligence.map((brand, idx) => {
+                {visibleBrandIntelligence.length > 0 ? (
+                  visibleBrandIntelligence.map((brand, idx) => {
                     const pointColors = ['bg-blue-500', 'bg-indigo-500', 'bg-emerald-500', 'bg-purple-500', 'bg-amber-500'];
                     const neutralMentions = brand.total_mentions - brand.positive_mentions - brand.negative_mentions;
 
@@ -866,66 +892,6 @@ export default function DashboardPage() {
                 </tbody>
               </table>
             </div>
-          </div>
-
-          {/* Fifth Row: Trends */}
-          <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] mb-10">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="font-semibold text-lg flex items-center gap-2">
-                <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-blue-400 to-cyan-500 shadow-sm"></div>
-                Sentiment Trends (7 Days)
-              </h3>
-              <div className="flex items-center gap-4 text-xs font-medium text-slate-500">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-[#54657E]"></div>
-                  <span>Total Calls</span>
-                </div>
-              </div>
-            </div>
-
-            {trends.length > 0 ? (
-              <div className="h-[200px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#54657E" stopOpacity={0.1} />
-                        <stop offset="95%" stopColor="#54657E" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis
-                      dataKey="date"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 10, fill: '#94a3b8' }}
-                      dy={10}
-                    />
-                    <YAxis
-                      hide={true}
-                    />
-                    <Tooltip
-                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                      labelStyle={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b', marginBottom: '8px' }}
-                    />
-                    <Line
-                      type="monotone"
-                      // using total calls as value to match the single trend line UI request
-                      dataKey={(row) => Number(row.positive_calls) + Number(row.negative_calls) + Number(row.neutral_calls)}
-                      name="Total Calls"
-                      stroke="#54657E"
-                      strokeWidth={2}
-                      dot={{ r: 3, fill: '#fff', stroke: '#54657E', strokeWidth: 2 }}
-                      activeDot={{ r: 5 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="h-[200px] w-full flex items-center justify-center text-slate-400 text-sm">
-                No trend data available for this range
-              </div>
-            )}
           </div>
 
         </div>
