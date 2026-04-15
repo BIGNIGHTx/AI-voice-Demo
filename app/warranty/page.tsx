@@ -205,7 +205,7 @@ export default function WarrantyDatabasePage() {
       <Sidebar />
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-white border-b border-slate-200 px-6 py-5 shadow-sm z-10">
+        <header className="z-10 border-b border-slate-200 bg-white px-4 py-4 shadow-sm sm:px-5 lg:px-6 lg:py-5">
           <div className="max-w-full mx-auto flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
@@ -238,12 +238,12 @@ export default function WarrantyDatabasePage() {
         </header>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-6">
+        <div className="flex-1 overflow-auto p-4 sm:p-5 lg:p-6">
           <div className="max-w-full mx-auto space-y-6">
 
             {/* Stats & Search */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-6">
+              <div className="flex flex-wrap items-center gap-4 sm:gap-6">
                 <div className="bg-white px-5 py-3 rounded-2xl border border-slate-100 shadow-sm">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Records</p>
                   <p className="text-2xl font-black text-slate-800">{warranties.length}</p>

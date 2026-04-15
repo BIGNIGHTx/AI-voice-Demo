@@ -131,29 +131,29 @@ export default function CustomersPage() {
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
       <Sidebar />
-      <main className="flex-1 p-6 overflow-auto">
+      <main className="flex-1 overflow-auto p-4 sm:p-5 lg:p-6">
         <div className="max-w-full mx-auto">
 
           {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-            <div className="flex items-center gap-5">
-              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-white via-indigo-50/50 to-indigo-100/20 shadow-[0_4px_15px_-3px_rgba(99,102,241,0.1),inset_0_2px_4px_rgba(255,255,255,1),inset_0_-2px_6px_rgba(99,102,241,0.1)] border border-indigo-100 flex items-center justify-center shrink-0">
+          <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-center">
+            <div className="flex items-center gap-4 sm:gap-5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/50 to-indigo-100/20 shadow-[0_4px_15px_-3px_rgba(99,102,241,0.1),inset_0_2px_4px_rgba(255,255,255,1),inset_0_-2px_6px_rgba(99,102,241,0.1)] sm:h-14 sm:w-14">
                 <Users size={26} strokeWidth={1.5} className="text-indigo-600 drop-shadow-sm" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-slate-800 tracking-tight">ลูกค้าทั้งหมด</h1>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-800 sm:text-3xl">Customers</h1>
                 <p className="text-slate-400 text-sm font-medium">ค้นหาและดูข้อมูลลูกค้าพร้อมประวัติการติดต่อ</p>
               </div>
             </div>
 
-            <div className="flex gap-8">
+            <div className="flex flex-wrap items-center gap-4 sm:gap-6">
               <div className="text-right">
-                <div className="text-3xl font-black text-slate-800 tracking-tight">{total.toLocaleString()}</div>
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ลูกค้าทั้งหมด</div>
+                <div className="text-2xl font-black tracking-tight text-slate-800 sm:text-3xl">{total.toLocaleString()}</div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Customer</div>
               </div>
-              <div className="w-px h-10 bg-slate-200"></div>
+              <div className="hidden h-10 w-px bg-slate-200 sm:block"></div>
               <div className="text-right">
-                <div className="text-3xl font-black text-emerald-600 tracking-tight">{totalWithWarranty}</div>
+                <div className="text-2xl font-black tracking-tight text-emerald-600 sm:text-3xl">{totalWithWarranty}</div>
                 <div className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">มีประกัน</div>
               </div>
             </div>

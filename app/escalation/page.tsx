@@ -184,7 +184,7 @@ export default function EscalationPage() {
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden text-slate-800">
       <Sidebar />
-      <main className="flex-1 p-6 overflow-auto">
+      <main className="flex-1 overflow-auto p-4 sm:p-5 lg:p-6">
         <div className="max-w-full mx-auto space-y-6">
 
           {/* ── Header ── */}

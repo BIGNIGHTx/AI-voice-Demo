@@ -120,22 +120,22 @@ export default function Chatbot() {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-10 right-10 w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-lg shadow-blue-200 hover:bg-blue-700 hover:scale-105 transition-transform duration-300 z-[9999]"
+          className="fixed bottom-5 right-4 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-200 transition-transform duration-300 hover:scale-105 hover:bg-blue-700 sm:bottom-6 sm:right-6 sm:h-16 sm:w-16 lg:bottom-8 lg:right-8"
           style={{ animation: 'float 3s ease-in-out infinite' }}
         >
-          <MessageCircle size={32} />
+          <MessageCircle className="h-7 w-7 sm:h-8 sm:w-8" />
         </button>
       )}
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-10 right-10 w-[360px] max-w-[calc(100vw-40px)] h-[560px] max-h-[calc(100vh-40px)] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden z-[9999] border border-slate-100 font-sans animation-slide-up">
+        <div className="animation-slide-up fixed bottom-3 right-3 z-[9999] flex h-[min(500px,calc(100vh-24px))] w-[min(320px,calc(100vw-24px))] flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white font-sans shadow-2xl sm:bottom-5 sm:right-5 sm:h-[540px] sm:w-[340px] lg:bottom-8 lg:right-8 lg:w-[350px]">
           {/* Header */}
-          <div className="px-5 py-4 bg-white border-b border-slate-100 flex items-center justify-between shadow-sm z-10">
+          <div className="z-10 flex items-center justify-between border-b border-slate-100 bg-white px-4 py-3 shadow-sm sm:px-5 sm:py-4">
             <div className="flex items-center gap-3">
               <div className="relative">
-                <div className="w-9 h-9 bg-blue-50 rounded-full flex items-center justify-center text-blue-600">
-                  <Bot size={20} />
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600 sm:h-9 sm:w-9">
+                  <Bot className="h-[18px] w-[18px] sm:h-5 sm:w-5" />
                 </div>
                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></div>
               </div>
@@ -146,20 +146,20 @@ export default function Chatbot() {
             </div>
             <button
               onClick={() => setIsOpen(false)}
-              className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+              className="cursor-pointer rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600"
             >
-              <X size={20} />
+              <X className="h-5 w-5" />
             </button>
           </div>
 
           {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50/50 scroll-smooth">
+          <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50/50 p-4 scroll-smooth sm:space-y-4 sm:p-5">
             {messages.map((msg) => (
               <div
                 key={msg.id}
                 className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${msg.role === 'user'
+                <div className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-[13px] sm:max-w-[85%] sm:px-4 sm:py-3 sm:text-sm ${msg.role === 'user'
                     ? 'bg-blue-600 text-white rounded-br-sm shadow-md shadow-blue-600/20'
                     : 'bg-white text-slate-700 rounded-bl-sm shadow-sm border border-slate-100'
                   }`}>
@@ -177,8 +177,8 @@ export default function Chatbot() {
             ))}
             {isLoading && (
               <div className="flex w-full justify-start">
-                <div className="bg-white px-4 py-3 rounded-2xl rounded-bl-sm shadow-sm border border-slate-100 text-slate-500">
-                  <Loader2 size={18} className="animate-spin" />
+                <div className="rounded-2xl rounded-bl-sm border border-slate-100 bg-white px-3.5 py-2.5 text-slate-500 shadow-sm sm:px-4 sm:py-3">
+                  <Loader2 className="h-[18px] w-[18px] animate-spin" />
                 </div>
               </div>
             )}
@@ -186,7 +186,7 @@ export default function Chatbot() {
           </div>
 
           {/* Input Area */}
-          <div className="p-4 bg-white border-t border-slate-100">
+          <div className="border-t border-slate-100 bg-white p-3.5 sm:p-4">
             <div className="flex items-center gap-2 relative">
               <input
                 type="text"
@@ -194,18 +194,18 @@ export default function Chatbot() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Type your message.."
-                className="w-full pl-4 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-slate-700"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-4 pr-11 text-[13px] text-slate-700 transition-all focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:py-3 sm:pr-12 sm:text-sm"
                 disabled={isLoading}
               />
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || isLoading}
-                className="absolute right-2 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="absolute right-2 cursor-pointer rounded-lg bg-blue-600 p-2 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Send size={16} className="ml-0.5" />
+                <Send className="ml-0.5 h-4 w-4" />
               </button>
             </div>
-            <div className="text-center mt-3">
+            <div className="mt-2.5 text-center sm:mt-3">
               <span className="text-[10px] text-slate-400 font-medium">Powered by Asyntai</span>
             </div>
           </div>

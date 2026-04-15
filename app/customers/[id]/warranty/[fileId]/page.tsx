@@ -110,7 +110,7 @@ export default function WarrantyDetailPage() {
     return (
       <div className="flex h-screen bg-slate-50 overflow-hidden">
         <Sidebar />
-        <main className="flex-1 p-6 flex items-center justify-center">
+        <main className="flex-1 p-4 sm:p-5 lg:p-6 flex items-center justify-center">
           <div className="text-center">
             <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-slate-500">กำลังโหลดข้อมูลการรับประกัน...</p>
@@ -124,7 +124,7 @@ export default function WarrantyDetailPage() {
     return (
       <div className="flex h-screen bg-slate-50 overflow-hidden">
         <Sidebar />
-        <main className="flex-1 p-6 flex items-center justify-center">
+        <main className="flex-1 p-4 sm:p-5 lg:p-6 flex items-center justify-center">
           <div className="text-center">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-red-600 text-3xl">✕</span>

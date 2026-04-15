@@ -8,42 +8,42 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 h-screen bg-slate-50 border-r border-slate-200 flex flex-col justify-between">
-      <div>
-        <div className="p-6 flex items-center space-x-3">
-          <div className="w-10 h-10 bg-blue-700 rounded-xl flex items-center justify-center text-white">
-            <Folder size={24} />
+    <aside className="flex h-screen w-20 shrink-0 flex-col justify-between overflow-hidden border-r border-slate-200 bg-slate-50 sm:w-56 lg:w-60 xl:w-64">
+      <div className="overflow-y-auto">
+        <div className="flex items-center justify-center gap-3 px-3 py-4 sm:justify-start sm:px-4 sm:py-5 lg:px-5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-700 text-white sm:h-10 sm:w-10">
+            <Folder className="h-5 w-5 sm:h-6 sm:w-6" />
           </div>
-          <span className="text-xl font-bold text-slate-800">File Manager</span>
+          <span className="hidden text-base font-bold text-slate-800 sm:inline lg:text-lg">File Manager</span>
         </div>
 
-        <nav className="mt-6 px-4 space-y-2">
-          <Link href="/dashboard" className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${pathname === '/dashboard' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
-            <LayoutDashboard size={20} />
-            <span>Dashboard</span>
+        <nav className="mt-4 space-y-1.5 px-2 sm:px-3 lg:px-4">
+          <Link href="/dashboard" title="Dashboard" className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors cursor-pointer sm:justify-start sm:px-4 ${pathname === '/dashboard' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
+            <LayoutDashboard className="h-5 w-5 shrink-0" />
+            <span className="hidden sm:inline">Dashboard</span>
           </Link>
-          <Link href="/customers" className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${pathname.includes('/customers') ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
-            <Users size={20} />
-            <span>Customers</span>
+          <Link href="/customers" title="Customers" className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors cursor-pointer sm:justify-start sm:px-4 ${pathname.includes('/customers') ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
+            <Users className="h-5 w-5 shrink-0" />
+            <span className="hidden sm:inline">Customers</span>
           </Link>
-          <Link href="/files" className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${pathname.includes('/files') ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
-            <FileText size={20} />
-            <span>Files</span>
+          <Link href="/files" title="Files" className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors cursor-pointer sm:justify-start sm:px-4 ${pathname.includes('/files') ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
+            <FileText className="h-5 w-5 shrink-0" />
+            <span className="hidden sm:inline">Files</span>
           </Link>
 
-          <Link href="/warranty" className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${pathname === '/warranty' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
-            <ShieldCheck size={20} className={pathname === '/warranty' ? 'text-blue-700' : 'text-slate-500'} />
-            <span>Warranty DB</span>
+          <Link href="/warranty" title="Warranty DB" className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors cursor-pointer sm:justify-start sm:px-4 ${pathname === '/warranty' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
+            <ShieldCheck className={`h-5 w-5 shrink-0 ${pathname === '/warranty' ? 'text-blue-700' : 'text-slate-500'}`} />
+            <span className="hidden sm:inline">Warranty DB</span>
           </Link>
 
           {/* ── Escalation ── */}
-          <div className="pt-2 pb-1">
+          <div className="pb-1 pt-2 sm:block hidden">
             <p className="px-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Call Center</p>
           </div>
-          <Link href="/escalation" className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer ${pathname === '/escalation' ? 'bg-red-50 text-red-700' : 'text-slate-500 hover:bg-slate-100'}`}>
-            <PhoneForwarded size={20} />
-            <span>Escalation</span>
-            <span className="ml-auto text-[10px] bg-red-100 text-red-600 font-bold px-1.5 py-0.5 rounded-full">NEW</span>
+          <Link href="/escalation" title="Escalation" className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors cursor-pointer sm:justify-start sm:px-4 ${pathname === '/escalation' ? 'bg-red-50 text-red-700' : 'text-slate-500 hover:bg-slate-100'}`}>
+            <PhoneForwarded className="h-5 w-5 shrink-0" />
+            <span className="hidden sm:inline">Escalation</span>
+            <span className="ml-auto hidden rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-600 sm:inline">NEW</span>
           </Link>
         </nav>
       </div>

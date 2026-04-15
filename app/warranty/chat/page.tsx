@@ -103,7 +103,7 @@ export default function WarrantyChatPage() {
       <Sidebar />
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between shadow-sm z-10 shrink-0">
+        <header className="z-10 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-3 shadow-sm sm:px-6 sm:py-4 lg:px-8">
           <div className="flex items-center gap-4">
             <Link href="/warranty" className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-all">
               <ArrowLeft size={20} />
@@ -125,9 +125,9 @@ export default function WarrantyChatPage() {
         {/* Chat Area */}
         <div 
           ref={scrollRef}
-          className="flex-1 overflow-y-auto p-8 space-y-6 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:24px_24px]"
+          className="flex-1 overflow-y-auto bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] p-4 space-y-4 [background-size:24px_24px] sm:p-6 sm:space-y-5 lg:p-8 lg:space-y-6"
         >
-          <div className="max-w-4xl mx-auto space-y-8">
+            <div className="mx-auto max-w-4xl space-y-6 sm:space-y-8">
             {messages.map((m, i) => (
               <div key={i} className={`flex items-start gap-4 ${m.role === 'user' ? 'flex-row-reverse' : ''} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                 <div className={`shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center shadow-md ${
@@ -138,7 +138,7 @@ export default function WarrantyChatPage() {
                   {m.role === 'bot' ? <Bot size={20} /> : <User size={20} />}
                 </div>
                 
-                <div className={`max-w-[70%] group`}>
+                <div className="group max-w-[85%] sm:max-w-[70%]">
                   <div className={`px-6 py-4 rounded-3xl shadow-sm leading-relaxed text-sm ${
                     m.role === 'bot'
                       ? 'bg-white border border-slate-200 text-slate-700 rounded-tl-none'
@@ -187,12 +187,12 @@ export default function WarrantyChatPage() {
         </div>
 
         {/* Input Area */}
-        <div className="p-8 bg-white border-t border-slate-200 shrink-0 shadow-[0_-1px_10px_rgba(0,0,0,0.02)]">
+          <div className="shrink-0 border-t border-slate-200 bg-white p-4 shadow-[0_-1px_10px_rgba(0,0,0,0.02)] sm:p-6 lg:p-8">
           <div className="max-w-4xl mx-auto relative group">
             <input 
               type="text" 
               placeholder="พิมพ์คำถามของคุณที่นี่..."
-              className="w-full px-8 py-5 pr-20 bg-slate-50 border-2 border-slate-100 rounded-3xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 font-medium"
+              className="w-full rounded-3xl border-2 border-slate-100 bg-slate-50 px-6 py-4 pr-16 font-medium outline-none transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 sm:px-8 sm:py-5 sm:pr-20"
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSend()}
@@ -201,7 +201,7 @@ export default function WarrantyChatPage() {
             <button 
               onClick={handleSend}
               disabled={loading || !input.trim()}
-              className={`absolute right-3 top-3 bottom-3 px-6 rounded-2xl flex items-center justify-center transition-all ${
+              className={`absolute bottom-2 right-2 top-2 flex items-center justify-center rounded-2xl px-4 transition-all sm:bottom-3 sm:right-3 sm:top-3 sm:px-6 ${
                 input.trim() && !loading
                   ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200' 
                   : 'bg-slate-200 text-slate-400 cursor-not-allowed'

@@ -171,17 +171,17 @@ export default function UploadPage() {
   return (
     <div className="flex h-screen bg-white overflow-hidden">
       <Sidebar />
-      <main className="flex-1 p-8 overflow-auto">
-        <h1 className="text-3xl font-semibold text-slate-800 mb-8">Upload File</h1>
+      <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+        <h1 className="mb-6 text-2xl font-semibold text-slate-800 sm:mb-8 sm:text-3xl">Upload File</h1>
 
-        <div className="flex gap-8">
+        <div className="flex flex-col gap-6 xl:flex-row xl:gap-8">
           {/* Upload Area */}
           <div
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             onClick={handleSelectFiles}
-            className={`flex-1 border-2 border-dashed rounded-[32px] flex flex-col items-center justify-center p-10 min-h-[420px] transition-all cursor-pointer group ${
+            className={`group flex min-h-[320px] flex-1 cursor-pointer flex-col items-center justify-center rounded-[28px] border-2 border-dashed p-8 transition-all sm:min-h-[380px] sm:p-10 xl:min-h-[420px] ${
               isDragging
                 ? 'border-blue-500 bg-blue-50/50'
                 : 'border-slate-200 bg-slate-50/30 hover:bg-slate-50 hover:border-blue-200'
@@ -198,7 +198,7 @@ export default function UploadPage() {
                 e.target.value = '';
               }}
             />
-            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-110 ${
+            <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-110 sm:mb-5 sm:h-16 sm:w-16 ${
               isDragging ? 'bg-blue-100 text-blue-700 scale-110' : 'bg-blue-50 text-blue-700'
             }`}>
               <FileUp size={32} />

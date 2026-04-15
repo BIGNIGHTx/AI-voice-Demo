@@ -505,16 +505,16 @@ export default function DashboardPage() {
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-800">
       <Sidebar />
-      <main className="flex-1 p-6 overflow-auto">
+      <main className="flex-1 overflow-auto p-4 sm:p-5 lg:p-6">
         <div className="max-w-full mx-auto space-y-6">
 
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
-            <div className="flex items-center gap-5">
-              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-white via-indigo-50/50 to-indigo-100/20 shadow-[0_4px_15px_-3px_rgba(99,102,241,0.1),inset_0_2px_4px_rgba(255,255,255,1),inset_0_-2px_6px_rgba(99,102,241,0.1)] border border-indigo-100 flex items-center justify-center shrink-0">
+          <div className="mb-6 flex flex-col justify-between gap-5 md:flex-row md:items-center">
+            <div className="flex items-center gap-4 sm:gap-5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/50 to-indigo-100/20 shadow-[0_4px_15px_-3px_rgba(99,102,241,0.1),inset_0_2px_4px_rgba(255,255,255,1),inset_0_-2px_6px_rgba(99,102,241,0.1)] sm:h-14 sm:w-14">
                 <LayoutDashboard size={26} strokeWidth={1.5} className="text-indigo-500 drop-shadow-sm" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Voice Analytics Dashboard</h1>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-800 sm:text-3xl">Voice Analytics Dashboard</h1>
                 <div className="flex items-center gap-2 text-slate-400 text-xs font-medium uppercase tracking-wider">
                   <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Backend Analysis</span>
                   <span>•</span>
@@ -525,7 +525,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3 md:justify-end">
               <div className="flex bg-white border border-slate-200 rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] overflow-hidden text-[13px]">
                 {(['Day', 'Month', 'Year'] as FilterType[]).map((type) => (
                   <button

@@ -99,11 +99,11 @@ export default function HealthPage() {
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
       <Sidebar />
-      <main className="flex-1 p-6 overflow-auto">
+      <main className="flex-1 overflow-auto p-4 sm:p-5 lg:p-6">
         <div className="max-w-6xl mx-auto space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-slate-800 mb-2 flex items-center gap-2">
+              <h1 className="mb-2 flex items-center gap-2 text-2xl font-bold text-slate-800 sm:text-3xl">
                 <Activity size={28} className="text-blue-600" /> Health Check
               </h1>
               <p className="text-slate-500">ตรวจสถานะ API ทุก endpoint ที่หน้า frontend ใช้งานจริง</p>
