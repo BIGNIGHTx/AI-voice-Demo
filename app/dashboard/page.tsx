@@ -567,14 +567,14 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Positive Analysis */}
+            {/* Active Brands */}
             <div className="bg-white rounded-2xl p-6 flex items-center gap-5 shadow-[0_2px_15px_-3px_rgba(6,81,237,0.08)] border border-slate-100 transition-transform hover:scale-[1.02]">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-white via-emerald-50/50 to-emerald-100/30 shadow-[0_4px_15px_-3px_rgba(16,185,129,0.1),inset_0_2px_4px_rgba(255,255,255,1),inset_0_-2px_6px_rgba(16,185,129,0.1)] border border-emerald-100 flex items-center justify-center shrink-0">
-                <Smile size={24} strokeWidth={2} className="text-emerald-500 drop-shadow-sm" />
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-white via-orange-50/60 to-amber-100/40 shadow-[0_4px_15px_-3px_rgba(245,158,11,0.12),inset_0_2px_4px_rgba(255,255,255,1),inset_0_-2px_6px_rgba(245,158,11,0.1)] border border-amber-100 flex items-center justify-center shrink-0">
+                <Building2 size={24} strokeWidth={2} className="text-amber-500 drop-shadow-sm" />
               </div>
               <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Positive</p>
-                <h3 className="text-3xl font-extrabold text-slate-800">{positiveCount}</h3>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Active Brands</p>
+                <h3 className="text-3xl font-extrabold text-slate-800">{brandSummary.totalBrands}</h3>
               </div>
             </div>
 
