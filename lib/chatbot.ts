@@ -466,7 +466,11 @@ const extractWarrantyMeta = (payload: unknown): WarrantyMeta | null => {
   };
 };
 
-const appendWarrantyMeta = (answerText: string, meta: WarrantyMeta | null): string => {
+const appendWarrantyMeta = (
+  answerText: string,
+  meta: WarrantyMeta | null,
+  options?: { preserveAnswerOnNoWarranty?: boolean }
+): string => {
   if (!meta) return answerText;
 
   const normalizedAnswerText = answerText.replace(
@@ -477,6 +481,17 @@ const appendWarrantyMeta = (answerText: string, meta: WarrantyMeta | null): stri
   const lines: string[] = [];
 
   if (!meta.hasWarranty) {
+    if (options?.preserveAnswerOnNoWarranty) {
+      if (!containsValue(normalizedAnswerText, 'ไม่มีประกัน')) {
+        lines.push('🛡️ ข้อมูลประกัน: ไม่มีประกัน');
+      }
+      if (meta.autoId !== '-' && !containsValue(normalizedAnswerText, meta.autoId)) {
+        lines.push(`🆔 Auto ID: ${meta.autoId}`);
+      }
+      if (!lines.length) return normalizedAnswerText;
+      return `${normalizedAnswerText}\n${lines.join('\n')}`;
+    }
+
     const minimalLines = ['🛡️ ข้อมูลประกัน: ไม่มีประกัน'];
     if (meta.autoId !== '-') {
       minimalLines.push(`🆔 Auto ID: ${meta.autoId}`);
@@ -1110,7 +1125,9 @@ const requestWarrantyReply = async (question: string): Promise<string> => {
     return CHATBOT_FALLBACK_MESSAGE;
   }
 
-  return appendWarrantyMeta(answerText, extractWarrantyMeta(payload));
+  return appendWarrantyMeta(answerText, extractWarrantyMeta(payload), {
+    preserveAnswerOnNoWarranty: includeHistory,
+  });
 };
 
 const tryExactWarrantyReply = async (question: string): Promise<string | null> => {
