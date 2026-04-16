@@ -240,8 +240,14 @@ export default function CustomerDetailPage() {
       }
 
       const data = await res.json();
+      const visibleWarranties = (data.warranties || []).filter((item: WarrantyItem) => {
+        const normalizedStatus = String(item.status || '').trim().toUpperCase();
+        const normalizedRegistration = String(item.registration_no || '').trim().toUpperCase();
+        return normalizedStatus !== 'DELETED' && !normalizedRegistration.startsWith('DELETED-');
+      });
+
       setCustomer(data.customer);
-      setWarranties(data.warranties || []);
+      setWarranties(visibleWarranties);
       setCallHistory(data.call_history || []);
       if (!editingWarrantyFileId) {
         setWarrantyForm((prev) => ({
@@ -383,6 +389,35 @@ export default function CustomerDetailPage() {
     setDeletingWarrantyFileId(warranty.file_id);
 
     try {
+      if (warranty.warranty_source === 'manual') {
+        const deletedRegistrationNo = `DELETED-${warranty.file_id.slice(0, 8).toUpperCase()}`;
+        const res = await fetch(
+          `${API_BASE}/api/v1/customers/${encodeURIComponent(customerId)}/warranty/${encodeURIComponent(warranty.file_id)}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              registration_no: deletedRegistrationNo,
+              brand: warranty.brand,
+              model: warranty.model,
+              serial_no: null,
+              warranty_period: warranty.warranty_period || null,
+              purchase_date: normalizeDateForInput(warranty.purchase_date) || null,
+              status: 'DELETED',
+              sale_channel: warranty.sale_channel || 'Manual',
+              agent_id: warranty.agent_id || 'N/A',
+            }),
+          });
+
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || `Delete warranty failed: ${res.status}`);
+        }
+
+        await loadCustomerDetails();
+        return;
+      }
+
       const deleteTargets = [
         `${API_BASE}/api/v1/audio/delete/${encodeURIComponent(warranty.file_id)}`,
         `${API_BASE}/api/v1/customers/${encodeURIComponent(customerId)}/warranty/${encodeURIComponent(warranty.file_id)}`,

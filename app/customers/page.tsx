@@ -40,6 +40,14 @@ interface Customer {
   call_type_counts?: { inbound: number; outbound: number; unknown: number };
 }
 
+const isActiveWarrantyRecord = (item: unknown): boolean => {
+  if (typeof item !== 'object' || item === null) return false;
+  const record = item as { status?: string; registration_no?: string };
+  const normalizedStatus = String(record.status || '').trim().toUpperCase();
+  const normalizedRegistration = String(record.registration_no || '').trim().toUpperCase();
+  return normalizedStatus !== 'DELETED' && !normalizedRegistration.startsWith('DELETED-');
+};
+
 export default function CustomersPage() {
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -67,11 +75,44 @@ export default function CustomersPage() {
       const res = await fetch(`${API_BASE}/api/v1/customers?${params}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setCustomers(data.customers || []);
+
+      const baseCustomers: Customer[] = data.customers || [];
+      const normalizedCustomers = await Promise.all(
+        baseCustomers.map(async (customer) => {
+          if (!customer.has_warranty) return customer;
+
+          try {
+            const detailRes = await fetch(
+              `${API_BASE}/api/v1/customers/${encodeURIComponent(customer.customer_id)}`,
+              { cache: 'no-store' }
+            );
+
+            if (!detailRes.ok) return customer;
+
+            const detailData = await detailRes.json();
+            const activeWarrantyCount = Array.isArray(detailData?.warranties)
+              ? detailData.warranties.filter(isActiveWarrantyRecord).length
+              : 0;
+
+            return {
+              ...customer,
+              has_warranty: activeWarrantyCount > 0,
+              warranty_count: activeWarrantyCount,
+            };
+          } catch {
+            return customer;
+          }
+        })
+      );
+
+      setCustomers(normalizedCustomers);
+      const visibleTotalWithWarranty = normalizedCustomers.filter((customer) => customer.has_warranty).length;
+      const visibleTotalWithoutWarranty = normalizedCustomers.length - visibleTotalWithWarranty;
+
       setTotalPages(data.total_pages || 1);
-      setTotal(data.total || 0);
-      setTotalWithWarranty(data.total_with_warranty || 0);
-      setTotalWithoutWarranty(data.total_without_warranty || 0);
+      setTotal(data.total || normalizedCustomers.length);
+      setTotalWithWarranty(visibleTotalWithWarranty);
+      setTotalWithoutWarranty(visibleTotalWithoutWarranty);
     } catch (err) {
       setError(`ไม่สามารถเชื่อมต่อ API ได้: ${err instanceof Error ? err.message : 'Unknown error'}`);
       if (!isSilent) {

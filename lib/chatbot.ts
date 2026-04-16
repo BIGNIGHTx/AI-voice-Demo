@@ -37,6 +37,7 @@ interface TopicSearchResponse {
 interface WarrantyMeta {
   autoId: string;
   serialNo: string;
+  hasWarranty: boolean;
 }
 
 interface ExactWarrantyRecord {
@@ -103,6 +104,18 @@ const WARRANTY_HISTORY_KEYWORDS = [
   'เคยคุย',
 ];
 
+const WARRANTY_LOOKUP_KEYWORDS = [
+  'ประกัน',
+  'รับประกัน',
+  'warranty',
+  'auto',
+  'serial',
+  'ทะเบียน',
+  'มีไหม',
+  'มีมั้ย',
+  'มีหรือไม่',
+];
+
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
@@ -138,6 +151,16 @@ const normalizeText = (value: string): string =>
     .trim();
 
 const compactText = (value: string): string => normalizeText(value).replace(/\s+/g, '');
+
+const PLACEHOLDER_TEXT_VALUES = new Set(['', '-', 'n/a', 'none', 'null', 'unknown']);
+
+const hasMeaningfulText = (value: unknown): boolean => {
+  if (typeof value !== 'string') return false;
+  return !PLACEHOLDER_TEXT_VALUES.has(value.trim().toLowerCase());
+};
+
+const pickPreferredText = (primary: unknown, fallback: string): string =>
+  hasMeaningfulText(primary) ? String(primary).trim() : fallback;
 
 const extractPhoneNumber = (value: string): string | null => {
   const match = String(value || '').match(/0\d{8,9}/);
@@ -250,6 +273,10 @@ const resolveWarrantyCoverage = (record: ExactWarrantyRecord): string => {
     return 'มีข้อมูลประกัน แต่หมดประกันแล้ว';
   }
 
+  if (normalizedStatus === 'ACTIVE' || normalizedStatus === 'INFERRED') {
+    return 'มีประกัน';
+  }
+
   const expirySource = record.expiryDate !== '-'
     ? record.expiryDate
     : (record.warrantyEndDate !== '-' ? record.warrantyEndDate : calculateExpiryDateFromWarranty(record.purchaseDate, record.warrantyPeriod));
@@ -302,6 +329,11 @@ const stripKeyInsightsPrefix = (value: string): string =>
 const isWarrantyHistoryQuestion = (question: string): boolean => {
   const normalized = normalizeText(question);
   return WARRANTY_HISTORY_KEYWORDS.some((keyword) => normalized.includes(normalizeText(keyword)));
+};
+
+const isWarrantyLookupQuestion = (question: string): boolean => {
+  const normalized = normalizeText(question);
+  return WARRANTY_LOOKUP_KEYWORDS.some((keyword) => normalized.includes(normalizeText(keyword)));
 };
 
 const buildTopicAliases = (topicName: string): string[] => {
@@ -401,41 +433,67 @@ const extractWarrantyMeta = (payload: unknown): WarrantyMeta | null => {
 
   const warranty = isObject(payload.data.warranty) ? payload.data.warranty : null;
   const callHistory = isObject(payload.data.call_history) ? payload.data.call_history : null;
+  const fileId = toText(callHistory?.file_id ?? warranty?.file_id);
 
-  const autoId = toText(
-    warranty?.registration_no ?? callHistory?.registration_no,
+  const callHistoryAutoId = toText(
+    callHistory?.registration_no ?? payload.data.registration_no,
     '-'
   );
+  const warrantyAutoId = toText(warranty?.registration_no, '-');
   const serialNo = toText(
     warranty?.serial_no ?? payload.data.serial_no,
     '-'
   );
+  const normalizedStatus = toText(warranty?.status).toUpperCase();
+  const normalizedWarrantyAutoId = warrantyAutoId.toUpperCase();
+  const isDeleted = normalizedStatus === 'DELETED' || normalizedWarrantyAutoId.startsWith('DELETED-');
+  const autoId = isDeleted
+    ? (callHistoryAutoId !== '-'
+      ? callHistoryAutoId
+      : (normalizedWarrantyAutoId.startsWith('DELETED-')
+        ? `AUTO-${normalizedWarrantyAutoId.slice('DELETED-'.length)}`
+        : (fileId ? buildAutoId(fileId) : '-')))
+    : (warrantyAutoId !== '-' ? warrantyAutoId : callHistoryAutoId);
 
-  if ((!autoId || autoId === '-') && (!serialNo || serialNo === '-')) {
+  if ((!autoId || autoId === '-') && (!serialNo || serialNo === '-') && !fileId) {
     return null;
   }
 
   return {
-    autoId: autoId || '-',
-    serialNo: serialNo || '-',
+    autoId: autoId || (fileId ? buildAutoId(fileId) : '-'),
+    serialNo: isDeleted ? '-' : (serialNo || '-'),
+    hasWarranty: !isDeleted && (warrantyAutoId !== '-' || callHistoryAutoId !== '-'),
   };
 };
 
 const appendWarrantyMeta = (answerText: string, meta: WarrantyMeta | null): string => {
   if (!meta) return answerText;
 
+  const normalizedAnswerText = answerText.replace(
+    /🛡️\s*ข้อมูลประกัน:\s*DELETED-[^\n]*/giu,
+    '🛡️ ข้อมูลประกัน: ไม่มีประกัน'
+  );
+
   const lines: string[] = [];
 
-  if (meta.autoId !== '-' && !containsValue(answerText, meta.autoId)) {
+  if (!meta.hasWarranty) {
+    const minimalLines = ['🛡️ ข้อมูลประกัน: ไม่มีประกัน'];
+    if (meta.autoId !== '-') {
+      minimalLines.push(`🆔 Auto ID: ${meta.autoId}`);
+    }
+    return minimalLines.join('\n');
+  }
+
+  if (meta.autoId !== '-' && !containsValue(normalizedAnswerText, meta.autoId)) {
     lines.push(`🆔 Auto ID: ${meta.autoId}`);
   }
 
-  if (meta.serialNo !== '-' && !containsValue(answerText, meta.serialNo)) {
+  if (meta.serialNo !== '-' && !containsValue(normalizedAnswerText, meta.serialNo)) {
     lines.push(`🔢 Serial No.: ${meta.serialNo}`);
   }
 
-  if (!lines.length) return answerText;
-  return `${answerText}\n${lines.join('\n')}`;
+  if (!lines.length) return normalizedAnswerText;
+  return `${normalizedAnswerText}\n${lines.join('\n')}`;
 };
 
 const parseTopicDistribution = (payload: unknown): TopicDistributionItem[] => {
@@ -514,6 +572,44 @@ const parseWarrantyRecords = (payload: unknown): ExactWarrantyRecord[] => {
     .filter((item): item is ExactWarrantyRecord => item !== null);
 };
 
+const isDeletedWarrantyRecord = (record: ExactWarrantyRecord): boolean => {
+  const normalizedStatus = String(record.status || '').trim().toUpperCase();
+  const normalizedRegistration = String(record.registrationNo || '').trim().toUpperCase();
+  return normalizedStatus === 'DELETED' || normalizedRegistration.startsWith('DELETED-');
+};
+
+const filterDeletedWarrantyRecords = (records: ExactWarrantyRecord[]): ExactWarrantyRecord[] =>
+  records.filter((record) => !isDeletedWarrantyRecord(record));
+
+const parseExactWarrantyRecordFromQueryPayload = (payload: unknown): ExactWarrantyRecord | null => {
+  if (!isObject(payload) || !isObject(payload.data)) return null;
+
+  const warranty = isObject(payload.data.warranty) ? payload.data.warranty : null;
+  const callHistory = isObject(payload.data.call_history) ? payload.data.call_history : null;
+  if (!warranty) return null;
+
+  const record: ExactWarrantyRecord = {
+    fileId: toText(callHistory?.file_id ?? warranty.file_id),
+    registrationNo: toText(warranty.registration_no ?? callHistory?.registration_no, '-'),
+    serialNo: toText(warranty.serial_no ?? payload.data.serial_no, '-'),
+    customerPhone: toText(payload.data.customer_phone ?? callHistory?.customer_phone, '-'),
+    customerName: toText(warranty.customer_name, '-'),
+    brand: toText(warranty.brand, '-'),
+    model: toText(warranty.model ?? warranty.category ?? warranty.product ?? warranty.product_name, '-'),
+    status: toText(warranty.status, '-'),
+    warrantyPeriod: toText(warranty.warranty_period, '-'),
+    purchaseDate: toText(warranty.purchase_date ?? warranty.date_of_purchase, '-'),
+    deliveryDate: toText(warranty.date_of_delivery ?? warranty.delivery_date, '-'),
+    warrantyStartDate: toText(warranty.warranty_start_date ?? warranty.registrationDate, '-'),
+    warrantyEndDate: toText(warranty.warranty_end_date, '-'),
+    expiryDate: toText(warranty.expiry_date_of_warranty ?? warranty.expiry_date ?? warranty.warranty_expiry_date, '-'),
+    saleChannel: toText(warranty.sale_channel ?? warranty.purchase_channel, '-'),
+    agentId: toText(callHistory?.agent_id, '-'),
+  };
+
+  return isDeletedWarrantyRecord(record) ? null : record;
+};
+
 const findExactWarrantyRecord = (
   records: ExactWarrantyRecord[],
   registrationNo: string | null,
@@ -559,10 +655,32 @@ const fetchExactWarrantyRecord = async (params: {
   if (!payload) return null;
 
   return findExactWarrantyRecord(
-    parseWarrantyRecords(payload),
+    filterDeletedWarrantyRecords(parseWarrantyRecords(payload)),
     params.registrationNo,
     params.serialNo
   );
+};
+
+const fetchVisibleWarrantiesByPhone = async (phone: string): Promise<ExactWarrantyRecord[]> => {
+  const normalizedPhone = String(phone || '').trim();
+  if (!normalizedPhone) return [];
+
+  const payload = await fetchJson(
+    `${API_BASE}/api/v1/customers/${encodeURIComponent(`CUST-${normalizedPhone}`)}`
+  );
+  if (!payload) return [];
+
+  return filterDeletedWarrantyRecords(parseWarrantyRecords(payload));
+};
+
+const fetchExactWarrantyRecordFromBackendQuery = async (question: string): Promise<ExactWarrantyRecord | null> => {
+  const payload = await fetchJson(`${API_BASE}/api/v1/warranty/query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question }),
+  });
+
+  return parseExactWarrantyRecordFromQueryPayload(payload);
 };
 
 const enrichExactWarrantyRecord = async (record: ExactWarrantyRecord): Promise<ExactWarrantyRecord> => {
@@ -574,12 +692,12 @@ const enrichExactWarrantyRecord = async (record: ExactWarrantyRecord): Promise<E
 
   return {
     ...record,
-    status: toText(analysis?.status, record.status),
-    purchaseDate: toText(analysis?.purchase_date ?? analysis?.date_of_purchase, record.purchaseDate),
-    deliveryDate: toText(analysis?.date_of_delivery ?? file?.date_of_delivery, record.deliveryDate),
-    warrantyStartDate: toText(analysis?.warranty_start_date ?? analysis?.registrationDate, record.warrantyStartDate),
-    warrantyEndDate: toText(analysis?.warranty_end_date, record.warrantyEndDate),
-    expiryDate: toText(analysis?.expiry_date_of_warranty ?? analysis?.warranty_end_date, record.expiryDate),
+    status: pickPreferredText(analysis?.status, record.status),
+    purchaseDate: pickPreferredText(analysis?.purchase_date ?? analysis?.date_of_purchase, record.purchaseDate),
+    deliveryDate: pickPreferredText(analysis?.date_of_delivery ?? file?.date_of_delivery, record.deliveryDate),
+    warrantyStartDate: pickPreferredText(analysis?.warranty_start_date ?? analysis?.registrationDate, record.warrantyStartDate),
+    warrantyEndDate: pickPreferredText(analysis?.warranty_end_date, record.warrantyEndDate),
+    expiryDate: pickPreferredText(analysis?.expiry_date_of_warranty ?? analysis?.warranty_end_date, record.expiryDate),
   };
 };
 
@@ -626,6 +744,9 @@ const formatExactWarrantyReply = (
   const identifier = record.registrationNo !== '-'
     ? record.registrationNo
     : (record.serialNo !== '-' ? `Serial No. ${record.serialNo}` : 'รายการนี้');
+  const resolvedDeliveryDate = record.deliveryDate !== '-'
+    ? formatDisplayDate(record.deliveryDate)
+    : (record.purchaseDate !== '-' ? formatDisplayDate(record.purchaseDate) : '-');
   const resolvedExpiryDate = record.expiryDate !== '-'
     ? formatDisplayDate(record.expiryDate)
     : (record.warrantyEndDate !== '-' ? formatDisplayDate(record.warrantyEndDate) : calculateExpiryDateFromWarranty(record.purchaseDate, record.warrantyPeriod));
@@ -640,7 +761,7 @@ const formatExactWarrantyReply = (
   if (record.serialNo !== '-') lines.push(`- 🔢 Serial No.: ${record.serialNo}`);
   if (record.status !== '-') lines.push(`- 🛡️ สถานะ: ${record.status}`);
   if (record.purchaseDate !== '-') lines.push(`- 📅 วันที่ซื้อ: ${formatDisplayDate(record.purchaseDate)}`);
-  if (record.deliveryDate !== '-') lines.push(`- 🚚 วันที่ส่ง: ${formatDisplayDate(record.deliveryDate)}`);
+  if (resolvedDeliveryDate !== '-') lines.push(`- 🚚 วันที่ส่ง: ${resolvedDeliveryDate}`);
   if (record.warrantyPeriod !== '-') lines.push(`- ⏳ ระยะประกัน: ${record.warrantyPeriod}`);
   if (resolvedExpiryDate !== '-') lines.push(`- 📆 วันที่หมดประกัน: ${resolvedExpiryDate}`);
   if (record.saleChannel !== '-') lines.push(`- 🛒 ช่องทางขาย: ${record.saleChannel}`);
@@ -707,6 +828,12 @@ const fetchCustomerWarrantyLookup = async (phone: string): Promise<Map<string, {
 
     const fileId = toText(item.file_id);
     if (!fileId) continue;
+
+    const normalizedStatus = String(item.status || '').trim().toUpperCase();
+    const normalizedRegistration = String(item.registration_no || '').trim().toUpperCase();
+    if (normalizedStatus === 'DELETED' || normalizedRegistration.startsWith('DELETED-')) {
+      continue;
+    }
 
     lookup.set(fileId, {
       autoId: toText(item.registration_no, buildAutoId(fileId)),
@@ -963,6 +1090,15 @@ const tryTopicReply = async (question: string): Promise<string | null> => {
 };
 
 const requestWarrantyReply = async (question: string): Promise<string> => {
+  const phone = extractPhoneNumber(question);
+  const includeHistory = isWarrantyHistoryQuestion(question);
+  if (phone && isWarrantyLookupQuestion(question) && !includeHistory) {
+    const visibleWarranties = await fetchVisibleWarrantiesByPhone(phone);
+    if (!visibleWarranties.length) {
+      return `ไม่พบข้อมูลประกันของลูกค้า ${phone} ในระบบ`;
+    }
+  }
+
   const payload = await fetchJson(`${API_BASE}/api/v1/warranty/query`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -982,8 +1118,16 @@ const tryExactWarrantyReply = async (question: string): Promise<string | null> =
   const serialNo = extractSerialNumber(question);
   if (!registrationNo && !serialNo) return null;
 
-  const baseRecord = await fetchExactWarrantyRecord({ registrationNo, serialNo });
+  const includeHistory = isWarrantyHistoryQuestion(question);
+
+  const baseRecord = await fetchExactWarrantyRecordFromBackendQuery(question)
+    || await fetchExactWarrantyRecord({ registrationNo, serialNo });
   if (!baseRecord) {
+    const backendReply = await requestWarrantyReply(question);
+    if (backendReply !== CHATBOT_FALLBACK_MESSAGE) {
+      return backendReply;
+    }
+
     return registrationNo
       ? `ไม่พบข้อมูลประกัน ${registrationNo} ในระบบ`
       : `ไม่พบข้อมูลประกันที่ผูกกับ Serial No. ${serialNo} ในระบบ`;
@@ -991,7 +1135,6 @@ const tryExactWarrantyReply = async (question: string): Promise<string | null> =
 
   const record = await enrichExactWarrantyRecord(baseRecord);
 
-  const includeHistory = isWarrantyHistoryQuestion(question);
   if (!includeHistory) {
     return formatExactWarrantyReply(record, 0, [], false);
   }

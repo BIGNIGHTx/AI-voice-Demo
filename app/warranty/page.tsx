@@ -37,6 +37,12 @@ interface WarrantyRecord {
   created_at?: string;
 }
 
+const isActiveWarrantyRecord = (item: WarrantyRecord): boolean => {
+  const normalizedStatus = String(item.status || '').trim().toUpperCase();
+  const normalizedRegistration = String(item.registration_no || '').trim().toUpperCase();
+  return normalizedStatus !== 'DELETED' && !normalizedRegistration.startsWith('DELETED-');
+};
+
 export default function WarrantyDatabasePage() {
   const [warranties, setWarranties] = useState<WarrantyRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,7 +77,7 @@ export default function WarrantyDatabasePage() {
     try {
       const res = await fetch(`${API_BASE}/api/v1/warranty/list`, { cache: 'no-store' });
       const data = await res.json();
-      const nextWarranties = data.warranties || [];
+      const nextWarranties = (data.warranties || []).filter(isActiveWarrantyRecord);
 
       if (onlyOnCompletion) {
         const previousByRegistration = new Map(
