@@ -39,7 +39,33 @@ interface WarrantyMeta {
   serialNo: string;
 }
 
-const customerWarrantyCache = new Map<string, Promise<Map<string, { autoId: string; serialNo: string }>>>();
+interface ExactWarrantyRecord {
+  fileId: string;
+  registrationNo: string;
+  serialNo: string;
+  customerPhone: string;
+  customerName: string;
+  brand: string;
+  model: string;
+  status: string;
+  warrantyPeriod: string;
+  purchaseDate: string;
+  deliveryDate: string;
+  warrantyStartDate: string;
+  warrantyEndDate: string;
+  expiryDate: string;
+  saleChannel: string;
+  agentId: string;
+}
+
+interface ExactHistoryItem {
+  fileId: string;
+  callTimestamp: string;
+  agentId: string;
+  topic: string;
+  summaryLines: string[];
+  keyInsightsLines: string[];
+}
 
 const TOPIC_OVERVIEW_KEYWORDS = [
   'topic distribution',
@@ -64,6 +90,17 @@ const TOPIC_ALIAS_RULES: Array<{ includes: string[]; aliases: string[] }> = [
   { includes: ['ประกัน'], aliases: ['ประกัน', 'รับประกัน', 'warranty'] },
   { includes: ['แก้ไขปัญหา', 'ปัญหา'], aliases: ['แก้ปัญหา', 'แก้ไขปัญหา', 'ปัญหา', 'เคลม'] },
   { includes: ['ชมเชย'], aliases: ['ชมเชย', 'ชื่นชม', 'ชมพนักงาน'] },
+];
+
+const WARRANTY_HISTORY_KEYWORDS = [
+  'ประวัติ',
+  'history',
+  'โทร',
+  'ติดต่อ',
+  'สนทนา',
+  'เคส',
+  'ร้องเรียน',
+  'เคยคุย',
 ];
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -108,8 +145,18 @@ const extractPhoneNumber = (value: string): string | null => {
 };
 
 const extractRegistrationNumber = (value: string): string | null => {
-  const match = String(value || '').toUpperCase().match(/(?<![A-Z0-9])AUTO[\s_-]?([A-F0-9]{8})(?![A-Z0-9])/);
-  return match ? `AUTO-${match[1]}` : null;
+  const match = String(value || '')
+    .toUpperCase()
+    .match(/(?:^|[^A-Z0-9])AUTO[\s_-]*([A-Z0-9][A-Z0-9_-]{2,31})(?![A-Z0-9_-])/);
+
+  if (!match?.[1]) return null;
+
+  const normalizedSuffix = match[1]
+    .replace(/^[\s_-]+|[\s_-]+$/g, '')
+    .replace(/[\s_]+/g, '-')
+    .toUpperCase();
+
+  return normalizedSuffix ? `AUTO-${normalizedSuffix}` : null;
 };
 
 const extractSerialNumber = (value: string): string | null => {
@@ -147,6 +194,114 @@ const buildAutoId = (fileId: string): string => {
   const normalized = String(fileId || '').trim();
   if (!normalized) return '-';
   return `AUTO-${normalized.slice(0, 8).toUpperCase()}`;
+};
+
+const formatDisplayDateTime = (value: string): string => {
+  const text = String(value || '').trim();
+  if (!text) return '-';
+  return text.replace('T', ' ').replace(/\.\d+$/, '');
+};
+
+const parseDateValue = (value: string): Date | null => {
+  const text = String(value || '').trim();
+  if (!text || text === '-') return null;
+
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(text)) {
+    const [day, month, year] = text.split('/').map(Number);
+    const date = new Date(year, month - 1, day);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  const normalized = text.includes('T') ? text : text.replace(' ', 'T');
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const formatDisplayDate = (value: string): string => {
+  const text = String(value || '').trim();
+  if (!text || text === '-') return '-';
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(text)) return text;
+
+  const date = parseDateValue(text);
+  if (!date) return text;
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
+const calculateExpiryDateFromWarranty = (purchaseDate: string, warrantyPeriod: string): string => {
+  const purchase = parseDateValue(purchaseDate);
+  if (!purchase) return '-';
+
+  const monthsMatch = String(warrantyPeriod || '').match(/(\d+)/);
+  const months = monthsMatch ? Number.parseInt(monthsMatch[1], 10) : 0;
+  if (!months) return '-';
+
+  const expiryDate = new Date(purchase);
+  expiryDate.setMonth(expiryDate.getMonth() + months);
+  return formatDisplayDate(expiryDate.toISOString());
+};
+
+const resolveWarrantyCoverage = (record: ExactWarrantyRecord): string => {
+  const normalizedStatus = String(record.status || '').trim().toUpperCase();
+  if (normalizedStatus === 'EXPIRED' || normalizedStatus === 'หมดอายุ') {
+    return 'มีข้อมูลประกัน แต่หมดประกันแล้ว';
+  }
+
+  const expirySource = record.expiryDate !== '-'
+    ? record.expiryDate
+    : (record.warrantyEndDate !== '-' ? record.warrantyEndDate : calculateExpiryDateFromWarranty(record.purchaseDate, record.warrantyPeriod));
+  const expiryDate = parseDateValue(expirySource);
+  if (expiryDate) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    expiryDate.setHours(0, 0, 0, 0);
+    return expiryDate >= today ? 'มีประกัน' : 'มีข้อมูลประกัน แต่หมดประกันแล้ว';
+  }
+
+  return 'มีข้อมูลประกันในระบบ';
+};
+
+const splitStructuredLines = (value: string): string[] =>
+  cleanSummary(value)
+    .split(/\s*(?:\||\n)+\s*/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+const normalizeStructuredLine = (value: string): string =>
+  compactText(
+    String(value || '')
+      .replace(/^[-•]\s*/u, '')
+      .replace(/^💡\s*key insights:\s*/iu, '')
+      .replace(/^📌\s*/u, '')
+      .replace(/^📝\s*/u, '')
+      .replace(/^💬\s*/u, '')
+      .replace(/^📊\s*/u, '')
+      .trim()
+  );
+
+const dedupeStructuredLines = (lines: string[]): string[] => {
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+
+  for (const line of lines) {
+    const normalized = normalizeStructuredLine(line);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    deduped.push(line.trim());
+  }
+
+  return deduped;
+};
+
+const stripKeyInsightsPrefix = (value: string): string =>
+  String(value || '').replace(/^💡\s*key insights:\s*/iu, '').trim();
+
+const isWarrantyHistoryQuestion = (question: string): boolean => {
+  const normalized = normalizeText(question);
+  return WARRANTY_HISTORY_KEYWORDS.some((keyword) => normalized.includes(normalizeText(keyword)));
 };
 
 const buildTopicAliases = (topicName: string): string[] => {
@@ -332,38 +487,234 @@ const parseSearchResults = (payload: unknown): TopicSearchResponse => {
   return { total, results };
 };
 
+const parseWarrantyRecords = (payload: unknown): ExactWarrantyRecord[] => {
+  return toArray(payload, ['warranties', 'results', 'items', 'data'])
+    .map((item) => {
+      if (!isObject(item)) return null;
+
+      return {
+        fileId: toText(item.file_id),
+        registrationNo: toText(item.registration_no, '-'),
+        serialNo: toText(item.serial_no, '-'),
+        customerPhone: toText(item.customer_phone ?? item.phone, '-'),
+        customerName: toText(item.customer_name, '-'),
+        brand: toText(item.brand, '-'),
+        model: toText(item.model ?? item.product ?? item.product_name ?? item.category, '-'),
+        status: toText(item.status, '-'),
+        warrantyPeriod: toText(item.warranty_period, '-'),
+        purchaseDate: toText(item.purchase_date ?? item.date_of_purchase, '-'),
+        deliveryDate: toText(item.date_of_delivery ?? item.delivery_date, '-'),
+        warrantyStartDate: toText(item.warranty_start_date ?? item.registrationDate, '-'),
+        warrantyEndDate: toText(item.warranty_end_date, '-'),
+        expiryDate: toText(item.expiry_date_of_warranty ?? item.expiry_date ?? item.warranty_expiry_date, '-'),
+        saleChannel: toText(item.sale_channel ?? item.purchase_channel, '-'),
+        agentId: toText(item.agent_id, '-'),
+      };
+    })
+    .filter((item): item is ExactWarrantyRecord => item !== null);
+};
+
+const findExactWarrantyRecord = (
+  records: ExactWarrantyRecord[],
+  registrationNo: string | null,
+  serialNo: string | null
+): ExactWarrantyRecord | null => {
+  const exactMatch = records.find((record) => {
+    const registrationMatches = registrationNo
+      ? compactText(record.registrationNo) === compactText(registrationNo)
+      : true;
+    const serialMatches = serialNo
+      ? compactText(record.serialNo) === compactText(serialNo)
+      : true;
+
+    return registrationMatches && serialMatches;
+  });
+
+  if (exactMatch) return exactMatch;
+
+  if (registrationNo) {
+    const registrationOnlyMatch = records.find(
+      (record) => compactText(record.registrationNo) === compactText(registrationNo)
+    );
+    if (registrationOnlyMatch) return registrationOnlyMatch;
+  }
+
+  if (serialNo) {
+    const serialOnlyMatch = records.find(
+      (record) => compactText(record.serialNo) === compactText(serialNo)
+    );
+    if (serialOnlyMatch) return serialOnlyMatch;
+  }
+
+  return null;
+};
+
+const fetchExactWarrantyRecord = async (params: {
+  registrationNo: string | null;
+  serialNo: string | null;
+}): Promise<ExactWarrantyRecord | null> => {
+  if (!params.registrationNo && !params.serialNo) return null;
+
+  const payload = await fetchJson(`${API_BASE}/api/v1/warranty/list`);
+  if (!payload) return null;
+
+  return findExactWarrantyRecord(
+    parseWarrantyRecords(payload),
+    params.registrationNo,
+    params.serialNo
+  );
+};
+
+const enrichExactWarrantyRecord = async (record: ExactWarrantyRecord): Promise<ExactWarrantyRecord> => {
+  if (!record.fileId) return record;
+
+  const payload = await fetchJson(`${API_BASE}/api/v1/audio/detail/${encodeURIComponent(record.fileId)}`);
+  const analysis = isObject(payload) && isObject(payload.analysis) ? payload.analysis : null;
+  const file = isObject(payload) && isObject(payload.file) ? payload.file : null;
+
+  return {
+    ...record,
+    status: toText(analysis?.status, record.status),
+    purchaseDate: toText(analysis?.purchase_date ?? analysis?.date_of_purchase, record.purchaseDate),
+    deliveryDate: toText(analysis?.date_of_delivery ?? file?.date_of_delivery, record.deliveryDate),
+    warrantyStartDate: toText(analysis?.warranty_start_date ?? analysis?.registrationDate, record.warrantyStartDate),
+    warrantyEndDate: toText(analysis?.warranty_end_date, record.warrantyEndDate),
+    expiryDate: toText(analysis?.expiry_date_of_warranty ?? analysis?.warranty_end_date, record.expiryDate),
+  };
+};
+
+const fetchExactHistoryItem = async (item: EnrichedTopicSearchResult): Promise<ExactHistoryItem> => {
+  const payload = await fetchJson(`${API_BASE}/api/v1/audio/detail/${encodeURIComponent(item.fileId)}`);
+  const analysis = isObject(payload) && isObject(payload.analysis) ? payload.analysis : null;
+
+  const summaryPointLines = Array.isArray(analysis?.summary_points)
+    ? analysis.summary_points
+        .flatMap((point) => splitStructuredLines(toText(point)))
+        .filter(Boolean)
+    : [];
+
+  const rawSummaryLines = dedupeStructuredLines([
+    ...splitStructuredLines(item.summary),
+    ...splitStructuredLines(toText(analysis?.summary ?? analysis?.summary_text)),
+    ...summaryPointLines,
+  ]);
+
+  const summaryLines = rawSummaryLines.filter((line) => !/^💡\s*key insights:/iu.test(line));
+  const keyInsightsLines = dedupeStructuredLines([
+    ...rawSummaryLines
+      .filter((line) => /^💡\s*key insights:/iu.test(line))
+      .map(stripKeyInsightsPrefix),
+    ...splitStructuredLines(toText(analysis?.key_insights)).map(stripKeyInsightsPrefix),
+  ]);
+
+  return {
+    fileId: item.fileId,
+    callTimestamp: toText(analysis?.call_timestamp, item.createdAt || '-'),
+    agentId: toText(analysis?.agent_id, item.agentId || '-'),
+    topic: toText(analysis?.intent ?? analysis?.topic ?? item.topic, item.topic || '-'),
+    summaryLines,
+    keyInsightsLines,
+  };
+};
+
+const formatExactWarrantyReply = (
+  record: ExactWarrantyRecord,
+  historyCount: number,
+  historyItems: ExactHistoryItem[],
+  includeHistory: boolean
+): string => {
+  const identifier = record.registrationNo !== '-'
+    ? record.registrationNo
+    : (record.serialNo !== '-' ? `Serial No. ${record.serialNo}` : 'รายการนี้');
+  const resolvedExpiryDate = record.expiryDate !== '-'
+    ? formatDisplayDate(record.expiryDate)
+    : (record.warrantyEndDate !== '-' ? formatDisplayDate(record.warrantyEndDate) : calculateExpiryDateFromWarranty(record.purchaseDate, record.warrantyPeriod));
+  const lines = ['ข้อมูลประกัน:', `- ผลการตรวจสอบ: ${resolveWarrantyCoverage(record)}`, `- Auto ID: ${identifier}`];
+
+  if (record.customerPhone !== '-') lines.push(`- 📞 เบอร์โทร: ${record.customerPhone}`);
+  if (record.customerName !== '-') lines.push(`- 👤 ลูกค้า: ${record.customerName}`);
+
+  const productLabel = [record.brand, record.model].filter((value) => value && value !== '-').join(' - ');
+  if (productLabel) lines.push(`- 📦 สินค้า: ${productLabel}`);
+
+  if (record.serialNo !== '-') lines.push(`- 🔢 Serial No.: ${record.serialNo}`);
+  if (record.status !== '-') lines.push(`- 🛡️ สถานะ: ${record.status}`);
+  if (record.purchaseDate !== '-') lines.push(`- 📅 วันที่ซื้อ: ${formatDisplayDate(record.purchaseDate)}`);
+  if (record.deliveryDate !== '-') lines.push(`- 🚚 วันที่ส่ง: ${formatDisplayDate(record.deliveryDate)}`);
+  if (record.warrantyPeriod !== '-') lines.push(`- ⏳ ระยะประกัน: ${record.warrantyPeriod}`);
+  if (resolvedExpiryDate !== '-') lines.push(`- 📆 วันที่หมดประกัน: ${resolvedExpiryDate}`);
+  if (record.saleChannel !== '-') lines.push(`- 🛒 ช่องทางขาย: ${record.saleChannel}`);
+  if (record.agentId !== '-') lines.push(`- 🧑‍💼 Agent: ${record.agentId}`);
+
+  if (!includeHistory) return lines.join('\n');
+
+  lines.push('', 'ประวัติการโทร:');
+
+  if (!record.customerPhone || record.customerPhone === '-') {
+    lines.push(`- ไม่พบเบอร์โทรที่ใช้ตรวจสอบประวัติการติดต่อของ ${identifier}`);
+    return lines.join('\n');
+  }
+
+  if (!historyCount) {
+    lines.push(`- ไม่พบประวัติการโทรที่ผูกกับ ${identifier} โดยตรง`);
+    return lines.join('\n');
+  }
+
+  lines.push(`- พบ ${historyCount} รายการที่ผูกกับ ${identifier}`);
+
+  historyItems.forEach((item, index) => {
+    lines.push('', `รายการที่ ${index + 1}:`);
+    lines.push(`- วันที่: ${formatDisplayDateTime(item.callTimestamp)}`);
+    lines.push(`- Agent: ${item.agentId || '-'}`);
+
+    if (item.topic && item.topic !== '-') {
+      lines.push(`- หัวข้อ: ${item.topic}`);
+    }
+
+    if (item.summaryLines.length) {
+      lines.push('สรุปการโทร:');
+      item.summaryLines.forEach((line) => {
+        lines.push(`• ${line}`);
+      });
+    }
+
+    if (item.keyInsightsLines.length) {
+      lines.push('Key Insights:');
+      item.keyInsightsLines.forEach((line) => {
+        lines.push(`• ${line}`);
+      });
+    }
+  });
+
+  if (historyCount > historyItems.length) {
+    lines.push('', `- แสดงล่าสุด ${historyItems.length} จากทั้งหมด ${historyCount} รายการ`);
+  }
+
+  return lines.join('\n');
+};
+
 const fetchCustomerWarrantyLookup = async (phone: string): Promise<Map<string, { autoId: string; serialNo: string }>> => {
   const normalizedPhone = String(phone || '').trim();
   if (!normalizedPhone) return new Map();
 
-  const cached = customerWarrantyCache.get(normalizedPhone);
-  if (cached) {
-    return cached;
+  const payload = await fetchJson(
+    `${API_BASE}/api/v1/customers/${encodeURIComponent(`CUST-${normalizedPhone}`)}`
+  );
+
+  const lookup = new Map<string, { autoId: string; serialNo: string }>();
+  for (const item of toArray(payload, ['warranties'])) {
+    if (!isObject(item)) continue;
+
+    const fileId = toText(item.file_id);
+    if (!fileId) continue;
+
+    lookup.set(fileId, {
+      autoId: toText(item.registration_no, buildAutoId(fileId)),
+      serialNo: toText(item.serial_no, '-'),
+    });
   }
 
-  const lookupPromise = (async () => {
-    const payload = await fetchJson(
-      `${API_BASE}/api/v1/customers/${encodeURIComponent(`CUST-${normalizedPhone}`)}`
-    );
-
-    const lookup = new Map<string, { autoId: string; serialNo: string }>();
-    for (const item of toArray(payload, ['warranties'])) {
-      if (!isObject(item)) continue;
-
-      const fileId = toText(item.file_id);
-      if (!fileId) continue;
-
-      lookup.set(fileId, {
-        autoId: toText(item.registration_no, buildAutoId(fileId)),
-        serialNo: toText(item.serial_no, '-'),
-      });
-    }
-
-    return lookup;
-  })();
-
-  customerWarrantyCache.set(normalizedPhone, lookupPromise);
-  return lookupPromise;
+  return lookup;
 };
 
 const enrichTopicSearchResults = async (
@@ -401,17 +752,19 @@ const filterEnrichedTopicResults = (
 ): EnrichedTopicSearchResult[] => {
   if (!registrationNo && !serialNo) return results;
 
-  return results.filter((item) => {
-    if (registrationNo && compactText(item.autoId) === compactText(registrationNo)) {
-      return true;
-    }
+  if (registrationNo) {
+    return results.filter(
+      (item) => compactText(item.autoId) === compactText(registrationNo)
+    );
+  }
 
-    if (serialNo && compactText(item.serialNo) === compactText(serialNo)) {
-      return true;
-    }
+  if (serialNo) {
+    return results.filter(
+      (item) => compactText(item.serialNo) === compactText(serialNo)
+    );
+  }
 
-    return false;
-  });
+  return results;
 };
 
 const formatTopicOverview = (topics: TopicDistributionItem[]): string => {
@@ -624,9 +977,51 @@ const requestWarrantyReply = async (question: string): Promise<string> => {
   return appendWarrantyMeta(answerText, extractWarrantyMeta(payload));
 };
 
+const tryExactWarrantyReply = async (question: string): Promise<string | null> => {
+  const registrationNo = extractRegistrationNumber(question);
+  const serialNo = extractSerialNumber(question);
+  if (!registrationNo && !serialNo) return null;
+
+  const baseRecord = await fetchExactWarrantyRecord({ registrationNo, serialNo });
+  if (!baseRecord) {
+    return registrationNo
+      ? `ไม่พบข้อมูลประกัน ${registrationNo} ในระบบ`
+      : `ไม่พบข้อมูลประกันที่ผูกกับ Serial No. ${serialNo} ในระบบ`;
+  }
+
+  const record = await enrichExactWarrantyRecord(baseRecord);
+
+  const includeHistory = isWarrantyHistoryQuestion(question);
+  if (!includeHistory) {
+    return formatExactWarrantyReply(record, 0, [], false);
+  }
+
+  const searchResponse = record.customerPhone !== '-'
+    ? await fetchTopicSearch({ phone: record.customerPhone })
+    : null;
+  const historyResults = searchResponse
+    ? filterEnrichedTopicResults(
+        await enrichTopicSearchResults(searchResponse.results),
+        record.registrationNo !== '-' ? record.registrationNo : registrationNo,
+        record.serialNo !== '-' ? record.serialNo : serialNo
+      )
+    : [];
+
+  const historyItems = await Promise.all(
+    historyResults.slice(0, 3).map((item) => fetchExactHistoryItem(item))
+  );
+
+  return formatExactWarrantyReply(record, historyResults.length, historyItems, true);
+};
+
 export const getChatbotReply = async (question: string): Promise<string> => {
   const normalizedQuestion = String(question || '').trim();
   if (!normalizedQuestion) return CHATBOT_FALLBACK_MESSAGE;
+
+  const exactWarrantyReply = await tryExactWarrantyReply(normalizedQuestion);
+  if (exactWarrantyReply) {
+    return exactWarrantyReply;
+  }
 
   const phone = extractPhoneNumber(normalizedQuestion);
   const registrationNo = extractRegistrationNumber(normalizedQuestion);

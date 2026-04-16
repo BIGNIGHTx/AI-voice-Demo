@@ -1,9 +1,9 @@
 'use client';
 
 import Sidebar from '@/components/Sidebar';
-import { AudioWaveform, Sparkles, MessageCircle, Info, Lightbulb, RefreshCw, Trash2, ArrowLeft, Play, Pause, AlertCircle, Loader2, Tag, Package, Key, FileText, Star, Smile } from 'lucide-react';
+import { AudioWaveform, Sparkles, MessageCircle, Info, Lightbulb, RefreshCw, Trash2, ArrowLeft, Play, Pause, AlertCircle, Loader2, Tag, Key, Star, Smile } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -97,14 +97,68 @@ interface FileData {
   upload_date: string;
 }
 
-const normalizeSpeakerLabel = (line: TranscriptionLine, index: number): 'Speaker A' | 'Speaker B' => {
-  const raw = String(line?.speaker || '').trim().toLowerCase();
-  if (raw === 'speaker a' || raw === 'speaker_a' || raw === 'a' || raw === 'agent') return 'Speaker A';
-  if (raw === 'speaker b' || raw === 'speaker_b' || raw === 'b' || raw === 'customer') return 'Speaker B';
-  if (line?.speaker_id === 'A') return 'Speaker A';
-  if (line?.speaker_id === 'B') return 'Speaker B';
-  return index % 2 === 0 ? 'Speaker A' : 'Speaker B';
+type ConversationRole = 'Agent' | 'Customer';
+
+interface SpeakerResolutionContext {
+  agentId?: string;
+  agentName?: string;
+  customerPhone?: string;
+}
+
+interface SpeakerGroupStats {
+  key: string;
+  firstIndex: number;
+  agentScore: number;
+  customerScore: number;
+  explicitRole: ConversationRole | null;
+}
+
+interface TranscriptSegment extends TranscriptionLine {
+  role: ConversationRole;
+  textValue: string;
+  startSec: number;
+  endSec: number;
+  canSeek: boolean;
+}
+
+const normalizeSpeakerToken = (value?: string): string =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+
+const hasStructuredSpeakerLabel = (line: TranscriptionLine): boolean =>
+  Boolean(normalizeSpeakerToken(line.speaker) || normalizeSpeakerToken(line.speaker_id));
+
+const getExplicitSpeakerRole = (line: TranscriptionLine): ConversationRole | null => {
+  const raw = `${normalizeSpeakerToken(line.speaker)} ${normalizeSpeakerToken(line.speaker_id)}`;
+
+  if (/(^|\s)(agent|เจ้าหน้าที่|พนักงาน|support|admin)(\s|$)/i.test(raw)) return 'Agent';
+  if (/(^|\s)(customer|ลูกค้า|caller|ผู้ซื้อ)(\s|$)/i.test(raw)) return 'Customer';
+
+  return null;
 };
+
+const getSpeakerGroupKey = (line: TranscriptionLine, index: number): string => {
+  const speaker = normalizeSpeakerToken(line.speaker);
+  const speakerId = normalizeSpeakerToken(line.speaker_id);
+  const raw = speaker || speakerId;
+
+  if (!raw) return `unknown_${index}`;
+  if (raw === 'agent') return 'explicit_agent';
+  if (raw === 'customer' || raw === 'caller') return 'explicit_customer';
+
+  const alphaMatch = raw.match(/(?:speaker|spk)?_?([ab])(?![a-z0-9])/i);
+  if (alphaMatch) return `speaker_${alphaMatch[1].toLowerCase()}`;
+
+  const numericMatch = raw.match(/(?:speaker|spk|speaker_id)?_?(\d+)/i);
+  if (numericMatch) return `speaker_${numericMatch[1]}`;
+
+  return raw;
+};
+
+const countMatches = (text: string, patterns: RegExp[]): number =>
+  patterns.reduce((total, pattern) => total + (text.match(pattern)?.length ?? 0), 0);
 
 const normalizeTranscription = (analysisPayload: unknown): TranscriptionLine[] => {
   if (!analysisPayload || typeof analysisPayload !== 'object') return [];
@@ -153,6 +207,202 @@ const pickFullTranscriptionText = (line: TranscriptionLine): string => {
   if (!subtitle) return text;
   if (!text) return subtitle;
   return text.length >= subtitle.length ? text : subtitle;
+};
+
+const parseTimestampToSeconds = (value?: string | number): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, value);
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const simpleNumber = Number(raw);
+  if (Number.isFinite(simpleNumber)) return Math.max(0, simpleNumber);
+  const normalized = raw.replace(/,/g, '.');
+  const timeMatch = normalized.match(/(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?|\d+(?:\.\d+)?)/);
+  if (!timeMatch) return null;
+  const token = timeMatch[1];
+  if (!token.includes(':')) {
+    const seconds = Number(token);
+    return Number.isFinite(seconds) ? Math.max(0, seconds) : null;
+  }
+  const parts = token.split(':').map((part) => Number(part));
+  if (parts.some((part) => !Number.isFinite(part))) return null;
+  if (parts.length === 3) return Math.max(0, parts[0] * 3600 + parts[1] * 60 + parts[2]);
+  if (parts.length === 2) return Math.max(0, parts[0] * 60 + parts[1]);
+  return Math.max(0, parts[0]);
+};
+
+const getTranscriptTimeRange = (line: TranscriptionLine): { start: number | null; end: number | null } => {
+  const fromNumeric = {
+    start: typeof line.start === 'number' && Number.isFinite(line.start) ? Math.max(0, line.start) : null,
+    end: typeof line.end === 'number' && Number.isFinite(line.end) ? Math.max(0, line.end) : null,
+  };
+  if (fromNumeric.start !== null || fromNumeric.end !== null) return fromNumeric;
+  const timecode = String(line.timecode || '').trim();
+  if (timecode) {
+    const parts = timecode.split(/-->|->|–|-/).map((part) => part.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      return { start: parseTimestampToSeconds(parts[0]), end: parseTimestampToSeconds(parts[1]) };
+    }
+  }
+  return { start: parseTimestampToSeconds(line.time), end: null };
+};
+
+const AGENT_CUE_PATTERNS = [
+  /ขอบคุณที่ติดต่อ|ยินดีให้บริการ|มีอะไรให้ช่วย|ขออนุญาต|รบกวน|ขอตรวจสอบ|ตรวจสอบให้|รอสักครู่|ยืนยันข้อมูล|ขอชื่อ|ขอเบอร์|ขอหมายเลข|ขอข้อมูล|รับเรื่อง|ประสานงาน|ติดต่อกลับ|เรียนแจ้ง|ไม่ทราบว่า|สะดวกไหม/gi,
+  /(?:สวัสดี(?:ค่ะ|ครับ)?)/gi,
+  /(?:เดี๋ยว|ขอ)\s*(?:ผม|ฉัน|เจ้าหน้าที่)?\s*(?:ตรวจสอบ|เช็ก|เช็ค|ประสานงาน)/gi,
+];
+
+const CUSTOMER_CUE_PATTERNS = [
+  /มีปัญหา|ใช้งานไม่ได้|ใช้ไม่ได้|เปิดไม่ติด|ชำรุด|เสีย|พัง|เคลม|คืนเงิน|เปลี่ยน(?:สินค้า|เครื่อง)|ไม่ได้รับ|ส่งผิด|สั่งซื้อ|ซื้อมา|ได้รับสินค้า|แจ้งปัญหา|ขอสอบถาม|สอบถามเรื่อง|ช่วยดูให้หน่อย|ทำยังไง|ทำอย่างไร|ต้องการ|อยาก/gi,
+  /(?:ผม|ดิฉัน|ฉัน|หนู|ลูกค้า)\s*(?:ต้องการ|อยาก|ซื้อ|สั่ง|ได้รับ|มีปัญหา|แจ้ง|สอบถาม)/gi,
+  /(?:เครื่อง|สินค้า|ออเดอร์|order|เลขที่สั่งซื้อ).*(?:เสีย|มีปัญหา|ไม่ได้|พัง|เคลม)/gi,
+];
+
+const scoreLineForRole = (text: string, lineIndex: number, context: SpeakerResolutionContext): { agent: number; customer: number } => {
+  const cleaned = cleanTranscriptText(text);
+  if (!cleaned) return { agent: lineIndex === 0 ? 1 : 0, customer: 0 };
+  let agent = countMatches(cleaned, AGENT_CUE_PATTERNS) * 2;
+  let customer = countMatches(cleaned, CUSTOMER_CUE_PATTERNS) * 2;
+  if (lineIndex === 0) agent += 1.5;
+  const digits = cleaned.replace(/\D/g, '');
+  const customerPhoneDigits = String(context.customerPhone || '').replace(/\D/g, '');
+  if (customerPhoneDigits && digits.includes(customerPhoneDigits)) customer += 1;
+  const agentId = String(context.agentId || '').trim().toLowerCase();
+  if (agentId && cleaned.toLowerCase().includes(agentId)) agent += 0.5;
+  const agentName = String(context.agentName || '').trim().toLowerCase();
+  if (agentName && cleaned.toLowerCase().includes(agentName)) customer += 0.5;
+  return { agent, customer };
+};
+
+const resolveTranscriptionRoles = (lines: TranscriptionLine[], context: SpeakerResolutionContext): ConversationRole[] => {
+  if (lines.length === 0) return [];
+  const hasSpeakerMetadata = lines.some(hasStructuredSpeakerLabel);
+
+  if (!hasSpeakerMetadata) {
+    let previousRole: ConversationRole = 'Agent';
+    return lines.map((line, index) => {
+      const text = pickFullTranscriptionText(line);
+      const { agent, customer } = scoreLineForRole(text, index, context);
+      if (agent > customer + 0.5) { previousRole = 'Agent'; return 'Agent'; }
+      if (customer > agent + 0.5) { previousRole = 'Customer'; return 'Customer'; }
+      previousRole = index === 0 ? 'Agent' : (previousRole === 'Agent' ? 'Customer' : 'Agent');
+      return previousRole;
+    });
+  }
+
+  const groups = new Map<string, SpeakerGroupStats>();
+  lines.forEach((line, index) => {
+    const key = getSpeakerGroupKey(line, index);
+    const explicitRole = getExplicitSpeakerRole(line);
+    const text = pickFullTranscriptionText(line);
+    const { agent, customer } = scoreLineForRole(text, index, context);
+    const existing = groups.get(key) ?? { key, firstIndex: index, agentScore: 0, customerScore: 0, explicitRole: null };
+    existing.firstIndex = Math.min(existing.firstIndex, index);
+    existing.agentScore += agent;
+    existing.customerScore += customer;
+    if (explicitRole === 'Agent') { existing.agentScore += 100; existing.explicitRole = 'Agent'; }
+    if (explicitRole === 'Customer') { existing.customerScore += 100; existing.explicitRole = 'Customer'; }
+    groups.set(key, existing);
+  });
+
+  const sortedGroups = Array.from(groups.values()).sort((a, b) => a.firstIndex - b.firstIndex);
+  const roleByKey = new Map<string, ConversationRole>();
+  sortedGroups.forEach((group) => { if (group.explicitRole) roleByKey.set(group.key, group.explicitRole); });
+  const usedKeys = new Set(roleByKey.keys());
+  const remainingGroups = () => sortedGroups.filter((group) => !usedKeys.has(group.key));
+
+  const pickBestGroup = (target: ConversationRole): SpeakerGroupStats | null => {
+    const candidates = remainingGroups();
+    if (candidates.length === 0) return null;
+    return candidates.sort((a, b) => {
+      const aScore = target === 'Agent' ? a.agentScore - a.customerScore : a.customerScore - a.agentScore;
+      const bScore = target === 'Agent' ? b.agentScore - b.customerScore : b.customerScore - b.agentScore;
+      if (bScore !== aScore) return bScore - aScore;
+      return a.firstIndex - b.firstIndex;
+    })[0] ?? null;
+  };
+
+  if (![...roleByKey.values()].includes('Agent')) {
+    const agentGroup = pickBestGroup('Agent') ?? sortedGroups[0] ?? null;
+    if (agentGroup) { roleByKey.set(agentGroup.key, 'Agent'); usedKeys.add(agentGroup.key); }
+  }
+
+  if (![...roleByKey.values()].includes('Customer')) {
+    const customerGroup = pickBestGroup('Customer') ?? sortedGroups[1] ?? sortedGroups[0] ?? null;
+    if (customerGroup) { roleByKey.set(customerGroup.key, 'Customer'); usedKeys.add(customerGroup.key); }
+  }
+
+  remainingGroups().forEach((group) => {
+    roleByKey.set(group.key, group.agentScore >= group.customerScore ? 'Agent' : 'Customer');
+  });
+
+  return lines.map((line, index) => {
+    const explicitRole = getExplicitSpeakerRole(line);
+    if (explicitRole) return explicitRole;
+    const baseRole = roleByKey.get(getSpeakerGroupKey(line, index)) ?? (index === 0 ? 'Agent' : 'Customer');
+    const text = pickFullTranscriptionText(line);
+    const { agent, customer } = scoreLineForRole(text, index, context);
+    if (agent >= customer + 3) return 'Agent';
+    if (customer >= agent + 3) return 'Customer';
+    return baseRole;
+  });
+};
+
+const buildTranscriptSegments = (lines: TranscriptionLine[], roles: ConversationRole[], duration: number): TranscriptSegment[] => {
+  if (lines.length === 0) return [];
+
+  const baseSegments = lines.map((line, index) => {
+    const range = getTranscriptTimeRange(line);
+    return {
+      ...line,
+      role: roles[index] || 'Customer',
+      textValue: pickFullTranscriptionText(line),
+      startSec: range.start ?? -1,
+      endSec: range.end ?? -1,
+      canSeek: range.start !== null || range.end !== null,
+    };
+  });
+
+  return baseSegments.map((segment, index) => {
+    let startSec = segment.startSec;
+    let endSec = segment.endSec;
+
+    if (startSec < 0) {
+      const previous = baseSegments[index - 1];
+      startSec = previous ? Math.max(0, previous.endSec >= 0 ? previous.endSec : previous.startSec >= 0 ? previous.startSec : 0) : 0;
+    }
+
+    if (endSec < 0) {
+      const nextWithStart = baseSegments.slice(index + 1).find((item) => item.startSec >= 0);
+      if (nextWithStart) endSec = nextWithStart.startSec;
+      else if (duration > 0) endSec = duration;
+      else endSec = startSec + 4;
+    }
+
+    if (endSec <= startSec) {
+      const nextWithStart = baseSegments.slice(index + 1).find((item) => item.startSec > startSec);
+      endSec = nextWithStart ? nextWithStart.startSec : Math.max(startSec + 0.8, duration || startSec + 4);
+    }
+
+    return { ...segment, startSec, endSec, canSeek: Number.isFinite(startSec) && startSec >= 0 };
+  });
+};
+
+const findActiveTranscriptIndex = (segments: TranscriptSegment[], currentTime: number): number => {
+  if (segments.length === 0) return -1;
+
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    if (currentTime >= Math.max(0, segment.startSec - 0.15) && currentTime < segment.endSec) return index;
+  }
+
+  let nearestIndex = -1;
+  for (let index = 0; index < segments.length; index += 1) {
+    if (currentTime >= segments[index].startSec) nearestIndex = index;
+    else break;
+  }
+
+  return nearestIndex;
 };
 
 const collectBrandKeywords = (
@@ -290,6 +540,8 @@ export default function FileAnalysisDetail() {
   const [currentTime, setCurrentTime] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const progressRef = useRef<HTMLDivElement | null>(null);
+  const transcriptItemRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const lastFocusedTranscriptIndexRef = useRef(-1);
 
   const getErrorMessage = (error: unknown): string =>
     error instanceof Error ? error.message : 'Unknown error';
@@ -490,6 +742,13 @@ export default function FileAnalysisDetail() {
     setIsPlaying(!isPlaying);
   };
 
+  const seekToTime = (seconds: number) => {
+    const audio = initAudio();
+    const boundedTime = Math.max(0, Math.min(seconds, audio.duration || seconds));
+    audio.currentTime = boundedTime;
+    setCurrentTime(boundedTime);
+  };
+
   const seekAudio = (e: React.MouseEvent<HTMLDivElement>) => {
     const audio = initAudio();
     const bar = progressRef.current;
@@ -497,8 +756,7 @@ export default function FileAnalysisDetail() {
     const rect = bar.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const pct = Math.max(0, Math.min(1, x / rect.width));
-    audio.currentTime = pct * audio.duration;
-    setCurrentTime(audio.currentTime);
+    seekToTime(pct * audio.duration);
   };
 
   const formatTime = (s: number) => {
@@ -507,8 +765,6 @@ export default function FileAnalysisDetail() {
     const sec = Math.floor(s % 60).toString().padStart(2, '0');
     return `${m}:${sec}`;
   };
-
-  const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   const fullTranscript = analysis?.transcription
     ?.map((line) => pickFullTranscriptionText(line))
@@ -525,6 +781,22 @@ export default function FileAnalysisDetail() {
   const parsedAgentIdFromFilename = extractAgentIdFromFilename(fileData?.original_filename);
   const displayPhone = parsedPhoneFromFilename || fileData?.customer_phone || analysis?.customer_phone || '-';
   const displayAgentId = parsedAgentIdFromFilename || analysis?.agent_id || fileData?.agent_id || '-';
+  const transcriptionRoles = useMemo(
+    () => resolveTranscriptionRoles(analysis?.transcription || [], {
+      agentId: displayAgentId,
+      agentName: analysis?.agent_name || fileData?.agent_name || '',
+      customerPhone: displayPhone,
+    }),
+    [analysis?.agent_name, analysis?.transcription, displayAgentId, displayPhone, fileData?.agent_name]
+  );
+  const transcriptSegments = useMemo(
+    () => buildTranscriptSegments(analysis?.transcription || [], transcriptionRoles, duration),
+    [analysis?.transcription, duration, transcriptionRoles]
+  );
+  const activeTranscriptIndex = useMemo(
+    () => findActiveTranscriptIndex(transcriptSegments, currentTime),
+    [currentTime, transcriptSegments]
+  );
   const currentFileRouteId = String(fileData?.file_id || analysis?.file_id || fileId || '');
   const customerPhoneForWarranty = String(parsedPhoneFromFilename || fileData?.customer_phone || analysis?.customer_phone || '').trim();
   const warrantyAutoId = currentFileRouteId
@@ -533,6 +805,22 @@ export default function FileAnalysisDetail() {
   const customerWarrantyHref = customerPhoneForWarranty && currentFileRouteId
     ? `/customers/CUST-${customerPhoneForWarranty}/warranty/${currentFileRouteId}`
     : '#';
+
+
+  useEffect(() => {
+    if (!isPlaying || activeTranscriptIndex < 0) return;
+    if (lastFocusedTranscriptIndexRef.current === activeTranscriptIndex) return;
+
+    transcriptItemRefs.current[activeTranscriptIndex]?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+    });
+    lastFocusedTranscriptIndexRef.current = activeTranscriptIndex;
+  }, [activeTranscriptIndex, isPlaying]);
+
+  useEffect(() => {
+    if (activeTranscriptIndex < 0) lastFocusedTranscriptIndexRef.current = -1;
+  }, [activeTranscriptIndex]);
 
   const enhancedCategoryKeywords = Object.values(enhancedAnalysis?.keywords?.categories || {})
     .flatMap((item) => Array.isArray(item?.matched) ? item.matched : []);
@@ -555,6 +843,7 @@ export default function FileAnalysisDetail() {
 
   const safeSummaryPoints = sanitizeSummaryPoints(analysis?.summary_points);
   const safeSummaryText = String(analysis?.summary || '').trim();
+  const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   // ── AI re-analysis ──
   const triggerAnalysis = async () => {
@@ -814,7 +1103,7 @@ export default function FileAnalysisDetail() {
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-slate-400 mb-5 ml-9">ถอดคำโดย Whisper Large V3 | Sentiment โดย Llama (STT + Wav2Vec2)</p>
+                  <p className="text-[10px] text-slate-400 mb-5 ml-9">ถอดคำโดย Whisper Large V3 | จับคู่ Agent / Customer จาก speaker data + บริบทของประโยค และกด transcript เพื่อกระโดดไปช่วงเสียงนั้นได้</p>
 
                   {analysis.transcription && analysis.transcription.length > 0 ? (
                     <div className="space-y-5">
@@ -835,27 +1124,33 @@ export default function FileAnalysisDetail() {
                         <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap wrap-break-word">{fullTranscript || '-'}</p>
                       </div>
 
-                      {analysis.transcription.map((line, idx) => {
-                        const speakerLabel = normalizeSpeakerLabel(line, idx);
-                        const isAgent = speakerLabel === 'Speaker A';
-                        const subtitleText = pickFullTranscriptionText(line);
-                        const timeText = line.time || (typeof line.start === 'number' ? formatTime(line.start) : '00:00');
+                      {transcriptSegments.map((segment, idx) => {
+                        const isAgent = segment.role === 'Agent';
+                        const isActive = idx === activeTranscriptIndex;
+                        const timeText = formatTime(segment.startSec);
 
                         return (
-                          <div key={idx}>
-                            <div className="flex items-center space-x-2 mb-1.5">
+                          <div
+                            key={idx}
+                            ref={(node) => {
+                              transcriptItemRefs.current[idx] = node;
+                            }}
+                            className={`rounded-2xl p-2 transition-all duration-200 ${isActive ? 'bg-blue-50/70 ring-2 ring-blue-100 shadow-sm' : ''}`}
+                          >
+                            <div className="mb-1.5 flex items-center gap-2">
                               <span className={`text-xs font-bold ${isAgent ? 'text-blue-700' : 'text-emerald-700'}`}>
-                                {speakerLabel}
+                                {segment.role}
                               </span>
-                              <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{timeText}</span>
+                              <span className={`rounded px-2 py-0.5 text-[10px] ${isActive ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>{timeText}</span>
+                              {isActive && <span className="text-[10px] font-bold uppercase tracking-wide text-blue-600">Now Playing</span>}
                             </div>
-                            <div className={`border p-4 rounded-2xl rounded-tl-sm text-slate-700 text-sm w-full whitespace-pre-wrap wrap-break-word ${
-                              isAgent 
-                                ? 'bg-blue-50 border-blue-100' 
-                                : 'bg-emerald-50 border-emerald-100'
-                            }`}>
-                              {subtitleText || '-'}
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => segment.canSeek && seekToTime(segment.startSec)}
+                              className={`w-full rounded-2xl rounded-tl-sm border p-4 text-left text-sm text-slate-700 transition-all whitespace-pre-wrap wrap-break-word ${segment.canSeek ? 'cursor-pointer' : 'cursor-default'} ${isActive ? 'border-blue-300 shadow-[0_0_0_1px_rgba(59,130,246,0.08)]' : ''} ${isAgent ? 'bg-blue-50 border-blue-100' : 'bg-emerald-50 border-emerald-100'}`}
+                            >
+                              {segment.textValue || '-'}
+                            </button>
                           </div>
                         );
                       })}
@@ -1070,123 +1365,11 @@ export default function FileAnalysisDetail() {
                   </div>
                 )}
 
-                {/* ── Conversation Keywords (non-brand) ── */}
-                {conversationKeywords.length > 0 && (
-                  <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                    <div className="flex items-center space-x-2 mb-3">
-                      <Key size={16} className="text-blue-600" />
-                      <h3 className="text-sm font-bold text-slate-800">Conversation Keywords</h3>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{conversationKeywords.length}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {conversationKeywords.map((kw, i) => (
-                        <span key={i} className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full">{kw}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
-                {brandKeywords.length > 0 && (
-                  <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                    <div className="flex items-center space-x-2 mb-3">
-                      <Tag size={16} className="text-amber-600" />
-                      <h3 className="text-sm font-bold text-slate-800">Brand Insights</h3>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">{brandKeywords.length}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {brandKeywords.map((kw) => (
-                        <span key={kw} className="px-3 py-1 bg-amber-50 text-amber-700 text-xs font-medium rounded-full">{kw}</span>
-                      ))}
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-3">แยกจาก Keywords เพื่อไม่ให้ชื่อแบรนด์กลบคำสำคัญเชิงปัญหา/ความต้องการลูกค้า</p>
-                  </div>
-                )}
 
                 {/* ── Enhanced Analysis Section ── */}
                 {enhancedAnalysis && (
                   <div className="enhanced-analysis-grid">
-                    {/* Entities Card */}
-                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                      <div className="flex items-center space-x-2 mb-4">
-                        <Package size={18} className="text-blue-600" />
-                        <h3 className="text-sm font-bold text-slate-800">📦 ข้อมูลที่ตรวจจับได้</h3>
-                      </div>
-
-                      {enhancedAnalysis.entities.brands?.length > 0 && (
-                        <div className="entity-section mb-4">
-                          <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">แบรนด์</h4>
-                          <div className="tags">
-                            {enhancedAnalysis.entities.brands.map((brand: string) => (
-                              <span key={brand} className="tag brand">{brand}</span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {enhancedAnalysis.entities.products?.length > 0 && (
-                        <div className="entity-section mb-4">
-                          <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">สินค้า</h4>
-                          <div className="tags">
-                            {enhancedAnalysis.entities.products.map((product: string) => (
-                              <span key={product} className="tag product">{product}</span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {enhancedAnalysis.entities.amounts?.length > 0 && (
-                        <div className="entity-section">
-                          <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">จำนวนเงิน</h4>
-                          {enhancedAnalysis.entities.amounts.map((amount, idx) => (
-                            <div key={idx} className="amount text-sm font-semibold text-slate-700">
-                              {Number.isFinite(amount?.value) ? amount.value.toLocaleString() : '-'} {amount?.currency || 'THB'}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Keywords Card */}
-                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                      <div className="flex items-center space-x-2 mb-4">
-                        <Key size={18} className="text-purple-600" />
-                        <h3 className="text-sm font-bold text-slate-800">🔑 คำสำคัญ</h3>
-                      </div>
-                      <div className="keyword-categories">
-                        {Object.entries(enhancedAnalysis.keywords.categories || {}).map(([category, data]) => (
-                          <div key={category} className={`keyword-category ${category.toLowerCase()}`}>
-                            <span className="category-label">{category}</span>
-                            <div className="keyword-tags">
-                              {data.matched.map((keyword: string) => (
-                                <span key={keyword} className="keyword-tag">{keyword}</span>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Topic Card */}
-                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                      <div className="flex items-center space-x-2 mb-4">
-                        <FileText size={18} className="text-green-600" />
-                        <h3 className="text-sm font-bold text-slate-800">📋 ประเภทการโทร</h3>
-                      </div>
-                      <div className="topic-info">
-                        <div className="topic-primary text-base font-bold text-slate-800 mb-2">
-                          {enhancedAnalysis.topic.primary_category}
-                        </div>
-                        <div className="topic-confidence text-xs text-slate-500 mb-2">
-                          ความมั่นใจ: {(enhancedAnalysis.topic.confidence * 100).toFixed(0)}%
-                        </div>
-                        {enhancedAnalysis.topic.secondary_categories && enhancedAnalysis.topic.secondary_categories.length > 0 && (
-                          <div className="topic-secondary text-xs text-slate-600">
-                            ประเภทรอง: {enhancedAnalysis.topic.secondary_categories.join(', ')}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
                     {/* QA Score Card */}
                     <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
                       <div className="flex items-center space-x-2 mb-4">
@@ -1202,18 +1385,32 @@ export default function FileAnalysisDetail() {
                         </div>
 
                         <div className="qa-criteria space-y-2">
-                          {Object.entries(enhancedAnalysis.qaScore.criteria || {}).map(([criteria, data]) => (
-                            <div key={criteria} className="criterion">
-                              <span className="criterion-name text-xs">{criteria}</span>
-                              <div className="criterion-bar">
-                                <div
-                                  className="criterion-fill"
-                                  style={{ width: `${(data.score / (data.max_score || 10)) * 100}%` }}
-                                />
+                          {Object.entries(enhancedAnalysis.qaScore.criteria || {}).map(([criteria, data]) => {
+                            const th: Record<string, string> = {
+                              greeting: 'การทักทาย',
+                              politeness: 'ความสุภาพ',
+                              listening: 'การรับฟัง',
+                              resolution: 'การแก้ไขปัญหา',
+                              closing: 'การกล่าวปิด',
+                              compliance: 'ความถูกต้องตามกฎ'
+                            };
+                            const thLabel = th[criteria.toLowerCase()];
+                            return (
+                              <div key={criteria} className="criterion">
+                                <span className="criterion-name">
+                                  <span className="text-xs font-medium">{criteria}</span>
+                                  {thLabel && <span className="block text-[10px] text-slate-400 leading-tight">{thLabel}</span>}
+                                </span>
+                                <div className="criterion-bar">
+                                  <div
+                                    className="criterion-fill"
+                                    style={{ width: `${(data.score / (data.max_score || 10)) * 100}%` }}
+                                  />
+                                </div>
+                                <span className="criterion-score text-xs font-bold">{data.score}/{data.max_score || 10}</span>
                               </div>
-                              <span className="criterion-score text-xs font-bold">{data.score}/{data.max_score || 10}</span>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
 
                         {enhancedAnalysis.qaScore.strengths?.length > 0 && (

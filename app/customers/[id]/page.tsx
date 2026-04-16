@@ -4,16 +4,15 @@ import Sidebar from '@/components/Sidebar';
 import {
   CheckCircle2,
   History,
-  Sparkles,
   Pencil,
   Plus,
   Filter,
   ListOrdered,
   ChevronRight,
-  Zap,
   ChevronLeft,
   Package,
-  ImagePlus
+  ImagePlus,
+  Trash2
 } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect, useCallback, type ChangeEvent } from 'react';
@@ -206,6 +205,7 @@ export default function CustomerDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [showAddWarranty, setShowAddWarranty] = useState(false);
   const [savingWarranty, setSavingWarranty] = useState(false);
+  const [deletingWarrantyFileId, setDeletingWarrantyFileId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [editForm, setEditForm] = useState<Partial<CustomerDetail>>({});
@@ -336,11 +336,6 @@ export default function CustomerDetailPage() {
       return;
     }
 
-    if (!warrantyForm.brand.trim()) {
-      setError('ไม่พบ Brand จากผลวิเคราะห์ของลูกค้ารายนี้');
-      return;
-    }
-
     setSavingWarranty(true);
     try {
       const url = editingWarrantyFileId 
@@ -375,6 +370,56 @@ export default function CustomerDetailPage() {
       setError(errorMsg);
     } finally {
       setSavingWarranty(false);
+    }
+  };
+
+  const handleDeleteWarranty = async (warranty: WarrantyItem) => {
+    const warrantyLabel = warranty.registration_no || warranty.file_id;
+    if (!window.confirm(`ต้องการลบรายการประกัน ${warrantyLabel} จริงหรือไม่?`)) {
+      return;
+    }
+
+    setError(null);
+    setDeletingWarrantyFileId(warranty.file_id);
+
+    try {
+      const deleteTargets = [
+        `${API_BASE}/api/v1/audio/delete/${encodeURIComponent(warranty.file_id)}`,
+        `${API_BASE}/api/v1/customers/${encodeURIComponent(customerId)}/warranty/${encodeURIComponent(warranty.file_id)}`,
+      ];
+
+      let deleted = false;
+      let lastErrorMessage = '';
+
+      for (const target of deleteTargets) {
+        const res = await fetch(target, {
+          method: 'DELETE',
+        });
+
+        if (res.ok) {
+          deleted = true;
+          break;
+        }
+
+        const text = await res.text();
+        lastErrorMessage = text || `Delete warranty failed: ${res.status}`;
+
+        if (res.status !== 404 && res.status !== 405) {
+          throw new Error(lastErrorMessage);
+        }
+      }
+
+      if (!deleted) {
+        throw new Error(lastErrorMessage || 'Delete warranty failed');
+      }
+
+      await loadCustomerDetails();
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMsg);
+      window.alert(errorMsg);
+    } finally {
+      setDeletingWarrantyFileId(null);
     }
   };
 
@@ -552,20 +597,6 @@ export default function CustomerDetailPage() {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 md:col-span-2 flex flex-col justify-center">
-              <div className="flex items-center gap-2 mb-2">
-                <Sparkles size={16} className="text-rose-500" />
-                <span className="text-xs font-bold text-slate-400 tracking-wider">AI RECOMMENDED STRATEGY</span>
-              </div>
-              <h3 className="text-lg font-bold text-slate-800 mb-4">
-                {customer.suggested_brand ? `แนะนำแบรนด์ ${customer.suggested_brand} สำหรับกลุ่มลูกค้าระดับพรีเมียม` : 'ยังไม่มีคำแนะนำจากระบบ'}
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {customer.suggested_brand && <span className="px-3 py-1 bg-blue-100/50 text-blue-700 text-xs font-bold rounded-full">BRAND {customer.suggested_brand}</span>}
-                {customer.suggested_agent_id && <span className="px-3 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-full">AGENT {customer.suggested_agent_id}</span>}
-                {customer.suggested_sale_channel && <span className="px-3 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-full">{customer.suggested_sale_channel}</span>}
-              </div>
-            </div>
           </div>
 
           {/* --- Main Content Grid --- */}
@@ -762,22 +793,6 @@ export default function CustomerDetailPage() {
                 </div>
               </div>
 
-              {/* Insights Summary Card */}
-              <div className="bg-[#0052cc] text-white p-6 rounded-2xl shadow-sm relative overflow-hidden">
-                <div className="flex items-center gap-2 mb-4">
-                  <Zap size={20} className="text-white" />
-                  <h3 className="font-bold tracking-wider text-sm">INSIGHTS SUMMARY</h3>
-                </div>
-                <p className="text-sm leading-relaxed mb-6 text-blue-50">
-                  {customer.suggested_brand 
-                    ? `ลูกค้ารายนี้มีแนวโน้มที่จะอัพเกรดผลิตภัณฑ์ในกลุ่ม ${customer.suggested_brand} ภายในรอบระยะเวลาถัดไป โดยพิจารณาจากประวัติและพฤติกรรมการซื้อที่ระบบ AI วิเคราะห์ได้`
-                    : 'ระบบกำลังวิเคราะห์ข้อมูลเชิงลึกสำหรับลูกค้ารายนี้ โปรดรอข้อมูลเพิ่มเติมหลังจากมีการติดต่อในอนาคต'}
-                </p>
-                <button className="flex cursor-pointer items-center gap-2 text-xs font-bold uppercase tracking-wider transition hover:opacity-80">
-                  VIEW DETAILED REPORT <ChevronRight size={14} />
-                </button>
-              </div>
-
               {/* Added Call History as a secondary section */}
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                 <div className="flex items-center justify-between mb-4">
@@ -872,15 +887,28 @@ export default function CustomerDetailPage() {
                             <h3 className="text-lg font-bold text-slate-800">{warranty.brand} - {warranty.model}</h3>
                             <p className="mt-1 text-xs font-medium text-slate-400">ทะเบียน: {warranty.registration_no || '-'}</p>
                           </div>
-                          <button
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              openEditWarrantyModal(warranty);
-                            }}
-                            className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
-                          >
-                            <Pencil size={14} /> Edit
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openEditWarrantyModal(warranty);
+                              }}
+                              className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                              disabled={deletingWarrantyFileId === warranty.file_id}
+                            >
+                              <Pencil size={14} /> Edit
+                            </button>
+                            <button
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleDeleteWarranty(warranty);
+                              }}
+                              className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 shadow-sm transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={deletingWarrantyFileId === warranty.file_id}
+                            >
+                              <Trash2 size={14} /> {deletingWarrantyFileId === warranty.file_id ? 'Deleting...' : 'Delete'}
+                            </button>
+                          </div>
                         </div>
 
                         <div className="mb-6 flex flex-wrap items-center gap-3">
@@ -1038,7 +1066,7 @@ export default function CustomerDetailPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-slate-700">รูปสินค้า / เอกสารประกัน</p>
-                    <p className="text-xs text-slate-400">เพิ่มหรือแก้ไขรูปภายหลังได้ด้วยปุ่ม Edit บนการ์ด</p>
+                    <p className="text-xs text-slate-400">ไม่ใส่รูปก็ได้ และเพิ่มหรือแก้ไขรูปภายหลังได้ด้วยปุ่ม Edit บนการ์ด</p>
                   </div>
                   <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600">
                     <ImagePlus size={16} /> Choose file
@@ -1095,7 +1123,7 @@ export default function CustomerDetailPage() {
               <button
                 onClick={handleSaveWarranty}
                 className="cursor-pointer rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
-                disabled={savingWarranty || !warrantyForm.brand.trim()}
+                disabled={savingWarranty}
               >
                 {savingWarranty ? 'กำลังบันทึก...' : 'บันทึกประกัน'}
               </button>
