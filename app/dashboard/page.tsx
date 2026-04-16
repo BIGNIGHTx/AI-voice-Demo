@@ -459,6 +459,24 @@ export default function DashboardPage() {
 
   const dateLabel = formatDateLabel(selectedDate, filterType);
 
+  const leaderboardAgents = useMemo(() => {
+    const toCompositeScore = (agent: AgentRow) => {
+      const qaOnTen = Math.max(0, Math.min(10, agent.avg_qa_score));
+      const csatOnTen = Math.max(0, Math.min(5, agent.avg_csat_score)) * 2;
+      return qaOnTen * 0.6 + csatOnTen * 0.4;
+    };
+
+    return [...agentPerformance].sort((left, right) => {
+      const scoreDiff = toCompositeScore(right) - toCompositeScore(left);
+      if (scoreDiff !== 0) return scoreDiff;
+
+      const callsDiff = right.total_calls - left.total_calls;
+      if (callsDiff !== 0) return callsDiff;
+
+      return (left.agent_name || left.agent_id).localeCompare(right.agent_name || right.agent_id);
+    });
+  }, [agentPerformance]);
+
   const handleFilterTypeChange = (type: FilterType) => {
     setFilterType(type);
     setSelectedDate(getReferenceDate(type));
@@ -846,8 +864,8 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {agentPerformance.length > 0 ? (
-                    agentPerformance.slice(0, 5).map((agent, idx) => {
+                  {leaderboardAgents.length > 0 ? (
+                    leaderboardAgents.slice(0, 5).map((agent, idx) => {
                       const RankNum = idx + 1;
                       const initial = (agent.agent_name || agent.agent_id).slice(0, 2).toUpperCase();
                       const avatarColors = [
