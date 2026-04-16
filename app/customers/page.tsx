@@ -69,8 +69,6 @@ export default function CustomersPage() {
     try {
       const params = new URLSearchParams({ page: page.toString(), per_page: perPage.toString() });
       if (searchQuery) params.set('search', searchQuery);
-      if (warrantyFilter === 'with') params.set('has_warranty', 'true');
-      if (warrantyFilter === 'without') params.set('has_warranty', 'false');
 
       const res = await fetch(`${API_BASE}/api/v1/customers?${params}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -79,8 +77,6 @@ export default function CustomersPage() {
       const baseCustomers: Customer[] = data.customers || [];
       const normalizedCustomers = await Promise.all(
         baseCustomers.map(async (customer) => {
-          if (!customer.has_warranty) return customer;
-
           try {
             const detailRes = await fetch(
               `${API_BASE}/api/v1/customers/${encodeURIComponent(customer.customer_id)}`,
@@ -105,7 +101,13 @@ export default function CustomersPage() {
         })
       );
 
-      setCustomers(normalizedCustomers);
+      const visibleCustomers = normalizedCustomers.filter((customer) => {
+        if (warrantyFilter === 'with') return customer.has_warranty;
+        if (warrantyFilter === 'without') return !customer.has_warranty;
+        return true;
+      });
+
+      setCustomers(visibleCustomers);
       const visibleTotalWithWarranty = normalizedCustomers.filter((customer) => customer.has_warranty).length;
       const visibleTotalWithoutWarranty = normalizedCustomers.length - visibleTotalWithWarranty;
 
