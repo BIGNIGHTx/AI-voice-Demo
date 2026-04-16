@@ -68,6 +68,15 @@ interface ExactHistoryItem {
   keyInsightsLines: string[];
 }
 
+interface ExactWarrantyQueryMatch {
+  record: ExactWarrantyRecord;
+  callHistory: {
+    fileId: string;
+    callDate: string;
+    agentId: string;
+  } | null;
+}
+
 const TOPIC_OVERVIEW_KEYWORDS = [
   'topic distribution',
   'topic',
@@ -596,7 +605,7 @@ const isDeletedWarrantyRecord = (record: ExactWarrantyRecord): boolean => {
 const filterDeletedWarrantyRecords = (records: ExactWarrantyRecord[]): ExactWarrantyRecord[] =>
   records.filter((record) => !isDeletedWarrantyRecord(record));
 
-const parseExactWarrantyRecordFromQueryPayload = (payload: unknown): ExactWarrantyRecord | null => {
+const parseExactWarrantyRecordFromQueryPayload = (payload: unknown): ExactWarrantyQueryMatch | null => {
   if (!isObject(payload) || !isObject(payload.data)) return null;
 
   const warranty = isObject(payload.data.warranty) ? payload.data.warranty : null;
@@ -622,7 +631,24 @@ const parseExactWarrantyRecordFromQueryPayload = (payload: unknown): ExactWarran
     agentId: toText(callHistory?.agent_id, '-'),
   };
 
-  return isDeletedWarrantyRecord(record) ? null : record;
+  if (isDeletedWarrantyRecord(record)) return null;
+
+  const historyFileId = toText(callHistory?.file_id);
+  const historyCallDate = toText(
+    callHistory?.call_date ?? callHistory?.call_timestamp ?? callHistory?.created_at,
+    '-'
+  );
+
+  return {
+    record,
+    callHistory: callHistory
+      ? {
+          fileId: historyFileId,
+          callDate: historyCallDate,
+          agentId: toText(callHistory?.agent_id, '-'),
+        }
+      : null,
+  };
 };
 
 const findExactWarrantyRecord = (
@@ -688,7 +714,7 @@ const fetchVisibleWarrantiesByPhone = async (phone: string): Promise<ExactWarran
   return filterDeletedWarrantyRecords(parseWarrantyRecords(payload));
 };
 
-const fetchExactWarrantyRecordFromBackendQuery = async (question: string): Promise<ExactWarrantyRecord | null> => {
+const fetchExactWarrantyRecordFromBackendQuery = async (question: string): Promise<ExactWarrantyQueryMatch | null> => {
   const payload = await fetchJson(`${API_BASE}/api/v1/warranty/query`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -719,6 +745,7 @@ const enrichExactWarrantyRecord = async (record: ExactWarrantyRecord): Promise<E
 const fetchExactHistoryItem = async (item: EnrichedTopicSearchResult): Promise<ExactHistoryItem> => {
   const payload = await fetchJson(`${API_BASE}/api/v1/audio/detail/${encodeURIComponent(item.fileId)}`);
   const analysis = isObject(payload) && isObject(payload.analysis) ? payload.analysis : null;
+  const file = isObject(payload) && isObject(payload.file) ? payload.file : null;
 
   const summaryPointLines = Array.isArray(analysis?.summary_points)
     ? analysis.summary_points
@@ -742,7 +769,10 @@ const fetchExactHistoryItem = async (item: EnrichedTopicSearchResult): Promise<E
 
   return {
     fileId: item.fileId,
-    callTimestamp: toText(analysis?.call_timestamp, item.createdAt || '-'),
+    callTimestamp: toText(
+      analysis?.call_timestamp ?? analysis?.call_date ?? file?.call_date ?? file?.call_timestamp,
+      item.createdAt || '-'
+    ),
     agentId: toText(analysis?.agent_id, item.agentId || '-'),
     topic: toText(analysis?.intent ?? analysis?.topic ?? item.topic, item.topic || '-'),
     summaryLines,
@@ -1137,8 +1167,8 @@ const tryExactWarrantyReply = async (question: string): Promise<string | null> =
 
   const includeHistory = isWarrantyHistoryQuestion(question);
 
-  const baseRecord = await fetchExactWarrantyRecordFromBackendQuery(question)
-    || await fetchExactWarrantyRecord({ registrationNo, serialNo });
+  const backendMatch = await fetchExactWarrantyRecordFromBackendQuery(question);
+  const baseRecord = backendMatch?.record || await fetchExactWarrantyRecord({ registrationNo, serialNo });
   if (!baseRecord) {
     const backendReply = await requestWarrantyReply(question);
     if (backendReply !== CHATBOT_FALLBACK_MESSAGE) {
@@ -1167,9 +1197,32 @@ const tryExactWarrantyReply = async (question: string): Promise<string | null> =
       )
     : [];
 
-  const historyItems = await Promise.all(
+  const historyItemsRaw = await Promise.all(
     historyResults.slice(0, 3).map((item) => fetchExactHistoryItem(item))
   );
+
+  const historyItems = historyItemsRaw.map((item, index) => {
+    const backendCallDate = backendMatch?.callHistory?.callDate || '-';
+    if (!backendMatch?.callHistory || backendCallDate === '-') return item;
+
+    const sameFile = !!backendMatch.callHistory.fileId && item.fileId === backendMatch.callHistory.fileId;
+    if (sameFile || historyItemsRaw.length === 1) {
+      return {
+        ...item,
+        callTimestamp: backendCallDate,
+        agentId: backendMatch.callHistory.agentId !== '-' ? backendMatch.callHistory.agentId : item.agentId,
+      };
+    }
+
+    if (index === 0 && !historyItemsRaw.some((historyItem) => historyItem.fileId === backendMatch.callHistory?.fileId)) {
+      return {
+        ...item,
+        callTimestamp: backendCallDate,
+      };
+    }
+
+    return item;
+  });
 
   return formatExactWarrantyReply(record, historyResults.length, historyItems, true);
 };
