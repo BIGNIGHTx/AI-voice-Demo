@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw, Search, ShieldCheck, UserCog } from 'lucide-react';
+import { Loader2, RefreshCw, Search, Shield, Users, User, KeyRound } from 'lucide-react';
 
 import Sidebar from '@/components/Sidebar';
 
@@ -147,17 +147,17 @@ export default function AdminUsersPage() {
 
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-full p-5 sm:p-6 lg:p-8">
-          <section className="mb-6 rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,#0f172a_0%,#1f2937_48%,#065f46_100%)] p-6 text-white shadow-[0_24px_80px_rgba(15,23,42,0.16)] sm:p-7">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <section className="mb-6 rounded-[24px] border border-white bg-gradient-to-br from-white via-[#fcfdfe] to-[#f4f7f9] p-6 text-slate-800 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] ring-1 ring-slate-100 sm:p-7">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-3">
-                <span className="inline-flex w-fit items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-emerald-100">
-                  <UserCog className="h-3.5 w-3.5" />
+                <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-200/80 bg-emerald-50 px-3 py-1 text-[11px] font-bold tracking-wide text-emerald-600 shadow-sm">
+                  <KeyRound className="h-3 w-3" strokeWidth={2.5} />
                   Admin Only
                 </span>
-                <div className="space-y-2">
-                  <h1 className="text-2xl font-bold sm:text-3xl">จัดการสิทธิ์ผู้ใช้</h1>
-                  <p className="max-w-3xl text-sm leading-6 text-slate-200">
-                    หน้าเดียวสำหรับสลับสิทธิ์ระหว่าง Admin และ User โดย Admin เท่านั้นที่เข้าถึงได้ และทุกการเปลี่ยน role จะถูกบันทึกลง audit log
+                <div className="space-y-1.5">
+                  <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-[26px]">จัดการสิทธิ์ผู้ใช้</h1>
+                  <p className="max-w-xl text-[13px] leading-relaxed text-slate-500 font-medium lg:text-sm">
+                    หน้าเดียวสำหรับสลับสิทธิ์ Admin/User ที่ถูกบันทึกใน audit log อย่างปลอดภัย
                   </p>
                 </div>
               </div>
@@ -166,25 +166,54 @@ export default function AdminUsersPage() {
                 type="button"
                 onClick={() => void loadUsers(true)}
                 disabled={refreshing}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-70"
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-[13px] font-bold text-emerald-600 shadow-sm transition-all hover:bg-emerald-50 hover:border-emerald-300 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 lg:mt-2"
               >
-                {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" strokeWidth={2.5} />}
                 {refreshing ? 'กำลังรีเฟรช...' : 'รีเฟรชรายชื่อ'}
               </button>
             </div>
 
-            <div className="mt-6 grid gap-4 sm:grid-cols-3">
-              <div className="rounded-3xl border border-white/10 bg-white/10 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Users</p>
-                <p className="mt-3 text-3xl font-bold">{stats.total}</p>
+            <div className="mt-8 grid gap-4 sm:grid-cols-3">
+              {/* Card 1: ผู้ใช้ทั้งหมด */}
+              <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] transition-all hover:-translate-y-0.5 hover:shadow-md">
+                <div className="flex items-center gap-3.5">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-50 border border-slate-100">
+                    <Users className="h-5 w-5 text-slate-500" strokeWidth={1.5} />
+                  </div>
+                  <span className="text-[13px] font-bold text-slate-700">ผู้ใช้ทั้งหมด</span>
+                </div>
+                <div className="text-right">
+                  <p className="text-3xl font-black leading-none text-slate-900">{stats.total}</p>
+                  <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">(USERS)</p>
+                </div>
               </div>
-              <div className="rounded-3xl border border-white/10 bg-white/10 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Admins</p>
-                <p className="mt-3 text-3xl font-bold">{stats.admins}</p>
+
+              {/* Card 2: ผู้ดูแลระบบ */}
+              <div className="flex items-center justify-between rounded-2xl border border-emerald-200/70 bg-gradient-to-r from-emerald-50/50 to-white p-4 shadow-[0_4px_20px_-4px_rgba(16,185,129,0.08)] transition-all hover:-translate-y-0.5 hover:shadow-md hover:shadow-emerald-500/10">
+                <div className="flex items-center gap-3.5">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100/50 border border-emerald-200/50">
+                    <KeyRound className="h-5 w-5 text-emerald-600" strokeWidth={1.5} />
+                  </div>
+                  <span className="text-[13px] font-bold text-emerald-800">ผู้ดูแลระบบ</span>
+                </div>
+                <div className="text-right">
+                  <p className="text-3xl font-black leading-none text-emerald-700">{stats.admins}</p>
+                  <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-emerald-500/80">(ADMINS)</p>
+                </div>
               </div>
-              <div className="rounded-3xl border border-white/10 bg-white/10 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Standard Users</p>
-                <p className="mt-3 text-3xl font-bold">{stats.standardUsers}</p>
+
+              {/* Card 3: ผู้ใช้ทั่วไป */}
+              <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] transition-all hover:-translate-y-0.5 hover:shadow-md">
+                <div className="flex items-center gap-3.5">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-50 border border-slate-100">
+                    <User className="h-5 w-5 text-slate-400" strokeWidth={1.5} />
+                  </div>
+                  <span className="text-[13px] font-bold text-slate-700">ผู้ใช้ทั่วไป</span>
+                </div>
+                <div className="text-right">
+                  <p className="text-3xl font-black leading-none text-slate-900">{stats.standardUsers}</p>
+                  <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">(STANDARD USERS)</p>
+                </div>
               </div>
             </div>
           </section>
@@ -225,78 +254,104 @@ export default function AdminUsersPage() {
                 const nextRoleLabel = user.role === 'admin' ? 'เปลี่ยนเป็น User' : 'เปลี่ยนเป็น Admin';
 
                 return (
-                  <article key={user.id} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
-                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px] xl:items-start">
-                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 xl:gap-6">
-                        <div className="flex min-h-[96px] flex-col justify-between">
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">ผู้ใช้</p>
-                          <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-semibold text-slate-900">{user.name}</p>
-                            {isCurrentUser ? (
-                              <span className="rounded-full bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-700">
-                                Current Session
-                              </span>
-                            ) : null}
-                            {user.id === firstAdminId ? (
-                              <span className="rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
-                                First Admin
-                              </span>
-                            ) : null}
+                  <article key={user.id} className="group relative overflow-hidden rounded-[24px] border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.03)] transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-[0_20px_40px_rgba(0,0,0,0.06)]">
+                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-50/40 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" pointerEvents="none" />
+                    
+                    <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+                      <div className="grid flex-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+                        
+                        {/* 1. User Info */}
+                        <div className="flex flex-col">
+                          <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">ข้อมูลผู้ใช้</p>
+                          <div className="flex flex-1 items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200/80 bg-gradient-to-b from-slate-50 to-slate-100 text-lg font-bold text-slate-600 shadow-sm">
+                              {user.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <h3 className="truncate text-sm font-bold text-slate-800">{user.name}</h3>
+                                {isCurrentUser && (
+                                  <span className="shrink-0 rounded-full border border-sky-200/60 bg-sky-50 px-2 py-0.5 text-[10px] font-bold tracking-wide text-sky-600">YOU</span>
+                                )}
+                              </div>
+                              <p className="truncate text-xs font-medium text-slate-500 mt-0.5">{user.email}</p>
+                            </div>
                           </div>
-                          <p className="text-sm text-slate-500">{user.email}</p>
                         </div>
 
-                        <div className="flex min-h-[96px] flex-col justify-between">
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Role</p>
-                          <div className="mt-2 flex items-center gap-2">
-                            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold uppercase ${roleBadgeClassName(user.role)}`}>
-                              {user.role}
+                        {/* 2. Role Info */}
+                        <div className="flex flex-col">
+                          <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">สิทธิ์ (Role)</p>
+                          <div className="flex flex-1 flex-col justify-center items-start">
+                            <span className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold uppercase tracking-wide shadow-sm transition-colors ${
+                              user.role === 'admin' 
+                                ? 'border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100/50 text-emerald-700' 
+                                : 'border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100/50 text-slate-600'
+                            }`}>
+                               {user.role === 'admin' ? <KeyRound className="h-3.5 w-3.5" strokeWidth={2.5} /> : <User className="h-3.5 w-3.5" strokeWidth={2.5} />}
+                               {user.role}
+                               {user.id === firstAdminId && (
+                                  <span className="ml-1 border-l border-emerald-300/50 pl-2 text-[9px] text-emerald-600">FIRST ADMIN</span>
+                               )}
                             </span>
+                            <p className="mt-1.5 text-[11px] font-medium text-slate-400">
+                              Audit events: <span className="font-bold text-slate-600">{user._count.auditLogs}</span>
+                            </p>
                           </div>
-                          <p className="mt-1 text-sm text-slate-500">Audit events: {user._count.auditLogs}</p>
                         </div>
 
-                        <div className="flex min-h-[96px] flex-col justify-between">
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">สร้างบัญชีเมื่อ</p>
-                          <div className="mt-4 flex items-center">
-                            <p className="text-sm font-medium text-slate-800">{formatDateTime(user.createdAt)}</p>
+                        {/* 3. Created At */}
+                        <div className="flex flex-col">
+                          <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">สร้างบัญชีเมื่อ</p>
+                          <div className="flex flex-1 flex-col justify-center">
+                            <p className="text-sm font-semibold text-slate-700">{formatDateTime(user.createdAt)}</p>
                           </div>
-                          <p className="invisible mt-1 text-sm leading-5">placeholder</p>
                         </div>
 
-                        <div className="flex min-h-[96px] flex-col justify-between">
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">เข้าใช้ล่าสุด</p>
-                          <div className="mt-4 flex items-center">
-                            <p className="text-sm font-medium text-slate-800">{formatDateTime(user.lastLoginAt)}</p>
+                        {/* 4. Last Login */}
+                        <div className="flex flex-col">
+                          <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">เข้าใช้ล่าสุด</p>
+                          <div className="flex flex-1 flex-col justify-center">
+                            <p className="text-sm font-semibold text-slate-700">{formatDateTime(user.lastLoginAt)}</p>
                           </div>
-                          <p className="invisible mt-1 text-sm leading-5">placeholder</p>
                         </div>
+
                       </div>
 
-                      <div className="flex h-full flex-col justify-between gap-3 xl:w-[260px]">
+                      {/* Actions */}
+                      <div className="flex shrink-0 flex-col gap-2 xl:w-[220px]">
                         <button
                           type="button"
                           onClick={() => void handleRoleToggle(user)}
                           disabled={isCurrentUser || isUpdating || isProtectedFirstAdmin}
-                          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                          className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold shadow-sm transition-all duration-200
+                            ${(isCurrentUser || isUpdating || isProtectedFirstAdmin)
+                              ? 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
+                              : user.role === 'admin'
+                                ? 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 hover:shadow-md active:scale-[0.98]'
+                                : 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:border-emerald-700 hover:shadow-md hover:shadow-emerald-500/20 active:scale-[0.98]'
+                            }
+                          `}
                         >
-                          {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                          {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" strokeWidth={2.5} />}
                           {isUpdating ? 'กำลังอัปเดต...' : nextRoleLabel}
                         </button>
 
-                        {isCurrentUser ? (
-                          <p className="text-center text-xs leading-5 text-slate-400">
-                            บัญชีที่ล็อกอินอยู่จะเปลี่ยนสิทธิ์จากหน้านี้ไม่ได้
-                          </p>
-                        ) : isProtectedFirstAdmin ? (
-                          <p className="text-center text-xs leading-5 text-slate-400">
-                            Admin คนแรกถูกล็อกไว้ บัญชี admin อื่นเปลี่ยนสิทธิ์ไม่ได้
-                          </p>
-                        ) : (
-                          <p className="text-center text-xs leading-5 text-slate-400">
-                            กดครั้งเดียวเพื่อสลับ role ระหว่าง Admin และ User
-                          </p>
-                        )}
+                        <div className="h-[28px] flex items-center justify-center">
+                          {isCurrentUser ? (
+                            <p className="text-center text-[10px] font-medium leading-tight text-slate-400">
+                              ไม่สามารถเปลี่ยนสิทธิ์บัญชีปัจจุบัน
+                            </p>
+                          ) : isProtectedFirstAdmin ? (
+                            <p className="text-center text-[10px] font-medium leading-tight text-slate-400">
+                              Admin คนแรกถูกล็อกสิทธิ์
+                            </p>
+                          ) : (
+                            <p className="text-center text-[10px] font-medium leading-tight text-slate-400 opacity-60">
+                              สลับสิทธิ์การเข้าถึงข้อมูล
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </article>

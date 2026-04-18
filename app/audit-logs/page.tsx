@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { History, Loader2, LogIn, Search, ShieldAlert, ShieldCheck, RefreshCw, Trash2 } from 'lucide-react';
+import { History, Loader2, LogIn, Search, ShieldAlert, ShieldCheck, RefreshCw, Trash2, Activity, AlertCircle, MousePointerClick } from 'lucide-react';
 
 import Sidebar from '@/components/Sidebar';
 
@@ -216,29 +216,29 @@ export default function AuditLogsPage() {
 
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-full p-5 sm:p-6 lg:p-8">
-          <div className="mb-6 flex flex-col gap-4 rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,#0f172a_0%,#1e293b_52%,#155e75_100%)] p-6 text-white shadow-[0_20px_70px_rgba(15,23,42,0.18)] sm:p-7">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <section className="mb-6 rounded-[24px] border border-white bg-gradient-to-br from-white via-[#fcfdfe] to-[#f4f7f9] p-6 text-slate-800 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] ring-1 ring-slate-100 sm:p-7">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-3">
-                <span className="inline-flex w-fit items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-sky-100">
-                  <History className="h-3.5 w-3.5" />
+                <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-sky-200/80 bg-sky-50 px-3 py-1 text-[11px] font-bold tracking-wide text-sky-600 shadow-sm">
+                  <History className="h-3 w-3" strokeWidth={2.5} />
                   Audit Trail
                 </span>
-                <div className="space-y-2">
-                  <h1 className="text-2xl font-bold sm:text-3xl">ประวัติการใช้งานระบบ</h1>
-                  <p className="max-w-3xl text-sm leading-6 text-slate-200">
+                <div className="space-y-1.5">
+                  <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-[26px]">ประวัติการใช้งานระบบ</h1>
+                  <p className="max-w-xl text-[13px] font-medium leading-relaxed text-slate-500 lg:text-sm">
                     หน้านี้ใช้ดูว่าใคร login, logout, สมัครสมาชิก หรือเปิดหน้าไหนในระบบบ้าง เพื่อใช้ตรวจสอบย้อนหลังได้จริงจากฐานข้อมูล
                   </p>
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="flex flex-col gap-2.5 sm:flex-row lg:mt-2">
                 <button
                   type="button"
                   onClick={handleClearLogs}
                   disabled={clearing || refreshing}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-rose-300 bg-rose-500/90 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-[13px] font-bold text-rose-600 shadow-sm transition-all hover:border-rose-300 hover:bg-rose-50 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {clearing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  {clearing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" strokeWidth={2.5} />}
                   {clearing ? 'กำลังล้าง log...' : 'Clear Logs'}
                 </button>
 
@@ -246,33 +246,72 @@ export default function AuditLogsPage() {
                   type="button"
                   onClick={() => void loadLogs(true)}
                   disabled={refreshing || clearing}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-sky-200 bg-white px-4 py-2.5 text-[13px] font-bold text-sky-600 shadow-sm transition-all hover:border-sky-300 hover:bg-sky-50 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" strokeWidth={2.5} />}
                   {refreshing ? 'กำลังรีเฟรช...' : 'รีเฟรชข้อมูล'}
                 </button>
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-3xl border border-white/10 bg-white/10 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Total Events</p>
-                <p className="mt-3 text-3xl font-bold">{stats.total}</p>
+            <div className="mt-8 grid gap-4 grid-cols-2 lg:grid-cols-4">
+              {/* Card 1: Total Events */}
+              <div className="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] transition-all hover:-translate-y-0.5 hover:shadow-md sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3.5 mb-2 sm:mb-0">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-100 bg-slate-50">
+                    <Activity className="h-5 w-5 text-slate-500" strokeWidth={1.5} />
+                  </div>
+                  <span className="text-[12px] font-bold text-slate-700 hidden sm:inline-block">Total Events</span>
+                </div>
+                <div className="text-left sm:text-right">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 sm:hidden">Total Events</p>
+                  <p className="text-3xl font-black leading-none text-slate-900">{stats.total}</p>
+                </div>
               </div>
-              <div className="rounded-3xl border border-white/10 bg-white/10 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Logins Today</p>
-                <p className="mt-3 text-3xl font-bold">{stats.loginsToday}</p>
+
+              {/* Card 2: Logins Today */}
+              <div className="flex flex-col rounded-2xl border border-sky-200/70 bg-gradient-to-r from-sky-50/50 to-white p-4 shadow-[0_4px_20px_-4px_rgba(14,165,233,0.08)] transition-all hover:-translate-y-0.5 hover:shadow-md hover:shadow-sky-500/10 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3.5 mb-2 sm:mb-0">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-200/50 bg-sky-100/50">
+                    <LogIn className="h-5 w-5 text-sky-600" strokeWidth={1.5} />
+                  </div>
+                  <span className="text-[12px] font-bold text-sky-800 hidden sm:inline-block">Logins Today</span>
+                </div>
+                <div className="text-left sm:text-right">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-sky-500/80 sm:hidden">Logins</p>
+                  <p className="text-3xl font-black leading-none text-sky-700">{stats.loginsToday}</p>
+                </div>
               </div>
-              <div className="rounded-3xl border border-white/10 bg-white/10 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Failed Login</p>
-                <p className="mt-3 text-3xl font-bold">{stats.failedLogins}</p>
+
+              {/* Card 3: Failed Login */}
+              <div className="flex flex-col rounded-2xl border border-rose-200/70 bg-gradient-to-r from-rose-50/50 to-white p-4 shadow-[0_4px_20px_-4px_rgba(244,63,94,0.08)] transition-all hover:-translate-y-0.5 hover:shadow-md hover:shadow-rose-500/10 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3.5 mb-2 sm:mb-0">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-rose-200/50 bg-rose-100/50">
+                    <AlertCircle className="h-5 w-5 text-rose-600" strokeWidth={1.5} />
+                  </div>
+                  <span className="text-[12px] font-bold text-rose-800 hidden sm:inline-block">Failed Login</span>
+                </div>
+                <div className="text-left sm:text-right">
+                   <p className="text-[10px] font-bold uppercase tracking-widest text-rose-500/80 sm:hidden">Failed</p>
+                  <p className="text-3xl font-black leading-none text-rose-700">{stats.failedLogins}</p>
+                </div>
               </div>
-              <div className="rounded-3xl border border-white/10 bg-white/10 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Page Views</p>
-                <p className="mt-3 text-3xl font-bold">{stats.pageViews}</p>
+
+              {/* Card 4: Page Views */}
+              <div className="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] transition-all hover:-translate-y-0.5 hover:shadow-md sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3.5 mb-2 sm:mb-0">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-100 bg-slate-50">
+                    <MousePointerClick className="h-5 w-5 text-slate-400" strokeWidth={1.5} />
+                  </div>
+                  <span className="text-[12px] font-bold text-slate-700 hidden sm:inline-block">Page Views</span>
+                </div>
+                <div className="text-left sm:text-right">
+                   <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 sm:hidden">Views</p>
+                  <p className="text-3xl font-black leading-none text-slate-900">{stats.pageViews}</p>
+                </div>
               </div>
             </div>
-          </div>
+          </section>
 
           <div className="mb-5 rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
