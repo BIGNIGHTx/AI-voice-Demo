@@ -943,20 +943,20 @@ export default function FilesPage() {
               </div>
             </div>
 
-            <div className="w-full">
-              <table className="w-full table-fixed text-left border-collapse">
+            <div className="w-full overflow-x-auto">
+              <table className="w-full min-w-[640px] table-fixed text-left border-collapse">
                 <thead>
                   <tr className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                    <th className="w-[22%] px-3 py-3.5 pl-5">File Name</th>
-                    <th className="hidden 2xl:table-cell w-[10%] px-3 py-3.5">Auto ID</th>
-                    <th className="w-[9%] px-3 py-3.5">Sentiment</th>
-                    <th className="w-[12%] px-3 py-3.5">Customer</th>
-                    <th className="hidden xl:table-cell w-[7%] px-3 py-3.5">Agent ID</th>
-                    <th className="w-[8%] px-3 py-3.5">Brand</th>
-                    <th className="w-[8%] px-3 py-3.5">Call type</th>
-                    <th className="hidden xl:table-cell w-[7%] px-3 py-3.5">Status</th>
-                    <th className="hidden lg:table-cell w-[7%] px-3 py-3.5">Date</th>
-                    <th className="w-[9%] px-3 py-3.5 pr-5 text-right">Actions</th>
+                    <th className="w-[24%] px-3 py-3 pl-5">File Name</th>
+                    <th className="hidden 2xl:table-cell w-[9%] px-3 py-3">Auto ID</th>
+                    <th className="w-[10%] px-3 py-3">Sentiment</th>
+                    <th className="w-[13%] px-3 py-3">Customer</th>
+                    <th className="hidden xl:table-cell w-[8%] px-3 py-3">Agent ID</th>
+                    <th className="w-[9%] px-3 py-3">Brand</th>
+                    <th className="w-[10%] px-3 py-3">Call Type</th>
+                    <th className="hidden xl:table-cell w-[10%] px-3 py-3">Status</th>
+                    <th className="hidden xl:table-cell w-[10%] px-3 py-3">Date</th>
+                    <th className="w-[7%] px-3 py-3 pr-5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white">
@@ -1064,7 +1064,7 @@ export default function FilesPage() {
                             </span>
                           </td>
                           <td className="hidden xl:table-cell px-3 py-3 align-middle">
-                            <span className={`inline-flex items-center space-x-1 text-[11px] font-bold ${statusTone === 'complete'
+                            <span className={`inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-bold ${statusTone === 'complete'
                               ? 'text-emerald-500'
                               : statusTone === 'error'
                                 ? 'text-red-500'
@@ -1081,10 +1081,10 @@ export default function FilesPage() {
                               ) : (
                                 <RefreshCw size={12} className="animate-spin" />
                               )}
-                              <span>{file.status}</span>
+                              <span className="truncate max-w-[80px]">{file.status}</span>
                             </span>
                           </td>
-                          <td className="hidden lg:table-cell px-3 py-3 text-sm text-slate-500 whitespace-nowrap align-middle">{formatDate(file.date)}</td>
+                          <td className="hidden xl:table-cell px-3 py-3 text-sm text-slate-500 whitespace-nowrap align-middle">{formatDate(file.date)}</td>
                           <td className="px-3 py-3 align-middle">
                             {canOpenFile ? (
                               <div className="flex items-center justify-end gap-1">
