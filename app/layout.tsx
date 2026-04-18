@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Montserrat, Sarabun } from "next/font/google";
+
+import AppClientShell from '@/components/auth/AppClientShell';
 import "./globals.css";
-import Chatbot from '@/components/Chatbot';
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -30,7 +31,7 @@ export default function RootLayout({
     <html lang="th" className={`${montserrat.variable} ${sarabun.variable}`}>
       <body className="font-sans antialiased">
         {children}
-        <Chatbot />
+        <AppClientShell />
       </body>
     </html>
   );

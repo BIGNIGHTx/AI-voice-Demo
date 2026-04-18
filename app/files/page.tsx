@@ -18,6 +18,8 @@ import {
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback, useRef } from 'react';
 
+import { logClientActivity } from '@/lib/activity-client';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 interface FileRecord {
@@ -349,7 +351,27 @@ export default function FilesPage() {
           throw new Error('อัปโหลดสำเร็จ แต่ไม่พบ file_id จากระบบ');
         }
 
+        await logClientActivity({
+          action: 'AUDIO_FILE_UPLOADED',
+          target: serverFileId,
+          routePath: '/files',
+          metadata: {
+            fileName: selectedFile.name,
+            source: 'files-page-upload',
+          },
+        });
+
         await startAutoAnalysis(serverFileId);
+
+        await logClientActivity({
+          action: 'AUDIO_ANALYSIS_REQUESTED',
+          target: serverFileId,
+          routePath: '/files',
+          metadata: {
+            fileName: selectedFile.name,
+            source: 'files-page-auto-analysis',
+          },
+        });
 
         setLocalUploads((prev) => prev.map((item) => (
           item.temp_id === upload.temp_id
@@ -397,6 +419,14 @@ export default function FilesPage() {
     try {
       const res = await fetch(`${API_BASE}/api/v1/audio/delete/${fileId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete');
+
+      await logClientActivity({
+        action: 'AUDIO_FILE_DELETED',
+        target: fileId,
+        routePath: '/files',
+        metadata: { source: 'files-page-single-delete' },
+      });
+
       await fetchFiles();
     } catch {
       setError('ลบไฟล์ไม่สำเร็จ');
@@ -410,6 +440,7 @@ export default function FilesPage() {
     setError(null);
     try {
       // Repeatedly fetch first page and delete until no files remain.
+      let deletedCount = 0;
       let failedCount = 0;
       const failedStatuses: number[] = [];
       let safetyRounds = 0;
@@ -440,6 +471,7 @@ export default function FilesPage() {
           for (const result of results) {
             if (result.status === 'fulfilled' && result.value.ok) {
               deletedInRound += 1;
+              deletedCount += 1;
             } else {
               failedCount += 1;
               if (result.status === 'fulfilled') {
@@ -474,6 +506,19 @@ export default function FilesPage() {
       }
 
       await fetchFiles();
+
+      if (deletedCount > 0) {
+        await logClientActivity({
+          action: 'AUDIO_FILES_BULK_DELETED',
+          target: 'all-files',
+          routePath: '/files',
+          metadata: {
+            deletedCount,
+            failedCount,
+            source: 'files-page-delete-all',
+          },
+        });
+      }
 
       if (failedCount > 0) {
         const statusText = failedStatuses.length > 0

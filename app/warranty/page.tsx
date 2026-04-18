@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
+import { logClientActivity } from '@/lib/activity-client';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const ITEMS_PER_PAGE = 10;
 
@@ -135,7 +137,23 @@ export default function WarrantyDatabasePage() {
     setSyncing(true);
     try {
       const res = await fetch(`${API_BASE}/api/v1/warranty/sync`, { method: 'POST' });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
       const data = await res.json();
+
+      await logClientActivity({
+        action: 'WARRANTY_SYNC_TRIGGERED',
+        target: 'warranty-database',
+        routePath: '/warranty',
+        metadata: {
+          successCount: typeof data?.success === 'number' ? data.success : null,
+          total: typeof data?.total === 'number' ? data.total : null,
+          source: 'warranty-page-sync',
+        },
+      });
+
       alert(`ซิงค์เสร็จสิ้น: สำเร็จ ${data.success}/${data.total} รายการ`);
       fetchWarranties();
     } catch (error) {
@@ -149,6 +167,7 @@ export default function WarrantyDatabasePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const submittedWarranty = { ...formData };
       const res = await fetch(`${API_BASE}/api/v1/warranty/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -156,6 +175,19 @@ export default function WarrantyDatabasePage() {
       });
 
       if (res.ok) {
+        await logClientActivity({
+          action: 'WARRANTY_CREATED',
+          target: submittedWarranty.registration_no,
+          routePath: '/warranty',
+          metadata: {
+            registrationNo: submittedWarranty.registration_no,
+            customerName: submittedWarranty.customer_name,
+            customerPhone: submittedWarranty.customer_phone,
+            brand: submittedWarranty.brand,
+            source: 'warranty-page-add',
+          },
+        });
+
         setShowAddModal(false);
         setFormData({
           registration_no: '',

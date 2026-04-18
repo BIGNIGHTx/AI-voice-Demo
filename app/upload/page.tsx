@@ -5,6 +5,8 @@ import { FileUp, Music, X, ArrowRight, CheckCircle2, AlertCircle, Loader2 } from
 import { useState, useRef, DragEvent, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
+import { logClientActivity } from '@/lib/activity-client';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const SUPPORTED_FORMATS = ['MP3', 'WAV', 'M4A', 'AAC', 'OGG', 'FLAC', 'WMA', 'OPUS'];
 
@@ -135,12 +137,32 @@ export default function UploadPage() {
           throw new Error('Upload succeeded but no file_id was returned');
         }
 
+        await logClientActivity({
+          action: 'AUDIO_FILE_UPLOADED',
+          target: serverFileId,
+          routePath: '/upload',
+          metadata: {
+            fileName: item.name,
+            source: 'upload-page',
+          },
+        });
+
         const analysisRes = await fetch(`${API_BASE}/api/v1/ai/analyze/${serverFileId}`, {
           method: 'POST',
         });
 
         if (!analysisRes.ok) throw new Error(await getApiErrorMessage(analysisRes));
         await analysisRes.json().catch(() => null);
+
+        await logClientActivity({
+          action: 'AUDIO_ANALYSIS_REQUESTED',
+          target: serverFileId,
+          routePath: '/upload',
+          metadata: {
+            fileName: item.name,
+            source: 'upload-page-auto-analysis',
+          },
+        });
 
         setQueue(prev => prev.map(f =>
           f.id === item.id ? { ...f, status: 'done' as const } : f

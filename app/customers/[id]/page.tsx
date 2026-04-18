@@ -18,6 +18,8 @@ import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect, useCallback, type ChangeEvent } from 'react';
 import Link from 'next/link';
 
+import { logClientActivity } from '@/lib/activity-client';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const EMPTY_TEXT_VALUES = new Set(['', '-', 'n/a', 'none', 'null', 'unknown']);
 
@@ -344,6 +346,7 @@ export default function CustomerDetailPage() {
 
     setSavingWarranty(true);
     try {
+      const isEditingWarranty = Boolean(editingWarrantyFileId);
       const url = editingWarrantyFileId 
         ? `${API_BASE}/api/v1/customers/${encodeURIComponent(customerId)}/warranty/${encodeURIComponent(editingWarrantyFileId)}`
         : `${API_BASE}/api/v1/customers/${encodeURIComponent(customerId)}/warranty`;
@@ -371,6 +374,20 @@ export default function CustomerDetailPage() {
 
       closeWarrantyModal();
       await loadCustomerDetails();
+
+      await logClientActivity({
+        action: isEditingWarranty ? 'WARRANTY_UPDATED' : 'WARRANTY_CREATED',
+        target: savedWarrantyFileId || warrantyForm.registration_no,
+        routePath: `/customers/${customerId}`,
+        metadata: {
+          customerId,
+          registrationNo: warrantyForm.registration_no,
+          brand: warrantyForm.brand,
+          model: warrantyForm.model,
+          imageCount: selectedWarrantyImages.length,
+          source: isEditingWarranty ? 'customer-detail-edit' : 'customer-detail-create',
+        },
+      });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMsg);
@@ -415,6 +432,19 @@ export default function CustomerDetailPage() {
         }
 
         await loadCustomerDetails();
+
+        await logClientActivity({
+          action: 'WARRANTY_DELETED',
+          target: warranty.file_id,
+          routePath: `/customers/${customerId}`,
+          metadata: {
+            customerId,
+            registrationNo: warranty.registration_no,
+            warrantySource: warranty.warranty_source,
+            source: 'customer-detail-manual-delete',
+          },
+        });
+
         return;
       }
 
@@ -449,6 +479,18 @@ export default function CustomerDetailPage() {
       }
 
       await loadCustomerDetails();
+
+      await logClientActivity({
+        action: 'WARRANTY_DELETED',
+        target: warranty.file_id,
+        routePath: `/customers/${customerId}`,
+        metadata: {
+          customerId,
+          registrationNo: warranty.registration_no,
+          warrantySource: warranty.warranty_source,
+          source: 'customer-detail-delete',
+        },
+      });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMsg);
@@ -476,6 +518,18 @@ export default function CustomerDetailPage() {
 
       setIsEditing(false);
       await loadCustomerDetails();
+
+      await logClientActivity({
+        action: 'CUSTOMER_PROFILE_UPDATED',
+        target: customerId,
+        routePath: `/customers/${customerId}`,
+        metadata: {
+          customerName: `${editForm.first_name} ${editForm.last_name}`.trim(),
+          phone: editForm.phone,
+          email: editForm.email,
+          source: 'customer-detail-profile-edit',
+        },
+      });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMsg);

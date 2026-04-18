@@ -5,6 +5,8 @@ import { AudioWaveform, Sparkles, MessageCircle, Info, Lightbulb, RefreshCw, Tra
 import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
+import { logClientActivity } from '@/lib/activity-client';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 interface TranscriptionLine {
@@ -879,6 +881,14 @@ export default function FileAnalysisDetail() {
       }
 
       if (!taskId) throw new Error('Failed to start analysis after multiple attempts');
+
+      await logClientActivity({
+        action: 'AUDIO_ANALYSIS_REQUESTED',
+        target: fileId,
+        routePath: `/files/${fileId}`,
+        metadata: { source: 'file-detail-reanalyze' },
+      });
+
       console.log('[Analysis] ✓ Started task:', taskId);
 
       // Step 2: Poll for status (1200 attempts × 1s = 20 minutes max)
@@ -960,7 +970,16 @@ export default function FileAnalysisDetail() {
   const handleDelete = async () => {
     if (!confirm('ต้องการลบไฟล์นี้จริงหรือไม่?')) return;
     try {
-      await fetch(`${API_BASE}/api/v1/audio/delete/${fileId}`, { method: 'DELETE' });
+      const response = await fetch(`${API_BASE}/api/v1/audio/delete/${fileId}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      await logClientActivity({
+        action: 'AUDIO_FILE_DELETED',
+        target: fileId,
+        routePath: `/files/${fileId}`,
+        metadata: { source: 'file-detail-delete' },
+      });
+
       router.push('/files');
     } catch { setError('ลบไฟล์ไม่สำเร็จ'); }
   };
