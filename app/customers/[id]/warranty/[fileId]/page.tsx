@@ -302,14 +302,12 @@ export default function WarrantyDetailPage() {
                     </div>
                     <div className="space-y-1">
                       <InfoRow label="Customer Phone" value={warranty.customer_phone} bg />
-                      <InfoRow label="Agent ID" value={warranty.agent_id} />
                       <InfoRow label="Sale Channel" value={warranty.sale_channel} bg />
                       <InfoRow label="Order Number" value={warranty.order_number} />
                       <InfoRow label="Status" value={warranty.status} />
                       <InfoRow label="Registration Date" value={warranty.registrationDate} bg />
                       <InfoRow label="Delivery Date" value={warranty.date_of_delivery} />
                       <InfoRow label="Expiry Date" value={warranty.expiry_date_of_warranty} bg />
-                      <InfoRow label="Start Date" value={warranty.warranty_start_date} />
                     </div>
                   </>
                 ) : (
@@ -318,7 +316,6 @@ export default function WarrantyDetailPage() {
                       <InfoRow label="Brand" value={warranty.brand} bg />
                       <InfoRow label="Product Category" value={warranty.product_category} />
                       <InfoRow label="Customer Phone" value={warranty.customer_phone} bg />
-                      <InfoRow label="Agent ID" value={warranty.agent_id} />
                       <InfoRow label="Intent" value={warranty.intent} bg />
                       <InfoRow label="Sentiment" value={`${warranty.sentiment} (${((warranty.sentiment_confidence ?? 0) * 100).toFixed(1)}%)`} />
                       <InfoRow label="Sentiment Reason" value={warranty.sentiment_reason} bg />

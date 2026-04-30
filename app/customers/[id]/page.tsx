@@ -262,6 +262,7 @@ export default function CustomerDetailPage() {
   const [editForm, setEditForm] = useState<Partial<CustomerDetail>>({});
   const [editingWarrantyFileId, setEditingWarrantyFileId] = useState<string | null>(null);
   const [selectedWarrantyImages, setSelectedWarrantyImages] = useState<File[]>([]);
+  const [deletingWarrantyImageId, setDeletingWarrantyImageId] = useState<string | null>(null);
 
   const buildDefaultWarrantyForm = useCallback((): WarrantyFormState => ({
     registration_no: '',
@@ -392,6 +393,32 @@ export default function CustomerDetailPage() {
       }
     }
   }, [customerId, selectedWarrantyImages]);
+
+  const handleDeleteWarrantyImage = async (image: WarrantyImage) => {
+    if (!editingWarrantyFileId || deletingWarrantyImageId) return;
+    if (!window.confirm(`ต้องการลบรูป ${image.original_filename || 'นี้'} จริงหรือไม่?`)) return;
+
+    setError(null);
+    setDeletingWarrantyImageId(image.image_id);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/v1/customers/${encodeURIComponent(customerId)}/warranty/${encodeURIComponent(editingWarrantyFileId)}/images/${encodeURIComponent(image.image_id)}`,
+        { method: 'DELETE' }
+      );
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `Delete image failed: ${res.status}`);
+      }
+
+      await loadCustomerDetails();
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMsg);
+    } finally {
+      setDeletingWarrantyImageId(null);
+    }
+  };
 
   const handleSaveWarranty = async () => {
     setError(null);
@@ -1251,16 +1278,6 @@ export default function CustomerDetailPage() {
                 />
               </label>
 
-              <label className="space-y-2 md:col-span-2">
-                <span className="text-sm font-medium text-slate-700">Agent ID</span>
-                <input
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  placeholder="Agent ID"
-                  value={warrantyForm.agent_id}
-                  onChange={(e) => setWarrantyForm({ ...warrantyForm, agent_id: e.target.value })}
-                />
-              </label>
-
               <div className="space-y-3 md:col-span-2">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -1282,7 +1299,16 @@ export default function CustomerDetailPage() {
                 {editingWarranty?.images?.length ? (
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     {editingWarranty.images.map((image) => (
-                      <div key={image.image_id} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                      <div key={image.image_id} className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteWarrantyImage(image)}
+                          disabled={deletingWarrantyImageId === image.image_id}
+                          className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-rose-500 shadow-sm transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          title="ลบรูปภาพ"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                         <img
                           src={getApiAssetUrl(image.url)}
                           alt={image.original_filename || warrantyForm.model}
