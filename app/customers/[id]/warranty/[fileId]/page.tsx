@@ -327,68 +327,7 @@ export default function WarrantyDetailPage() {
               </div>
             )}
 
-            {/* Summary */}
-            {warranty.summary && (
-              <div className="col-span-1 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2 sm:p-6">
-                <SectionTitle title="Summary" />
-                <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 sm:p-5">
-                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{warranty.summary}</p>
-                </div>
-              </div>
-            )}
 
-            {/* Keywords */}
-            {warranty.keywords && (
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-                <SectionTitle title="Keywords" />
-                <div className="flex flex-wrap gap-2">
-                  {(() => {
-                    try {
-                      const keywords = JSON.parse(warranty.keywords);
-                      return Array.isArray(keywords) ? keywords.map((kw: string, i: number) => (
-                        <span key={i} className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-                          {kw}
-                        </span>
-                      )) : <p className="text-slate-500 text-sm">No keywords</p>;
-                    } catch {
-                      return <p className="text-slate-500 text-sm">Invalid format</p>;
-                    }
-                  })()}
-                </div>
-              </div>
-            )}
-
-            {/* Action Items */}
-            {warranty.action_items && (
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-                <SectionTitle title="Action Items" />
-                <div className="space-y-2">
-                  {(() => {
-                    try {
-                      const actions = JSON.parse(warranty.action_items);
-                      return Array.isArray(actions) ? actions.map((action: string, i: number) => (
-                        <div key={i} className="flex items-start gap-2 rounded-lg bg-slate-50 p-3">
-                          <CheckCircle2 size={16} className="text-blue-600 shrink-0 mt-0.5" />
-                          <span className="text-sm text-slate-700">{action}</span>
-                        </div>
-                      )) : <p className="text-slate-500 text-sm">No action items</p>;
-                    } catch {
-                      return <p className="text-slate-500 text-sm">Invalid format</p>;
-                    }
-                  })()}
-                </div>
-              </div>
-            )}
-
-            {/* Transcript */}
-            {warranty.full_transcript && (
-              <div className="col-span-1 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2 sm:p-6">
-                <SectionTitle title="Full Transcript" />
-                <div className="max-h-80 overflow-y-auto rounded-xl border border-slate-100 bg-slate-50 p-4 sm:p-5">
-                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap font-mono">{warranty.full_transcript}</p>
-                </div>
-              </div>
-            )}
 
           </div>
         </div>

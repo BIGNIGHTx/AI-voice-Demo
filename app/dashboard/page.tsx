@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
@@ -837,78 +837,6 @@ export default function DashboardPage() {
                   <div className="text-center text-slate-400 text-sm py-8">No brand data available</div>
                 )}
               </div>
-            </div>
-          </div>
-
-          {/* Fourth Row: Leaderboard */}
-          <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="font-semibold text-lg flex items-center gap-2">
-                <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-yellow-400 to-yellow-600 shadow-sm"></div>
-                Agent Performance Leaderboard
-              </h3>
-              <button className="text-sm text-slate-500 font-medium hover:text-blue-600 transition-colors">
-                View All Reports
-              </button>
-            </div>
-
-            <div className="w-full overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="text-xs text-slate-400 font-bold uppercase tracking-wider border-b border-slate-100">
-                    <th className="pb-4 px-4 w-20">Rank</th>
-                    <th className="pb-4 px-4">Agent Name</th>
-                    <th className="pb-4 px-4 w-40">QA Score</th>
-                    <th className="pb-4 px-4 w-32">CSAT</th>
-                    <th className="pb-4 px-4 w-24">Calls</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {leaderboardAgents.length > 0 ? (
-                    leaderboardAgents.slice(0, 5).map((agent, idx) => {
-                      const RankNum = idx + 1;
-                      const initial = (agent.agent_name || agent.agent_id).slice(0, 2).toUpperCase();
-                      const avatarColors = [
-                        'bg-blue-100 text-blue-600',
-                        'bg-emerald-100 text-emerald-600',
-                        'bg-amber-100 text-amber-600',
-                        'bg-purple-100 text-purple-600',
-                        'bg-rose-100 text-rose-600'
-                      ];
-
-                      return (
-                        <tr key={idx} className="group hover:bg-slate-50 transition-colors">
-                          <td className="py-4 px-4 font-medium text-slate-500">
-                            {RankNum < 10 ? `0${RankNum}` : RankNum}
-                          </td>
-                          <td className="py-4 px-4">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${avatarColors[idx % avatarColors.length]}`}>
-                                {initial}
-                              </div>
-                              <span className="font-medium">{agent.agent_name || agent.agent_id}</span>
-                            </div>
-                          </td>
-                          <td className="py-4 px-4">
-                            <div className="flex items-center gap-3">
-                              <span className="font-bold">{((agent.avg_qa_score / 10) * 100).toFixed(0)}%</span>
-                              <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-[#54657E] rounded-full transition-all" style={{ width: `${(agent.avg_qa_score / 10) * 100}%` }}></div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-4 px-4 font-medium">{agent.avg_csat_score.toFixed(1)}/5.0</td>
-                          <td className="py-4 px-4 text-slate-500">{agent.total_calls}</td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="text-center py-6 text-slate-400 text-sm">No agent data available</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
             </div>
           </div>
 

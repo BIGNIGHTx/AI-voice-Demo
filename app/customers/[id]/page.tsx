@@ -92,6 +92,48 @@ const normalizeTextInput = (value?: string | null) => {
   return EMPTY_TEXT_VALUES.has(text.toLowerCase()) ? '' : text;
 };
 
+const normalizePhone = (value: unknown): string => String(value ?? '').replace(/\D/g, '');
+
+const buildWarrantyKey = (registrationNo: unknown, phone: unknown): string =>
+  `${normalizeTextInput(String(registrationNo ?? '')).toUpperCase()}::${normalizePhone(phone)}`;
+
+const isActiveWarrantyRecord = (item: WarrantyItem): boolean => {
+  const normalizedStatus = String(item.status || '').trim().toUpperCase();
+  const normalizedRegistration = String(item.registration_no || '').trim().toUpperCase();
+  return normalizedStatus !== 'DELETED' && !normalizedRegistration.startsWith('DELETED-');
+};
+
+const isVoiceAnalysisWarrantyRecord = (item: WarrantyItem): boolean => {
+  const normalizedRegistration = String(item.registration_no || '').trim().toUpperCase();
+  const normalizedSource = String(item.warranty_source || '').trim().toLowerCase();
+
+  return normalizedRegistration.startsWith('AUTO-') ||
+    normalizedSource.includes('audio') ||
+    normalizedSource.includes('voice') ||
+    normalizedSource.includes('analysis');
+};
+
+const isVisibleWarrantyRecord = (item: WarrantyItem): boolean =>
+  isActiveWarrantyRecord(item) && !isVoiceAnalysisWarrantyRecord(item);
+
+const fetchVisibleWarrantyKeys = async (): Promise<Set<string>> => {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/warranty/list`, { cache: 'no-store' });
+    if (!res.ok) return new Set();
+
+    const data = await res.json();
+    const warranties = Array.isArray(data?.warranties) ? data.warranties : [];
+    return new Set(
+      warranties
+        .filter((item: WarrantyItem) => isVisibleWarrantyRecord(item))
+        .map((item: WarrantyItem) => buildWarrantyKey(item.registration_no, item.customer_phone))
+        .filter((key: string) => !key.startsWith('::') && !key.endsWith('::'))
+    );
+  } catch {
+    return new Set();
+  }
+};
+
 const normalizeDateForInput = (value?: string | null) => {
   const text = normalizeTextInput(value);
   if (!text) return '';
@@ -241,12 +283,14 @@ export default function CustomerDetailPage() {
         throw new Error(`Failed to fetch customer: ${res.status} ${res.statusText}`);
       }
 
-      const data = await res.json();
-      const visibleWarranties = (data.warranties || []).filter((item: WarrantyItem) => {
-        const normalizedStatus = String(item.status || '').trim().toUpperCase();
-        const normalizedRegistration = String(item.registration_no || '').trim().toUpperCase();
-        return normalizedStatus !== 'DELETED' && !normalizedRegistration.startsWith('DELETED-');
-      });
+      const [data, visibleWarrantyKeys] = await Promise.all([
+        res.json(),
+        fetchVisibleWarrantyKeys(),
+      ]);
+      const customerPhone = normalizePhone(data?.customer?.phone) || normalizePhone(customerId);
+      const visibleWarranties = (data.warranties || []).filter((item: WarrantyItem) =>
+        isVisibleWarrantyRecord(item)
+      );
 
       setCustomer(data.customer);
       setWarranties(visibleWarranties);
@@ -370,6 +414,26 @@ export default function CustomerDetailPage() {
 
       if (savedWarrantyFileId) {
         await uploadSelectedWarrantyImages(savedWarrantyFileId);
+      }
+
+      // Trigger Qdrant sync so it appears in the main Warranty Database
+      try {
+        const currentPhone = normalizePhone(customer?.phone || customerId);
+        await fetch(`${API_BASE}/api/v1/warranty/sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reference_field: 'customer_phone',
+            source: 'manual',
+            exclude_registration_prefixes: ['AUTO-'],
+            exclude_order_prefixes: ['CALL-'],
+            exclude_sources: ['audio', 'voice', 'analysis'],
+            registration_numbers: [warrantyForm.registration_no],
+            customer_phones: [currentPhone],
+          }),
+        });
+      } catch (syncErr) {
+        console.error('Failed to sync to Qdrant:', syncErr);
       }
 
       closeWarrantyModal();

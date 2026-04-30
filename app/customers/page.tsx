@@ -40,12 +40,56 @@ interface Customer {
   call_type_counts?: { inbound: number; outbound: number; unknown: number };
 }
 
+const normalizePhone = (value: unknown): string => String(value ?? '').replace(/\D/g, '');
+
+const normalizeText = (value: unknown): string => String(value ?? '').trim();
+
+const buildWarrantyKey = (registrationNo: unknown, phone: unknown): string =>
+  `${normalizeText(registrationNo).toUpperCase()}::${normalizePhone(phone)}`;
+
 const isActiveWarrantyRecord = (item: unknown): boolean => {
   if (typeof item !== 'object' || item === null) return false;
   const record = item as { status?: string; registration_no?: string };
-  const normalizedStatus = String(record.status || '').trim().toUpperCase();
-  const normalizedRegistration = String(record.registration_no || '').trim().toUpperCase();
+  const normalizedStatus = normalizeText(record.status).toUpperCase();
+  const normalizedRegistration = normalizeText(record.registration_no).toUpperCase();
   return normalizedStatus !== 'DELETED' && !normalizedRegistration.startsWith('DELETED-');
+};
+
+const isVoiceAnalysisWarrantyRecord = (item: unknown): boolean => {
+  if (typeof item !== 'object' || item === null) return false;
+  const record = item as { registration_no?: string; order_number?: string; warranty_source?: string };
+  const normalizedRegistration = normalizeText(record.registration_no).toUpperCase();
+  const normalizedOrder = normalizeText(record.order_number).toUpperCase();
+  const normalizedSource = normalizeText(record.warranty_source).toLowerCase();
+
+  return normalizedRegistration.startsWith('AUTO-') ||
+    normalizedOrder.startsWith('CALL-') ||
+    normalizedSource.includes('audio') ||
+    normalizedSource.includes('voice') ||
+    normalizedSource.includes('analysis');
+};
+
+const isVisibleWarrantyRecord = (item: unknown): boolean =>
+  isActiveWarrantyRecord(item) && !isVoiceAnalysisWarrantyRecord(item);
+
+const fetchVisibleWarrantyKeys = async (): Promise<Set<string>> => {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/warranty/list`, { cache: 'no-store' });
+    if (!res.ok) return new Set();
+
+    const data = await res.json();
+    const warranties = Array.isArray(data?.warranties) ? data.warranties : [];
+    return new Set(
+      warranties
+        .filter(isVisibleWarrantyRecord)
+        .map((item: { registration_no?: string; customer_phone?: string; phone?: string }) =>
+          buildWarrantyKey(item.registration_no, item.customer_phone || item.phone)
+        )
+        .filter((key: string) => !key.startsWith('::') && !key.endsWith('::'))
+    );
+  } catch {
+    return new Set();
+  }
 };
 
 export default function CustomersPage() {
@@ -75,6 +119,7 @@ export default function CustomersPage() {
       const data = await res.json();
 
       const baseCustomers: Customer[] = data.customers || [];
+      const visibleWarrantyKeys = await fetchVisibleWarrantyKeys();
       const normalizedCustomers = await Promise.all(
         baseCustomers.map(async (customer) => {
           try {
@@ -87,7 +132,10 @@ export default function CustomersPage() {
 
             const detailData = await detailRes.json();
             const activeWarrantyCount = Array.isArray(detailData?.warranties)
-              ? detailData.warranties.filter(isActiveWarrantyRecord).length
+              ? detailData.warranties.filter((item: { registration_no?: string; customer_phone?: string }) =>
+                isVisibleWarrantyRecord(item) &&
+                visibleWarrantyKeys.has(buildWarrantyKey(item.registration_no, item.customer_phone || customer.phone))
+              ).length
               : 0;
 
             return {

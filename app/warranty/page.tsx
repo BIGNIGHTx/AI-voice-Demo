@@ -2,26 +2,39 @@
 
 import Sidebar from '@/components/Sidebar';
 import {
-  ShieldCheck,
-  Search,
-  Plus,
-  RefreshCw,
+  CalendarDays,
   CheckCircle2,
-  XCircle,
   Clock,
+  Database,
+  Hash,
+  Layers,
+  Loader2,
   Package,
   Phone,
+  Plus,
+  RefreshCw,
+  SearchIcon,
+  Shield,
+  ShoppingCart,
   User,
-  ExternalLink
+  XCircle,
 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { logClientActivity } from '@/lib/activity-client';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const ITEMS_PER_PAGE = 10;
+const MANUAL_WARRANTY_SYNC_FILTER = {
+  reference_field: 'customer_phone',
+  source: 'manual',
+  exclude_registration_prefixes: ['AUTO-'],
+  exclude_order_prefixes: ['CALL-'],
+  exclude_sources: ['audio', 'voice', 'analysis'],
+};
 
 interface WarrantyRecord {
+  file_id?: string;
   registration_no: string;
   customer_name: string;
   customer_phone: string;
@@ -36,69 +49,236 @@ interface WarrantyRecord {
   order_number: string;
   status: string;
   qdrant_synced: boolean;
+  warranty_source?: string;
   created_at?: string;
 }
 
+interface WarrantyFormData {
+  registration_no: string;
+  customer_name: string;
+  customer_phone: string;
+  brand: string;
+  category: string;
+  size: string;
+  serial_no: string;
+  warranty_period: string;
+  date_of_purchase: string;
+  date_of_delivery: string;
+  purchase_channel: string;
+  order_number: string;
+  status: string;
+}
+
+interface CustomerWarrantyRecord {
+  file_id?: string;
+  registration_no?: string;
+  brand?: string;
+  model?: string;
+  serial_no?: string;
+  warranty_period?: string;
+  purchase_date?: string;
+  status?: string;
+  sale_channel?: string;
+  customer_phone?: string;
+  qdrant_synced?: boolean;
+  warranty_source?: string;
+}
+
+interface CustomerDetailResponse {
+  customer?: {
+    customer_id?: string;
+    first_name?: string;
+    last_name?: string;
+    phone?: string;
+    nickname?: string;
+  };
+  warranties?: CustomerWarrantyRecord[];
+}
+
+const createDefaultFormData = (): WarrantyFormData => ({
+  registration_no: '',
+  customer_name: '',
+  customer_phone: '',
+  brand: '',
+  category: '',
+  size: '',
+  serial_no: '',
+  warranty_period: '12 Months',
+  date_of_purchase: '',
+  date_of_delivery: '',
+  purchase_channel: 'Manual',
+  order_number: '',
+  status: 'ACTIVE',
+});
+
+const normalizePhone = (value: string): string => String(value || '').replace(/\D/g, '');
+
+const normalizeText = (value: unknown): string => String(value ?? '').trim();
+
 const isActiveWarrantyRecord = (item: WarrantyRecord): boolean => {
-  const normalizedStatus = String(item.status || '').trim().toUpperCase();
-  const normalizedRegistration = String(item.registration_no || '').trim().toUpperCase();
+  const normalizedStatus = normalizeText(item.status).toUpperCase();
+  const normalizedRegistration = normalizeText(item.registration_no).toUpperCase();
   return normalizedStatus !== 'DELETED' && !normalizedRegistration.startsWith('DELETED-');
 };
+
+const isActiveCustomerWarrantyRecord = (item: CustomerWarrantyRecord): boolean => {
+  const normalizedStatus = normalizeText(item.status).toUpperCase();
+  const normalizedRegistration = normalizeText(item.registration_no).toUpperCase();
+  return normalizedStatus !== 'DELETED' && !normalizedRegistration.startsWith('DELETED-');
+};
+
+const isVoiceAnalysisWarrantyRecord = (item: WarrantyRecord | CustomerWarrantyRecord): boolean => {
+  const normalizedRegistration = normalizeText(item.registration_no).toUpperCase();
+  const normalizedOrder = 'order_number' in item ? normalizeText(item.order_number).toUpperCase() : '';
+  const normalizedSource = normalizeText(item.warranty_source).toLowerCase();
+
+  return normalizedRegistration.startsWith('AUTO-') ||
+    normalizedOrder.startsWith('CALL-') ||
+    normalizedSource.includes('audio') ||
+    normalizedSource.includes('voice') ||
+    normalizedSource.includes('analysis');
+};
+
+const getProductLabel = (item: WarrantyRecord): string => {
+  const values = [item.brand, item.category, item.size].map(normalizeText).filter(Boolean);
+  return values.length ? values.join(' / ') : '-';
+};
+
+const formatDate = (value: string): string => {
+  const text = normalizeText(value);
+  if (!text) return '-';
+
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return text;
+
+  return date.toLocaleDateString('th-TH', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
+const getCustomerIdFromPhone = (phone: string): string => `CUST-${normalizePhone(phone)}`;
+
+const getCustomerDisplayName = (customer?: CustomerDetailResponse['customer']): string => {
+  const fullName = [customer?.first_name, customer?.last_name].map(normalizeText).filter(Boolean).join(' ');
+  return fullName || normalizeText(customer?.nickname) || normalizeText(customer?.phone);
+};
+
+const fetchCustomerDetailByPhone = async (phone: string): Promise<CustomerDetailResponse | null> => {
+  const normalizedPhone = normalizePhone(phone);
+  if (!normalizedPhone) return null;
+
+  const res = await fetch(`${API_BASE}/api/v1/customers/${encodeURIComponent(getCustomerIdFromPhone(normalizedPhone))}`, {
+    cache: 'no-store',
+  });
+
+  if (res.status === 404) {
+    return null;
+  }
+
+  if (!res.ok) {
+    throw new Error(`Customer lookup failed: HTTP ${res.status}`);
+  }
+
+  return await res.json() as CustomerDetailResponse;
+};
+
+const findMatchingCustomerWarranty = (
+  record: WarrantyRecord,
+  customerDetail: CustomerDetailResponse | null
+): CustomerWarrantyRecord | null => {
+  const normalizedRegistration = normalizeText(record.registration_no).toUpperCase();
+  if (!normalizedRegistration || !Array.isArray(customerDetail?.warranties)) return null;
+
+  return customerDetail.warranties.find((item) =>
+    isActiveCustomerWarrantyRecord(item) &&
+    !isVoiceAnalysisWarrantyRecord(item) &&
+    normalizeText(item.registration_no).toUpperCase() === normalizedRegistration
+  ) || null;
+};
+
+const mergeWarrantyWithCustomerData = (
+  record: WarrantyRecord,
+  customerDetail: CustomerDetailResponse,
+  customerWarranty: CustomerWarrantyRecord
+): WarrantyRecord => ({
+  ...record,
+  customer_name: getCustomerDisplayName(customerDetail.customer) || record.customer_name,
+  customer_phone: normalizePhone(customerDetail.customer?.phone || customerWarranty.customer_phone || record.customer_phone),
+  brand: normalizeText(customerWarranty.brand) || record.brand,
+  category: normalizeText(customerWarranty.model) || record.category,
+  serial_no: normalizeText(customerWarranty.serial_no) || record.serial_no,
+  warranty_period: normalizeText(customerWarranty.warranty_period) || record.warranty_period,
+  date_of_purchase: normalizeText(customerWarranty.purchase_date) || record.date_of_purchase,
+  purchase_channel: normalizeText(customerWarranty.sale_channel) || record.purchase_channel,
+  status: normalizeText(customerWarranty.status) || record.status,
+  qdrant_synced: typeof customerWarranty.qdrant_synced === 'boolean' ? customerWarranty.qdrant_synced : record.qdrant_synced,
+  warranty_source: normalizeText(customerWarranty.warranty_source) || record.warranty_source,
+});
+
+const fetchManualWarrantyRecords = async (): Promise<WarrantyRecord[]> => {
+  const res = await fetch(`${API_BASE}/api/v1/warranty/list`, { cache: 'no-store' });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+
+  const data = await res.json();
+  const baseRecords: WarrantyRecord[] = Array.isArray(data?.warranties)
+    ? data.warranties
+      .filter(isActiveWarrantyRecord)
+      .filter((item: WarrantyRecord) => !isVoiceAnalysisWarrantyRecord(item))
+    : [];
+
+  const customerDetails = new Map<string, CustomerDetailResponse | null>();
+  await Promise.all(Array.from(new Set(baseRecords.map((record) => normalizePhone(record.customer_phone)).filter(Boolean))).map(async (phone) => {
+    customerDetails.set(phone, await fetchCustomerDetailByPhone(phone));
+  }));
+
+  return baseRecords.flatMap((record) => {
+    const customerDetail = customerDetails.get(normalizePhone(record.customer_phone)) || null;
+    const customerWarranty = findMatchingCustomerWarranty(record, customerDetail);
+
+    return customerDetail && customerWarranty
+      ? [mergeWarrantyWithCustomerData(record, customerDetail, customerWarranty)]
+      : [];
+  });
+};
+
+const buildCustomerWarrantyPayload = (payload: WarrantyFormData) => ({
+  registration_no: normalizeText(payload.registration_no),
+  brand: normalizeText(payload.brand),
+  model: normalizeText(payload.category) || normalizeText(payload.size) || normalizeText(payload.brand) || normalizeText(payload.registration_no),
+  serial_no: normalizeText(payload.serial_no) || null,
+  warranty_period: normalizeText(payload.warranty_period) || '12 Months',
+  purchase_date: normalizeText(payload.date_of_purchase) || null,
+  status: normalizeText(payload.status) || 'ACTIVE',
+  sale_channel: normalizeText(payload.purchase_channel) || 'Manual',
+  agent_id: 'N/A',
+});
 
 export default function WarrantyDatabasePage() {
   const [warranties, setWarranties] = useState<WarrantyRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const warrantiesRef = useRef<WarrantyRecord[]>([]);
+  const [formData, setFormData] = useState<WarrantyFormData>(createDefaultFormData);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Form State
-  const [formData, setFormData] = useState({
-    registration_no: '',
-    customer_name: '',
-    customer_phone: '',
-    brand: '',
-    category: '',
-    size: '',
-    serial_no: '',
-    warranty_period: '',
-    date_of_purchase: '',
-    date_of_delivery: '',
-    purchase_channel: '',
-    order_number: '',
-    status: 'Active'
-  });
-
-  const fetchWarranties = async ({ silent = false, onlyOnCompletion = false }: { silent?: boolean; onlyOnCompletion?: boolean } = {}) => {
+  const fetchWarranties = async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!silent) {
       setLoading(true);
     }
 
     try {
-      const res = await fetch(`${API_BASE}/api/v1/warranty/list`, { cache: 'no-store' });
-      const data = await res.json();
-      const nextWarranties = (data.warranties || []).filter(isActiveWarrantyRecord);
-
-      if (onlyOnCompletion) {
-        const previousByRegistration = new Map(
-          warrantiesRef.current.map((item) => [item.registration_no, item.qdrant_synced])
-        );
-
-        const hasCompletedAnalysis = nextWarranties.some((item: WarrantyRecord) => {
-          const previousSynced = previousByRegistration.get(item.registration_no);
-          return previousSynced === false && item.qdrant_synced;
-        });
-
-        if (hasCompletedAnalysis) {
-          setWarranties(nextWarranties);
-        }
-      } else {
-        setWarranties(nextWarranties);
-      }
+      setWarranties(await fetchManualWarrantyRecords());
     } catch (error) {
       console.error('Failed to fetch warranties:', error);
+      setNotice({ type: 'error', text: 'โหลดข้อมูลประกันจาก Backend ไม่สำเร็จ' });
     } finally {
       if (!silent) {
         setLoading(false);
@@ -106,37 +286,40 @@ export default function WarrantyDatabasePage() {
     }
   };
 
-  useEffect(() => {
-    fetchWarranties();
-  }, []);
+  const syncWarrantyToQdrant = async ({
+    notify = true,
+    records = warranties,
+  }: {
+    notify?: boolean;
+    records?: WarrantyRecord[];
+  } = {}) => {
+    if (syncing) return false;
 
-  useEffect(() => {
-    warrantiesRef.current = warranties;
-  }, [warranties]);
+    if (records.length === 0) {
+      if (notify) {
+        setNotice({ type: 'success', text: 'ยังไม่มีข้อมูลประกันจริงที่ตรงกับหน้า Customer สำหรับซิงค์เข้า Qdrant' });
+      }
+      return true;
+    }
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const initialSearch = new URLSearchParams(window.location.search).get('search') || '';
-    setSearchTerm(initialSearch);
-  }, []);
+    const allowedRegistrationNumbers = records
+      .map((record) => normalizeText(record.registration_no).toUpperCase())
+      .filter(Boolean);
+    const allowedCustomerPhones = records
+      .map((record) => normalizePhone(record.customer_phone))
+      .filter(Boolean);
 
-  // Auto-refresh when there are pending items
-  useEffect(() => {
-    const hasPending = warranties.some(w => !w.qdrant_synced);
-    if (!hasPending) return;
-
-    const interval = setInterval(() => {
-      fetchWarranties({ silent: true, onlyOnCompletion: true });
-    }, 5000); // Polling every 5 seconds if pending
-
-    return () => clearInterval(interval);
-  }, [warranties]);
-
-  const handleSync = async () => {
-    if (syncing) return;
     setSyncing(true);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/warranty/sync`, { method: 'POST' });
+      const res = await fetch(`${API_BASE}/api/v1/warranty/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...MANUAL_WARRANTY_SYNC_FILTER,
+          registration_numbers: allowedRegistrationNumbers,
+          customer_phones: allowedCustomerPhones,
+        }),
+      });
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
@@ -150,75 +333,88 @@ export default function WarrantyDatabasePage() {
         metadata: {
           successCount: typeof data?.success === 'number' ? data.success : null,
           total: typeof data?.total === 'number' ? data.total : null,
-          source: 'warranty-page-sync',
+          referenceField: 'customer_phone',
+          source: 'warranty-page-manual-sync',
         },
       });
 
-      alert(`ซิงค์เสร็จสิ้น: สำเร็จ ${data.success}/${data.total} รายการ`);
-      fetchWarranties();
+      if (notify) {
+        setNotice({
+          type: 'success',
+          text: `ซิงค์ Qdrant สำเร็จ ${data?.success ?? 0}/${data?.total ?? 0} รายการ`,
+        });
+      }
+
+      await fetchWarranties({ silent: true });
+      return true;
     } catch (error) {
       console.error('Sync failed:', error);
-      alert('การซิงค์ล้มเหลว ลบกวนตรวจสอบ Server');
+      if (notify) {
+        setNotice({ type: 'error', text: 'ซิงค์ Qdrant ไม่สำเร็จ กรุณาตรวจสอบ Backend' });
+      }
+      return false;
     } finally {
       setSyncing(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const submittedWarranty = { ...formData };
-      const res = await fetch(`${API_BASE}/api/v1/warranty/add`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+  useEffect(() => {
+    let cancelled = false;
+
+    setLoading(true);
+    fetchManualWarrantyRecords()
+      .then((nextWarranties) => {
+        if (!cancelled) {
+          setWarranties(nextWarranties);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Failed to fetch warranties:', error);
+          setNotice({ type: 'error', text: 'โหลดข้อมูลประกันจาก Backend ไม่สำเร็จ' });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
       });
 
-      if (res.ok) {
-        await logClientActivity({
-          action: 'WARRANTY_CREATED',
-          target: submittedWarranty.registration_no,
-          routePath: '/warranty',
-          metadata: {
-            registrationNo: submittedWarranty.registration_no,
-            customerName: submittedWarranty.customer_name,
-            customerPhone: submittedWarranty.customer_phone,
-            brand: submittedWarranty.brand,
-            source: 'warranty-page-add',
-          },
-        });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-        setShowAddModal(false);
-        setFormData({
-          registration_no: '',
-          customer_name: '',
-          customer_phone: '',
-          brand: '',
-          category: '',
-          size: '',
-          serial_no: '',
-          warranty_period: '',
-          date_of_purchase: '',
-          date_of_delivery: '',
-          purchase_channel: '',
-          order_number: '',
-          status: 'Active'
-        });
-        fetchWarranties();
-      } else {
-        const err = await res.json();
-        alert(`Error: ${err.detail}`);
-      }
-    } catch (error) {
-      console.error('Add failed:', error);
-    }
-  };
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
 
-  const filteredWarranties = warranties.filter(w =>
-    w.registration_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    w.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    w.customer_phone.includes(searchTerm)
-  );
+    const initialSearch = new URLSearchParams(window.location.search).get('search') || '';
+    setSearchTerm(initialSearch);
+  }, []);
+
+  const filteredWarranties = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase();
+    const phoneKeyword = normalizePhone(searchTerm);
+
+    if (!keyword) return warranties;
+
+    return warranties.filter((item) => {
+      const values = [
+        item.registration_no,
+        item.customer_name,
+        item.customer_phone,
+        item.brand,
+        item.category,
+        item.size,
+        item.serial_no,
+        item.order_number,
+        item.purchase_channel,
+      ].map((value) => normalizeText(value).toLowerCase());
+
+      return values.some((value) => value.includes(keyword)) ||
+        (phoneKeyword ? normalizePhone(item.customer_phone).includes(phoneKeyword) : false);
+    });
+  }, [searchTerm, warranties]);
 
   const totalPages = Math.max(1, Math.ceil(filteredWarranties.length / ITEMS_PER_PAGE));
   const paginatedWarranties = filteredWarranties.slice(
@@ -227,6 +423,8 @@ export default function WarrantyDatabasePage() {
   );
   const pageStart = filteredWarranties.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
   const pageEnd = Math.min(currentPage * ITEMS_PER_PAGE, filteredWarranties.length);
+  const syncedCount = warranties.filter((item) => item.qdrant_synced).length;
+  const pendingCount = warranties.length - syncedCount;
 
   useEffect(() => {
     setCurrentPage(1);
@@ -238,300 +436,536 @@ export default function WarrantyDatabasePage() {
     }
   }, [currentPage, totalPages]);
 
+  const closeModal = () => {
+    if (saving) return;
+    setShowAddModal(false);
+    setFormError(null);
+    setFormData(createDefaultFormData());
+  };
+
+  const updateForm = (field: keyof WarrantyFormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormError(null);
+    setNotice(null);
+
+    const normalizedPhone = normalizePhone(formData.customer_phone);
+
+    if (!formData.registration_no.trim()) {
+      setFormError('กรุณากรอกเลขทะเบียนรับประกัน');
+      return;
+    }
+
+    if (!formData.customer_name.trim()) {
+      setFormError('กรุณากรอกชื่อลูกค้า');
+      return;
+    }
+
+    if (normalizedPhone.length < 9) {
+      setFormError('กรุณากรอกเบอร์โทรให้ถูกต้อง เพราะระบบใช้เบอร์นี้เป็นตัวอ้างอิงข้อมูลประกัน');
+      return;
+    }
+
+    setSaving(true);
+
+    const payload: WarrantyFormData = {
+      ...formData,
+      customer_phone: normalizedPhone,
+      status: formData.status || 'ACTIVE',
+      purchase_channel: formData.purchase_channel || 'Manual',
+    };
+
+    try {
+      const customerDetail = await fetchCustomerDetailByPhone(normalizedPhone);
+      if (!customerDetail?.customer) {
+        throw new Error(`ไม่พบข้อมูล Customer จริงของเบอร์ ${normalizedPhone} กรุณาตรวจสอบหน้า Customer ก่อนบันทึกประกัน`);
+      }
+
+      const res = await fetch(`${API_BASE}/api/v1/customers/${encodeURIComponent(getCustomerIdFromPhone(normalizedPhone))}/warranty`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildCustomerWarrantyPayload(payload)),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || `บันทึกข้อมูลประกันไม่สำเร็จ: HTTP ${res.status}`);
+      }
+
+      await logClientActivity({
+        action: 'WARRANTY_CREATED',
+        target: payload.registration_no,
+        routePath: '/warranty',
+        metadata: {
+          registrationNo: payload.registration_no,
+          customerName: payload.customer_name,
+          customerPhone: payload.customer_phone,
+          brand: payload.brand,
+          referenceField: 'customer_phone',
+          source: 'warranty-page-manual-registration',
+        },
+      });
+
+      setShowAddModal(false);
+      setFormData(createDefaultFormData());
+
+      const nextWarranties = await fetchManualWarrantyRecords();
+      setWarranties(nextWarranties);
+      const synced = await syncWarrantyToQdrant({ notify: false, records: nextWarranties });
+
+      setNotice({
+        type: synced ? 'success' : 'error',
+        text: synced
+          ? `ลงทะเบียนประกันแล้ว ข้อมูลตรงกับ Customer ${payload.customer_phone} และซิงค์เข้า Qdrant แล้ว`
+          : `ลงทะเบียนประกันแล้ว แต่ซิงค์ Qdrant ไม่สำเร็จ กรุณากดซิงค์อีกครั้ง`,
+      });
+    } catch (error) {
+      console.error('Add failed:', error);
+      setFormError(error instanceof Error ? error.message : 'บันทึกข้อมูลประกันไม่สำเร็จ');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+    <div className="flex h-screen bg-slate-50 font-sans">
       <Sidebar />
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="z-10 border-b border-slate-200 bg-white px-4 py-4 shadow-sm sm:px-5 lg:px-6 lg:py-5">
-          <div className="max-w-full mx-auto flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-                <ShieldCheck className="text-blue-600" size={28} />
-                Warranty Database
-              </h1>
-              <p className="text-sm text-slate-500 font-medium">จัดการข้อมูลการรับประกันสินค้าและการซิงค์ RAG</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleSync}
-                disabled={syncing}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all border-2 ${syncing
-                    ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed'
-                    : 'bg-white text-blue-600 border-blue-100 hover:border-blue-600 hover:bg-blue-50'
-                  }`}
-              >
-                <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
-                {syncing ? 'กำลังซิงค์...' : 'ซิงค์กับ Qdrant'}
-              </button>
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
-              >
-                <Plus size={20} />
-                เพิ่มข้อมูลใหม่
-              </button>
-            </div>
-          </div>
-        </header>
-
-        {/* Content */}
-        <div className="flex-1 overflow-auto p-4 sm:p-5 lg:p-6">
-          <div className="max-w-full mx-auto space-y-6">
-
-            {/* Stats & Search */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-4 sm:gap-6">
-                <div className="bg-white px-5 py-3 rounded-2xl border border-slate-100 shadow-sm">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Records</p>
-                  <p className="text-2xl font-black text-slate-800">{warranties.length}</p>
+      <main className="flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-full space-y-6 p-4 sm:p-5 lg:p-6">
+          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:p-7">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-600">
+                  <Shield size={28} strokeWidth={2.4} />
                 </div>
-                <div className="bg-white px-5 py-3 rounded-2xl border border-slate-100 shadow-sm">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Synced to RAG</p>
-                  <p className="text-2xl font-black text-emerald-600">
-                    {warranties.filter(w => w.qdrant_synced).length}
+                <div>
+                  <h1 className="text-2xl font-black leading-tight tracking-tight text-slate-900">
+                    Warranty <span className="text-blue-600">Database</span>
+                  </h1>
+                  <p className="mt-1 text-sm font-medium text-slate-500">
+                    ลงทะเบียนประกันเองจากหน้านี้ ข้อมูลจะผูกกับเบอร์โทรลูกค้าและส่งเข้า Qdrant ผ่าน Backend
                   </p>
                 </div>
               </div>
 
-              <div className="relative w-full md:w-96">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                <input
-                  type="text"
-                  placeholder="ค้นหาตามชื่อ, เบอร์ หรือเลขทะเบียน..."
-                  className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all shadow-sm"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+              <div className="flex flex-wrap items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => syncWarrantyToQdrant()}
+                  disabled={syncing}
+                  className={`inline-flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-[13px] font-bold shadow-sm transition-all ${
+                    syncing
+                      ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400'
+                      : 'border-blue-100 bg-white text-blue-600 hover:border-blue-300 hover:bg-blue-50'
+                  }`}
+                >
+                  {syncing ? <Loader2 size={17} className="animate-spin" /> : <RefreshCw size={17} strokeWidth={2.5} />}
+                  {syncing ? 'กำลังซิงค์...' : 'ซิงค์ Qdrant'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormError(null);
+                    setFormData(createDefaultFormData());
+                    setShowAddModal(true);
+                  }}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-[13px] font-bold text-white shadow-sm transition-all hover:bg-blue-700"
+                >
+                  <Plus size={18} strokeWidth={3} />
+                  ลงทะเบียนประกัน
+                </button>
               </div>
             </div>
 
-            {/* Table */}
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-              <table className="w-full text-left border-collapse">
+            {notice && (
+              <div
+                className={`mt-5 rounded-2xl border px-4 py-3 text-sm font-semibold ${
+                  notice.type === 'success'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : 'border-rose-200 bg-rose-50 text-rose-700'
+                }`}
+              >
+                {notice.text}
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-col gap-4 border-t border-slate-100 pt-6 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 p-3.5 pr-7">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white">
+                    <Database className="h-5 w-5 text-slate-500" strokeWidth={1.8} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Manual Records</p>
+                    <p className="mt-0.5 text-2xl font-black leading-none text-slate-900">{warranties.length}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3.5 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-3.5 pr-7">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-200 bg-white">
+                    <Layers className="h-5 w-5 text-emerald-600" strokeWidth={1.8} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600/80">Synced to Qdrant</p>
+                    <p className="mt-0.5 text-2xl font-black leading-none text-emerald-700">{syncedCount}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3.5 rounded-2xl border border-amber-200 bg-amber-50/60 p-3.5 pr-7">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-white">
+                    <Clock className="h-5 w-5 text-amber-600" strokeWidth={1.8} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-600/80">Pending</p>
+                    <p className="mt-0.5 text-2xl font-black leading-none text-amber-700">{pendingCount}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="relative w-full md:w-80 lg:w-96">
+                <SearchIcon className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={17} strokeWidth={2.5} />
+                <input
+                  type="text"
+                  placeholder="ค้นหาด้วยเบอร์, ชื่อ, ทะเบียน, Serial..."
+                  className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-sm font-medium shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                />
+              </div>
+            </div>
+          </section>
+
+          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[980px] border-collapse text-left">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100">
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Registration No</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Customer</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Product</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Sync Status</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Action</th>
+                  <tr className="border-b border-slate-100 bg-slate-50">
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">เบอร์อ้างอิง</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">ทะเบียนประกัน</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">ลูกค้า</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">สินค้า</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">วันซื้อ</th>
+                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">Qdrant</th>
+                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-slate-500">Action</th>
                   </tr>
                 </thead>
-                <tbody className="">
+                <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={5} className="py-20 text-center">
-                        <RefreshCw className="animate-spin text-blue-600 mx-auto mb-3" size={32} />
-                        <p className="text-slate-400 font-medium">กำลังโหลดข้อมูล...</p>
+                      <td colSpan={7} className="py-20 text-center">
+                        <RefreshCw className="mx-auto mb-3 animate-spin text-blue-600" size={32} />
+                        <p className="font-medium text-slate-400">กำลังโหลดข้อมูล...</p>
                       </td>
                     </tr>
                   ) : filteredWarranties.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-20 text-center">
-                        <Package className="text-slate-200 mx-auto mb-3" size={48} />
-                        <p className="text-slate-400 font-bold">ไม่พบข้อมูลการรับประกัน</p>
+                      <td colSpan={7} className="py-20 text-center">
+                        <Package className="mx-auto mb-3 text-slate-200" size={48} />
+                        <p className="font-bold text-slate-400">ไม่พบข้อมูลการรับประกัน</p>
                       </td>
                     </tr>
-                  ) : paginatedWarranties.map((w) => (
-                    <tr key={w.registration_no} className="hover:bg-slate-50/50 transition-colors group">
+                  ) : paginatedWarranties.map((item) => (
+                    <tr key={`${item.registration_no}-${item.customer_phone}`} className="border-b border-slate-50 transition-colors hover:bg-slate-50/70">
                       <td className="px-6 py-5">
-                        <span className="font-bold text-slate-800 block">{w.registration_no}</span>
-                        <span className="text-[10px] text-slate-400 font-bold uppercase mt-1 block">Order: {w.order_number || '-'}</span>
+                        <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-700">
+                          <Phone size={14} />
+                          {item.customer_phone || '-'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <span className="block font-bold text-slate-800">{item.registration_no || '-'}</span>
+                        <span className="mt-1 flex items-center gap-1 text-[10px] font-bold uppercase text-slate-400">
+                          <Hash size={11} />
+                          {item.serial_no || item.order_number || '-'}
+                        </span>
                       </td>
                       <td className="px-6 py-5">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500">
                             <User size={14} />
                           </div>
                           <div>
-                            <span className="font-bold text-slate-800 block text-sm">{w.customer_name}</span>
-                            <span className="text-xs text-slate-400 flex items-center gap-1">
-                              <Phone size={10} /> {w.customer_phone}
-                            </span>
+                            <span className="block text-sm font-bold text-slate-800">{item.customer_name || '-'}</span>
+                            <span className="mt-0.5 block text-xs font-medium text-slate-400">อ้างอิงจากเบอร์โทร</span>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-5">
-                        <span className="text-sm font-bold text-slate-700 block">{w.brand}</span>
-                        <span className="text-xs text-slate-500">{w.category} {w.size ? `(${w.size})` : ''}</span>
+                        <span className="block text-sm font-bold text-slate-700">{getProductLabel(item)}</span>
+                        <span className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                          <ShoppingCart size={12} />
+                          {item.purchase_channel || 'Manual'}
+                        </span>
                       </td>
                       <td className="px-6 py-5">
-                        {w.qdrant_synced ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase rounded-full border border-emerald-100">
+                        <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600">
+                          <CalendarDays size={14} className="text-slate-400" />
+                          {formatDate(item.date_of_purchase)}
+                        </span>
+                        <span className="mt-1 block text-xs text-slate-400">{item.warranty_period || '-'}</span>
+                      </td>
+                      <td className="px-6 py-5">
+                        {item.qdrant_synced ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase text-emerald-600">
                             <CheckCircle2 size={12} /> Synced
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-600 text-[10px] font-black uppercase rounded-full border border-amber-100">
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-100 bg-amber-50 px-3 py-1 text-[10px] font-black uppercase text-amber-600">
                             <Clock size={12} /> Pending
                           </span>
                         )}
                       </td>
                       <td className="px-6 py-5 text-right">
-                        <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all border border-transparent hover:border-slate-100 shadow-sm">
-                          <ExternalLink size={18} />
+                        <button
+                          type="button"
+                          onClick={() => setSearchTerm(item.customer_phone || '')}
+                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                          title="กรองรายการด้วยเบอร์นี้"
+                        >
+                          <SearchIcon size={14} />
+                          กรองเบอร์
                         </button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-
-              {!loading && filteredWarranties.length > 0 && (
-                <div className="flex flex-col gap-3 border-t border-slate-100 px-6 py-4 md:flex-row md:items-center md:justify-between">
-                  <p className="text-sm text-slate-500">
-                    แสดง {pageStart}-{pageEnd} จาก {filteredWarranties.length} รายการ
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
-                      disabled={currentPage === 1}
-                      className={`rounded-xl border px-4 py-2 text-sm font-bold transition-all ${currentPage === 1
-                          ? 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-600'
-                        }`}
-                    >
-                      ก่อนหน้า
-                    </button>
-                    <div className="min-w-[84px] text-center text-sm font-bold text-slate-600">
-                      หน้า {currentPage}/{totalPages}
-                    </div>
-                    <button
-                      onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
-                      disabled={currentPage === totalPages}
-                      className={`rounded-xl border px-4 py-2 text-sm font-bold transition-all ${currentPage === totalPages
-                          ? 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-600'
-                        }`}
-                    >
-                      หน้าถัดไป
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
+
+            {!loading && filteredWarranties.length > 0 && (
+              <div className="flex flex-col gap-3 border-t border-slate-100 px-6 py-4 md:flex-row md:items-center md:justify-between">
+                <p className="text-sm text-slate-500">
+                  แสดง {pageStart}-{pageEnd} จาก {filteredWarranties.length} รายการ
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
+                    disabled={currentPage === 1}
+                    className={`rounded-xl border px-4 py-2 text-sm font-bold transition-all ${
+                      currentPage === 1
+                        ? 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-600'
+                    }`}
+                  >
+                    ก่อนหน้า
+                  </button>
+                  <div className="min-w-[84px] text-center text-sm font-bold text-slate-600">
+                    หน้า {currentPage}/{totalPages}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className={`rounded-xl border px-4 py-2 text-sm font-bold transition-all ${
+                      currentPage === totalPages
+                        ? 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-600'
+                    }`}
+                  >
+                    หน้าถัดไป
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Add Modal */}
         {showAddModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-            <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 font-sans">
-              <div className="px-8 py-6 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                  <Plus className="text-blue-600" /> เพิ่มข้อมูลการรับประกัน
-                </h2>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+            <div className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-6 py-5">
+                <div>
+                  <h2 className="flex items-center gap-2 text-xl font-black text-slate-800">
+                    <Plus className="text-blue-600" />
+                    ลงทะเบียนประกันเอง
+                  </h2>
+                  <p className="mt-1 text-sm font-medium text-slate-500">
+                    เบอร์โทรคือข้อมูลอ้างอิงหลักสำหรับค้นประกันและตอบจาก Qdrant
+                  </p>
+                </div>
                 <button
-                  onClick={() => setShowAddModal(false)}
-                  className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white text-slate-400 hover:text-red-500 transition-all border border-transparent hover:border-slate-200"
+                  type="button"
+                  onClick={closeModal}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-transparent text-slate-400 transition-all hover:border-slate-200 hover:bg-white hover:text-red-500"
+                  disabled={saving}
                 >
                   <XCircle size={24} />
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="p-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Registration No */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">เลขทะเบียนรับประกัน</label>
+              <form onSubmit={handleSubmit} className="max-h-[calc(92vh-92px)] overflow-y-auto p-6">
+                {formError && (
+                  <div className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+                    {formError}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">เลขทะเบียนรับประกัน *</span>
                     <input
                       required
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                      placeholder="เช่น WR-0001"
                       value={formData.registration_no}
-                      onChange={e => setFormData({ ...formData, registration_no: e.target.value })}
+                      onChange={(event) => updateForm('registration_no', event.target.value)}
                     />
-                  </div>
-                  {/* Order Number */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">เลขที่ใบสั่งซื้อ</label>
-                    <input
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                      value={formData.order_number}
-                      onChange={e => setFormData({ ...formData, order_number: e.target.value })}
-                    />
-                  </div>
+                  </label>
 
-                  <div className="md:col-span-2 border-t border-slate-100 my-2 pt-2">
-                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-[2px] mb-4">ข้อมูลลูกค้า</p>
-                  </div>
-
-                  {/* Customer Name */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">ชื่อลูกค้า</label>
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">เบอร์โทรอ้างอิง *</span>
                     <input
                       required
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                      value={formData.customer_name}
-                      onChange={e => setFormData({ ...formData, customer_name: e.target.value })}
-                    />
-                  </div>
-                  {/* Customer Phone */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">เบอร์โทรศัพท์</label>
-                    <input
-                      required
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                      inputMode="tel"
+                      className="w-full rounded-xl border border-blue-200 bg-blue-50/50 px-4 py-2.5 font-bold text-blue-700 outline-none transition-all placeholder:font-medium placeholder:text-blue-300 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                      placeholder="0812345678"
                       value={formData.customer_phone}
-                      onChange={e => setFormData({ ...formData, customer_phone: e.target.value })}
+                      onChange={(event) => updateForm('customer_phone', event.target.value)}
                     />
-                  </div>
+                  </label>
 
-                  <div className="md:col-span-2 border-t border-slate-100 my-2 pt-2">
-                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-[2px] mb-4">ข้อมูลสินค้า</p>
-                  </div>
-
-                  {/* Brand */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">แบรนด์</label>
+                  <label className="space-y-1.5 md:col-span-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">ชื่อลูกค้า *</span>
                     <input
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                      required
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                      placeholder="ชื่อลูกค้า"
+                      value={formData.customer_name}
+                      onChange={(event) => updateForm('customer_name', event.target.value)}
+                    />
+                  </label>
+
+                  <div className="md:col-span-2 border-t border-slate-100 pt-4">
+                    <p className="text-[10px] font-black uppercase tracking-[2px] text-blue-600">ข้อมูลสินค้า</p>
+                  </div>
+
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">แบรนด์</span>
+                    <input
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                      placeholder="Brand"
                       value={formData.brand}
-                      onChange={e => setFormData({ ...formData, brand: e.target.value })}
+                      onChange={(event) => updateForm('brand', event.target.value)}
                     />
-                  </div>
-                  {/* Category */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">ประเภทสินค้า</label>
+                  </label>
+
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">ประเภทสินค้า</span>
                     <input
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                      placeholder="Category / Model"
                       value={formData.category}
-                      onChange={e => setFormData({ ...formData, category: e.target.value })}
+                      onChange={(event) => updateForm('category', event.target.value)}
                     />
-                  </div>
-                  {/* Serial */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Serial Number</label>
+                  </label>
+
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">ขนาด / รุ่น</span>
                     <input
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                      value={formData.serial_no}
-                      onChange={e => setFormData({ ...formData, serial_no: e.target.value })}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                      placeholder="Size / Variant"
+                      value={formData.size}
+                      onChange={(event) => updateForm('size', event.target.value)}
                     />
+                  </label>
+
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Serial Number</span>
+                    <input
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                      placeholder="Serial No."
+                      value={formData.serial_no}
+                      onChange={(event) => updateForm('serial_no', event.target.value)}
+                    />
+                  </label>
+
+                  <div className="md:col-span-2 border-t border-slate-100 pt-4">
+                    <p className="text-[10px] font-black uppercase tracking-[2px] text-blue-600">ข้อมูลการรับประกัน</p>
                   </div>
-                  {/* Purchase Date */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">วันที่สั่งซื้อ</label>
+
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">ระยะประกัน</span>
+                    <input
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                      placeholder="12 Months"
+                      value={formData.warranty_period}
+                      onChange={(event) => updateForm('warranty_period', event.target.value)}
+                    />
+                  </label>
+
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">สถานะ</span>
+                    <select
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                      value={formData.status}
+                      onChange={(event) => updateForm('status', event.target.value)}
+                    >
+                      <option value="ACTIVE">อยู่ในประกัน</option>
+                      <option value="EXPIRED">หมดประกัน</option>
+                    </select>
+                  </label>
+
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">วันที่ซื้อ</span>
                     <input
                       type="date"
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
                       value={formData.date_of_purchase}
-                      onChange={e => setFormData({ ...formData, date_of_purchase: e.target.value })}
+                      onChange={(event) => updateForm('date_of_purchase', event.target.value)}
                     />
-                  </div>
+                  </label>
+
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">วันที่ส่งสินค้า</span>
+                    <input
+                      type="date"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                      value={formData.date_of_delivery}
+                      onChange={(event) => updateForm('date_of_delivery', event.target.value)}
+                    />
+                  </label>
+
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">ช่องทางซื้อ</span>
+                    <input
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                      placeholder="Manual / Online / Store"
+                      value={formData.purchase_channel}
+                      onChange={(event) => updateForm('purchase_channel', event.target.value)}
+                    />
+                  </label>
+
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">เลขที่ใบสั่งซื้อ</span>
+                    <input
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                      placeholder="Order No."
+                      value={formData.order_number}
+                      onChange={(event) => updateForm('order_number', event.target.value)}
+                    />
+                  </label>
                 </div>
 
-                <div className="mt-10 flex gap-4">
+                <div className="mt-8 flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
                   <button
                     type="button"
-                    onClick={() => setShowAddModal(false)}
-                    className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-100 rounded-2xl transition-all"
+                    onClick={closeModal}
+                    disabled={saving}
+                    className="rounded-2xl px-5 py-3 font-bold text-slate-500 transition-all hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     ยกเลิก
                   </button>
                   <button
                     type="submit"
-                    className="flex-[2] py-3 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100"
+                    disabled={saving}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-3 font-bold text-white shadow-sm transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    ยืนยันการเพิ่มข้อมูล
+                    {saving ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                    {saving ? 'กำลังบันทึก...' : 'บันทึกและซิงค์ Qdrant'}
                   </button>
                 </div>
               </form>

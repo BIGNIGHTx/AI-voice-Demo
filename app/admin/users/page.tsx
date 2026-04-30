@@ -256,10 +256,10 @@ export default function AdminUsersPage() {
                 return (
                   <article key={user.id} className="group relative overflow-hidden rounded-[24px] border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.03)] transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-[0_20px_40px_rgba(0,0,0,0.06)]">
                     <div className="absolute inset-0 bg-gradient-to-br from-emerald-50/40 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" pointerEvents="none" />
-                    
+
                     <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
                       <div className="grid flex-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-                        
+
                         {/* 1. User Info */}
                         <div className="flex flex-col">
                           <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">ข้อมูลผู้ใช้</p>
@@ -283,16 +283,15 @@ export default function AdminUsersPage() {
                         <div className="flex flex-col">
                           <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">สิทธิ์ (Role)</p>
                           <div className="flex flex-1 flex-col justify-center items-start">
-                            <span className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold uppercase tracking-wide shadow-sm transition-colors ${
-                              user.role === 'admin' 
-                                ? 'border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100/50 text-emerald-700' 
+                            <span className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold uppercase tracking-wide shadow-sm transition-colors ${user.role === 'admin'
+                                ? 'border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100/50 text-emerald-700'
                                 : 'border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100/50 text-slate-600'
-                            }`}>
-                               {user.role === 'admin' ? <KeyRound className="h-3.5 w-3.5" strokeWidth={2.5} /> : <User className="h-3.5 w-3.5" strokeWidth={2.5} />}
-                               {user.role}
-                               {user.id === firstAdminId && (
-                                  <span className="ml-1 border-l border-emerald-300/50 pl-2 text-[9px] text-emerald-600">FIRST ADMIN</span>
-                               )}
+                              }`}>
+                              {user.role === 'admin' ? <KeyRound className="h-3.5 w-3.5" strokeWidth={2.5} /> : <User className="h-3.5 w-3.5" strokeWidth={2.5} />}
+                              {user.role}
+                              {user.id === firstAdminId && (
+                                <span className="ml-1 border-l border-emerald-300/50 pl-2 text-[9px] text-emerald-600">FIRST ADMIN</span>
+                              )}
                             </span>
                             <p className="mt-1.5 text-[11px] font-medium text-slate-400">
                               Audit events: <span className="font-bold text-slate-600">{user._count.auditLogs}</span>
