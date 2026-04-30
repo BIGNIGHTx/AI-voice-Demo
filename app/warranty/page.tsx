@@ -19,6 +19,7 @@ import {
   User,
   XCircle,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 import { logClientActivity } from '@/lib/activity-client';
@@ -74,9 +75,13 @@ interface CustomerWarrantyRecord {
   registration_no?: string;
   brand?: string;
   model?: string;
+  size?: string;
   serial_no?: string;
   warranty_period?: string;
   purchase_date?: string;
+  delivery_date?: string;
+  date_of_delivery?: string;
+  order_number?: string;
   status?: string;
   sale_channel?: string;
   customer_phone?: string;
@@ -204,13 +209,17 @@ const mergeWarrantyWithCustomerData = (
   customerWarranty: CustomerWarrantyRecord
 ): WarrantyRecord => ({
   ...record,
+  file_id: normalizeText(customerWarranty.file_id) || record.file_id,
   customer_name: getCustomerDisplayName(customerDetail.customer) || record.customer_name,
   customer_phone: normalizePhone(customerDetail.customer?.phone || customerWarranty.customer_phone || record.customer_phone),
   brand: normalizeText(customerWarranty.brand) || record.brand,
   category: normalizeText(customerWarranty.model) || record.category,
+  size: normalizeText(customerWarranty.size) || record.size,
   serial_no: normalizeText(customerWarranty.serial_no) || record.serial_no,
   warranty_period: normalizeText(customerWarranty.warranty_period) || record.warranty_period,
   date_of_purchase: normalizeText(customerWarranty.purchase_date) || record.date_of_purchase,
+  date_of_delivery: normalizeText(customerWarranty.delivery_date || customerWarranty.date_of_delivery) || record.date_of_delivery,
+  order_number: normalizeText(customerWarranty.order_number) || record.order_number,
   purchase_channel: normalizeText(customerWarranty.sale_channel) || record.purchase_channel,
   status: normalizeText(customerWarranty.status) || record.status,
   qdrant_synced: typeof customerWarranty.qdrant_synced === 'boolean' ? customerWarranty.qdrant_synced : record.qdrant_synced,
@@ -258,6 +267,7 @@ const buildCustomerWarrantyPayload = (payload: WarrantyFormData) => ({
 });
 
 export default function WarrantyDatabasePage() {
+  const router = useRouter();
   const [warranties, setWarranties] = useState<WarrantyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -445,6 +455,14 @@ export default function WarrantyDatabasePage() {
 
   const updateForm = (field: keyof WarrantyFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const openWarrantyDetail = (item: WarrantyRecord) => {
+    const phone = normalizePhone(item.customer_phone);
+    const fileId = normalizeText(item.file_id) || normalizeText(item.registration_no);
+    if (!phone || !fileId) return;
+
+    router.push(`/customers/${getCustomerIdFromPhone(phone)}/warranty/${encodeURIComponent(fileId)}`);
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -668,7 +686,11 @@ export default function WarrantyDatabasePage() {
                       </td>
                     </tr>
                   ) : paginatedWarranties.map((item) => (
-                    <tr key={`${item.registration_no}-${item.customer_phone}`} className="border-b border-slate-50 transition-colors hover:bg-slate-50/70">
+                    <tr
+                      key={`${item.registration_no}-${item.customer_phone}`}
+                      onClick={() => openWarrantyDetail(item)}
+                      className="cursor-pointer border-b border-slate-50 transition-colors hover:bg-slate-50/70"
+                    >
                       <td className="px-6 py-5">
                         <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-700">
                           <Phone size={14} />
@@ -721,7 +743,10 @@ export default function WarrantyDatabasePage() {
                       <td className="px-6 py-5 text-right">
                         <button
                           type="button"
-                          onClick={() => setSearchTerm(item.customer_phone || '')}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSearchTerm(item.customer_phone || '');
+                          }}
                           className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
                           title="กรองรายการด้วยเบอร์นี้"
                         >

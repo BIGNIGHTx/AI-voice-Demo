@@ -64,11 +64,15 @@ interface WarrantyItem {
   registration_no: string;
   brand: string;
   model: string;
+  size?: string;
   serial_no: string;
   customer_phone?: string;
   agent_id?: string;
   warranty_period: string;
   purchase_date: string;
+  delivery_date?: string;
+  date_of_delivery?: string;
+  order_number?: string;
   status: string;
   sale_channel?: string;
   images?: WarrantyImage[];
@@ -79,9 +83,12 @@ interface WarrantyFormState {
   registration_no: string;
   brand: string;
   model: string;
+  size: string;
   serial_no: string;
   warranty_period: string;
   purchase_date: string;
+  delivery_date: string;
+  order_number: string;
   status: 'ACTIVE' | 'EXPIRED';
   sale_channel: string;
   agent_id: string;
@@ -260,9 +267,12 @@ export default function CustomerDetailPage() {
     registration_no: '',
     brand: normalizeTextInput(customer?.suggested_brand) || '',
     model: '',
+    size: '',
     serial_no: '',
     warranty_period: '12 Months',
     purchase_date: '',
+    delivery_date: '',
+    order_number: '',
     status: 'ACTIVE',
     sale_channel: normalizeTextInput(customer?.suggested_sale_channel) || 'Manual',
     agent_id: normalizeTextInput(customer?.suggested_agent_id) || 'N/A',
@@ -335,9 +345,12 @@ export default function CustomerDetailPage() {
       registration_no: normalizeTextInput(warranty.registration_no),
       brand: normalizeTextInput(warranty.brand),
       model: normalizeTextInput(warranty.model),
+      size: normalizeTextInput(warranty.size),
       serial_no: normalizeTextInput(warranty.serial_no),
       warranty_period: normalizeTextInput(warranty.warranty_period) || '12 Months',
       purchase_date: normalizeDateForInput(warranty.purchase_date),
+      delivery_date: normalizeDateForInput(warranty.delivery_date || warranty.date_of_delivery),
+      order_number: normalizeTextInput(warranty.order_number),
       status: resolveWarrantyStatus(warranty.status, warranty.purchase_date, warranty.warranty_period) === 'EXPIRED' ? 'EXPIRED' : 'ACTIVE',
       sale_channel: normalizeTextInput(warranty.sale_channel),
       agent_id: normalizeTextInput(warranty.agent_id) || 'N/A',
@@ -481,9 +494,12 @@ export default function CustomerDetailPage() {
               registration_no: deletedRegistrationNo,
               brand: warranty.brand,
               model: warranty.model,
+              size: warranty.size || null,
               serial_no: null,
               warranty_period: warranty.warranty_period || null,
               purchase_date: normalizeDateForInput(warranty.purchase_date) || null,
+              delivery_date: normalizeDateForInput(warranty.delivery_date || warranty.date_of_delivery) || null,
+              order_number: warranty.order_number || null,
               status: 'DELETED',
               sale_channel: warranty.sale_channel || 'Manual',
               agent_id: warranty.agent_id || 'N/A',
@@ -952,11 +968,11 @@ export default function CustomerDetailPage() {
                    <h3 className="font-bold text-slate-800 text-lg">ประวัติการติดต่อ</h3>
                    <span className="text-xs bg-slate-100 px-2 py-1 rounded-md font-bold text-slate-500">{callHistory.length}</span>
                 </div>
-                <div className="space-y-3">
+                <div className="max-h-80 space-y-3 overflow-y-auto pr-2">
                   {callHistory.length === 0 ? (
                     <p className="text-sm text-slate-400 text-center py-4 italic">ไม่พบประวัติการโทร</p>
                   ) : (
-                    callHistory.slice(0, 5).map((call, idx) => (
+                    callHistory.map((call, idx) => (
                       <Link 
                         key={idx} 
                         href={`/files/${call.file_id}`}
@@ -1154,6 +1170,16 @@ export default function CustomerDetailPage() {
               </label>
 
               <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">Size / ขนาดรุ่น</span>
+                <input
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  placeholder="Size / Variant"
+                  value={warrantyForm.size}
+                  onChange={(e) => setWarrantyForm({ ...warrantyForm, size: e.target.value })}
+                />
+              </label>
+
+              <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-700">Serial No.</span>
                 <input
                   className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
@@ -1184,6 +1210,16 @@ export default function CustomerDetailPage() {
               </label>
 
               <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">Delivery Date / วันที่ส่ง</span>
+                <input
+                  type="date"
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  value={warrantyForm.delivery_date}
+                  onChange={(e) => setWarrantyForm({ ...warrantyForm, delivery_date: e.target.value })}
+                />
+              </label>
+
+              <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-700">Status</span>
                 <select
                   className={`w-full rounded-xl px-3 py-2.5 text-sm outline-none transition focus:ring-4 ${warrantyFormStatusMeta.fieldClassName}`}
@@ -1202,6 +1238,16 @@ export default function CustomerDetailPage() {
                   placeholder="Sale Channel"
                   value={warrantyForm.sale_channel}
                   onChange={(e) => setWarrantyForm({ ...warrantyForm, sale_channel: e.target.value })}
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">Order Number / เลขที่ใบสั่งซื้อ</span>
+                <input
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  placeholder="Order Number"
+                  value={warrantyForm.order_number}
+                  onChange={(e) => setWarrantyForm({ ...warrantyForm, order_number: e.target.value })}
                 />
               </label>
 

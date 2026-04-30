@@ -28,13 +28,13 @@ interface WarrantyDetail {
   brand: string | null;
   product_category: string | null;
   intent: string | null;
-  sentiment: string;
-  sentiment_confidence: number;
+  sentiment: string | null;
+  sentiment_confidence: number | null;
   sentiment_reason: string | null;
-  csat_score: number;
+  csat_score: number | null;
   csat_reason: string | null;
-  qa_score: number;
-  qa_grade: string;
+  qa_score: number | null;
+  qa_grade: string | null;
   qa_reason: string | null;
   summary: string | null;
   keywords: string | null;
@@ -43,8 +43,8 @@ interface WarrantyDetail {
   
   // Audio metadata
   upload_date: string | null;
-  duration: number;
-  file_size: number;
+  duration: number | null;
+  file_size: number | null;
   agent_id: string;
   sale_channel: string;
   
@@ -52,9 +52,14 @@ interface WarrantyDetail {
   ai_mode: string;
   model_version: string;
   created_at: string | null;
+  registration_no?: string;
+  size?: string;
   serial_no?: string;
+  warranty_period?: string;
   warranty_start_date?: string;
   warranty_end_date?: string;
+  date_of_delivery?: string;
+  order_number?: string;
   expiry_date_of_warranty?: string;
   registrationDate?: string;
   status?: string;
@@ -163,7 +168,7 @@ export default function WarrantyDetailPage() {
   };
 
   // Helper functions
-  const getSentimentBadge = (sentiment: string) => {
+  const getSentimentBadge = (sentiment?: string | null) => {
     switch (sentiment?.toLowerCase()) {
       case 'positive': return { cls: 'bg-emerald-100 text-emerald-700', label: 'พอใจ' };
       case 'negative': return { cls: 'bg-red-100 text-red-600', label: 'ไม่พอใจ' };
@@ -186,19 +191,25 @@ export default function WarrantyDetailPage() {
     }
   };
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
+  const formatDuration = (seconds?: number | null) => {
+    if (seconds === null || seconds === undefined || Number.isNaN(Number(seconds))) return null;
+    const mins = Math.floor(Number(seconds) / 60);
+    const secs = Math.floor(Number(seconds) % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  const formatFileSize = (bytes?: number | null) => {
+    if (bytes === null || bytes === undefined || Number.isNaN(Number(bytes))) return null;
+    const size = Number(bytes);
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(2)} KB`;
+    return `${(size / (1024 * 1024)).toFixed(2)} MB`;
   };
 
-  const sentimentBadge = getSentimentBadge(warranty.sentiment);
+  const isManualWarranty = warranty.ai_mode?.toLowerCase() === 'manual' || warranty.warranty_source?.toLowerCase() === 'manual';
+  const sentimentBadge = isManualWarranty
+    ? { cls: 'bg-blue-100 text-blue-700', label: '' }
+    : getSentimentBadge(warranty.sentiment);
   const getApiAssetUrl = (url?: string | null) => {
     if (!url) return '';
     if (/^https?:\/\//i.test(url)) return url;
@@ -249,9 +260,11 @@ export default function WarrantyDetailPage() {
                       {warranty.product_category}
                     </span>
                   )}
-                  <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${sentimentBadge.cls}`}>
-                    <CheckCircle2 size={12} /> {sentimentBadge.label}
-                  </span>
+                  {!isManualWarranty && (
+                    <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${sentimentBadge.cls}`}>
+                      <CheckCircle2 size={12} /> {sentimentBadge.label}
+                    </span>
+                  )}
                 </h1>
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
                   <FileAudio size={14} className="text-blue-500" /> ถอดความจากไฟล์เสียง:
@@ -274,34 +287,60 @@ export default function WarrantyDetailPage() {
             
             {/* AI Analysis Information */}
             <div className="col-span-1 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2 sm:p-6">
-              <SectionTitle title="AI Analysis Results" />
+              <SectionTitle title={isManualWarranty ? "Warranty Information" : "AI Analysis Results"} />
               
               <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
-                <div className="space-y-1">
-                  <InfoRow label="Brand" value={warranty.brand} bg />
-                  <InfoRow label="Product Category" value={warranty.product_category} />
-                  <InfoRow label="Customer Phone" value={warranty.customer_phone} bg />
-                  <InfoRow label="Agent ID" value={warranty.agent_id} />
-                  <InfoRow label="Intent" value={warranty.intent} bg />
-                  <InfoRow label="Sentiment" value={`${warranty.sentiment} (${(warranty.sentiment_confidence * 100).toFixed(1)}%)`} />
-                  <InfoRow label="Sentiment Reason" value={warranty.sentiment_reason} bg />
-                  <InfoRow label="CSAT Score" value={`${warranty.csat_score}/5`} />
-                  <InfoRow label="CSAT Reason" value={warranty.csat_reason} bg />
-                </div>
-                <div className="space-y-1">
-                  <InfoRow label="QA Score" value={`${warranty.qa_score}/10 (Grade: ${warranty.qa_grade})`} />
-                  <InfoRow label="QA Reason" value={warranty.qa_reason} bg />
-                  <InfoRow label="AI Mode" value={warranty.ai_mode} />
-                  <InfoRow label="Model Version" value={warranty.model_version} bg />
-                  <InfoRow label="Upload Date" value={formatDate(warranty.upload_date)} />
-                  <InfoRow label="Duration" value={formatDuration(warranty.duration)} bg />
-                  <InfoRow label="File Size" value={formatFileSize(warranty.file_size)} />
-                  <InfoRow label="Serial No." value={warranty.serial_no} bg />
-                  <InfoRow label="Start Date" value={warranty.warranty_start_date} />
-                  <InfoRow label="End Date" value={warranty.warranty_end_date} bg />
-                  <InfoRow label="Expiry Date" value={warranty.expiry_date_of_warranty} />
-                  <InfoRow label="Registration Date" value={warranty.registrationDate} bg />
-                </div>
+                {isManualWarranty ? (
+                  <>
+                    <div className="space-y-1">
+                      <InfoRow label="Brand" value={warranty.brand} bg />
+                      <InfoRow label="Product Category" value={warranty.product_category} />
+                      <InfoRow label="Size" value={warranty.size} bg />
+                      <InfoRow label="Registration No." value={warranty.registration_no} bg />
+                      <InfoRow label="Serial No." value={warranty.serial_no} />
+                      <InfoRow label="Warranty Period" value={warranty.warranty_period} bg />
+                    </div>
+                    <div className="space-y-1">
+                      <InfoRow label="Customer Phone" value={warranty.customer_phone} bg />
+                      <InfoRow label="Agent ID" value={warranty.agent_id} />
+                      <InfoRow label="Sale Channel" value={warranty.sale_channel} bg />
+                      <InfoRow label="Order Number" value={warranty.order_number} />
+                      <InfoRow label="Status" value={warranty.status} />
+                      <InfoRow label="Registration Date" value={warranty.registrationDate} bg />
+                      <InfoRow label="Delivery Date" value={warranty.date_of_delivery} />
+                      <InfoRow label="Expiry Date" value={warranty.expiry_date_of_warranty} bg />
+                      <InfoRow label="Start Date" value={warranty.warranty_start_date} />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-1">
+                      <InfoRow label="Brand" value={warranty.brand} bg />
+                      <InfoRow label="Product Category" value={warranty.product_category} />
+                      <InfoRow label="Customer Phone" value={warranty.customer_phone} bg />
+                      <InfoRow label="Agent ID" value={warranty.agent_id} />
+                      <InfoRow label="Intent" value={warranty.intent} bg />
+                      <InfoRow label="Sentiment" value={`${warranty.sentiment} (${((warranty.sentiment_confidence ?? 0) * 100).toFixed(1)}%)`} />
+                      <InfoRow label="Sentiment Reason" value={warranty.sentiment_reason} bg />
+                      <InfoRow label="CSAT Score" value={`${warranty.csat_score}/5`} />
+                      <InfoRow label="CSAT Reason" value={warranty.csat_reason} bg />
+                    </div>
+                    <div className="space-y-1">
+                      <InfoRow label="QA Score" value={`${warranty.qa_score}/10 (Grade: ${warranty.qa_grade})`} />
+                      <InfoRow label="QA Reason" value={warranty.qa_reason} bg />
+                      <InfoRow label="AI Mode" value={warranty.ai_mode} />
+                      <InfoRow label="Model Version" value={warranty.model_version} bg />
+                      <InfoRow label="Upload Date" value={formatDate(warranty.upload_date)} />
+                      <InfoRow label="Duration" value={formatDuration(warranty.duration)} bg />
+                      <InfoRow label="File Size" value={formatFileSize(warranty.file_size)} />
+                      <InfoRow label="Serial No." value={warranty.serial_no} bg />
+                      <InfoRow label="Start Date" value={warranty.warranty_start_date} />
+                      <InfoRow label="End Date" value={warranty.warranty_end_date} bg />
+                      <InfoRow label="Expiry Date" value={warranty.expiry_date_of_warranty} />
+                      <InfoRow label="Registration Date" value={warranty.registrationDate} bg />
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
