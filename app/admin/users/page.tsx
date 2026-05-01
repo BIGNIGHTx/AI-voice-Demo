@@ -255,7 +255,7 @@ export default function AdminUsersPage() {
 
                 return (
                   <article key={user.id} className="group relative overflow-hidden rounded-[24px] border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.03)] transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-[0_20px_40px_rgba(0,0,0,0.06)]">
-                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-50/40 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" pointerEvents="none" />
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-emerald-50/40 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
 
                     <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
                       <div className="grid flex-1 gap-6 md:grid-cols-2 xl:grid-cols-4">

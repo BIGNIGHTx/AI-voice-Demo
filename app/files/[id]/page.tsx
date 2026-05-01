@@ -44,6 +44,8 @@ interface AnalysisData {
   key_insights: string;
   intent: string;
   keywords: string[];
+  action_items?: string[];
+  is_escalated?: boolean;
   wav2vec2_emotion: { dominant: string; scores: { positive: number; neutral: number; negative: number } };
   model_versions: { whisper: string; wav2vec2: string; llama: string };
   created_at: string;
@@ -74,6 +76,7 @@ interface EnhancedAnalysis {
     primary_category: string;
     secondary_categories?: string[];
     confidence: number;
+    reason?: string;
   };
   qaScore: {
     overall_score: number;
@@ -196,7 +199,7 @@ const cleanTranscriptText = (value: unknown): string => {
   const text = String(value || '').trim();
   if (!text) return '';
   return text
-    .replace(/[^\u0E00-\u0E7Fa-zA-Z0-9\s\.,!?():;/%\-"'@#&+]/g, ' ')
+    .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, ' ')
     .replace(/([!?.,]){3,}/g, '$1$1')
     .replace(/\s+/g, ' ')
     .trim();
@@ -459,13 +462,21 @@ const normalizeKeywordList = (keywords: string[]): string[] => {
   return result;
 };
 
+const normalizeSummaryPointText = (value: unknown): string =>
+  String(value || '')
+    .replace(/^[^a-zA-Z0-9\u0E00-\u0E7F]+/, '')
+    .replace(/^(?:ประเด็นหลัก|หัวข้อที่สนทนา|หัวข้อหลัก|key\s*insights?|topic|intent)\s*:\s*/iu, '')
+    .replace(/[\u{1F300}-\u{1FAFF}]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 const sanitizeSummaryPoints = (points: unknown): string[] => {
   if (!Array.isArray(points)) return [];
   const cleaned: string[] = [];
   const seen = new Set<string>();
 
   for (const item of points) {
-    const text = String(item || '').trim().replace(/\s+/g, ' ');
+    const text = normalizeSummaryPointText(item);
     if (!text) continue;
     if (text.length < 8 || text.length > 220) continue;
     const weird = (text.match(/[^\u0E00-\u0E7Fa-zA-Z0-9\s\.,!?\-()'":;/%]/g) || []).length;
@@ -477,6 +488,331 @@ const sanitizeSummaryPoints = (points: unknown): string[] => {
     if (cleaned.length >= 4) break;
   }
   return cleaned;
+};
+
+type TranscriptTopicId = 'billing' | 'usage' | 'delivery' | 'warranty' | 'order' | 'info';
+
+interface TranscriptTopicRule {
+  id: TranscriptTopicId;
+  label: string;
+  terms: string[];
+  supportingTerms?: string[];
+}
+
+interface DerivedSummaryData {
+  topic: string;
+  contactReason: string;
+  keyInsight: string;
+  overviewPoints: string[];
+}
+
+const TRANSCRIPT_TOPIC_RULES: TranscriptTopicRule[] = [
+  {
+    id: 'billing',
+    label: 'ตรวจสอบยอดและรายการในบิล',
+    terms: ['ยอด', 'บิล', 'สลิป', 'จ่ายแยก', 'ชำระ', 'รูดการ์ด', 'โอน', 'ตัดออกจากยอด', 'รวมในบิล'],
+    supportingTerms: ['รายการ', 'ซื้อ', 'แยก', 'ยอดรวม'],
+  },
+  {
+    id: 'usage',
+    label: 'ยืนยันรายการที่ใช้แล้วและยังไม่ใช้',
+    terms: ['ใช้ไปแล้ว', 'แกะใช้', 'ยังไม่ได้แกะ', 'ไม่ได้ใช้', 'เปิดใช้', 'จะคืน', 'ไม่ได้จะคืน'],
+    supportingTerms: ['หมอน', 'ผ้าห่ม', 'ผ้านวม', 'ผ้าปู', 'ท็อปเปอร์'],
+  },
+  {
+    id: 'delivery',
+    label: 'ตรวจสอบสินค้าและจำนวนที่ได้รับ',
+    terms: ['ได้รับ', 'ได้มา', 'แถม', 'จำนวน', 'กี่ใบ', 'กี่ชุด', 'มีอยู่', 'ส่งรูป', 'ถ่ายรูป'],
+    supportingTerms: ['หมอน', 'ผ้าห่ม', 'ผ้านวม', 'ผ้าปู', 'ชุดเครื่องนอน'],
+  },
+  {
+    id: 'warranty',
+    label: 'เคลมหรือประกันสินค้า',
+    terms: ['เคลม', 'ประกัน', 'warranty', 'claim'],
+    supportingTerms: ['สินค้า', 'เครื่อง'],
+  },
+  {
+    id: 'order',
+    label: 'ตรวจสอบออเดอร์และรายการสั่งซื้อ',
+    terms: ['ออเดอร์', 'สั่งซื้อ', 'รายการซื้อ', 'ใบสั่งซื้อ', 'order'],
+    supportingTerms: ['สินค้า', 'บิล', 'ยอด'],
+  },
+  {
+    id: 'info',
+    label: 'สอบถามข้อมูลสินค้า',
+    terms: ['สอบถาม', 'อยากทราบ', 'ขอข้อมูล', 'ข้อมูลสินค้า'],
+    supportingTerms: ['สินค้า', 'รายละเอียด'],
+  },
+];
+
+const THAI_NUMBER_MAP: Record<string, string> = {
+  '1': '1',
+  '2': '2',
+  '3': '3',
+  '4': '4',
+  '5': '5',
+  '6': '6',
+  '7': '7',
+  '8': '8',
+  '9': '9',
+  '10': '10',
+  'หนึ่ง': '1',
+  'สอง': '2',
+  'สาม': '3',
+  'สี่': '4',
+  'ห้า': '5',
+  'หก': '6',
+  'เจ็ด': '7',
+  'แปด': '8',
+  'เก้า': '9',
+  'สิบ': '10',
+};
+
+const COUNT_TOKEN_PATTERN = '(?:\\d+|หนึ่ง|สอง|สาม|สี่|ห้า|หก|เจ็ด|แปด|เก้า|สิบ)';
+
+const toCountLabel = (value?: string): string | null => {
+  if (!value) return null;
+  const normalized = THAI_NUMBER_MAP[String(value).trim()];
+  return normalized || null;
+};
+
+const isBroadTopicLabel = (value?: string | null): boolean => {
+  const normalized = cleanInsightText(value).toLowerCase();
+  if (!normalized) return true;
+  return [
+    'สอบถามเกี่ยวกับสินค้าที่ซื้อ',
+    'สอบถามสินค้า',
+    'สอบถามข้อมูล',
+    'สอบถามทั่วไป',
+    'สินค้า',
+    'ทั่วไป',
+    '-',
+  ].includes(normalized);
+};
+
+const inferTranscriptTopicRule = (value: string): TranscriptTopicRule | null => {
+  const text = cleanInsightText(value).toLowerCase();
+  if (!text) return null;
+
+  const ranked = TRANSCRIPT_TOPIC_RULES
+    .map((rule) => ({
+      rule,
+      score: rule.terms.reduce((total, term) => total + (text.includes(term.toLowerCase()) ? 2 : 0), 0)
+        + (rule.supportingTerms || []).reduce((total, term) => total + (text.includes(term.toLowerCase()) ? 1 : 0), 0),
+    }))
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score);
+
+  return ranked[0]?.rule || null;
+};
+
+const extractCountedProductMention = (
+  text: string,
+  label: string,
+  pattern: string,
+  unit: string
+): string | null => {
+  const afterRegex = new RegExp(`${pattern}[^a-zA-Z0-9\u0E00-\u0E7F]{0,8}(${COUNT_TOKEN_PATTERN})\\s*(?:${unit})?`, 'iu');
+  const beforeRegex = new RegExp(`(${COUNT_TOKEN_PATTERN})\\s*(?:${unit})?[^a-zA-Z0-9\u0E00-\u0E7F]{0,8}${pattern}`, 'iu');
+  const afterMatch = text.match(afterRegex);
+  const beforeMatch = text.match(beforeRegex);
+  const count = toCountLabel(afterMatch?.[1] || beforeMatch?.[1]);
+  return count ? `${label} ${count} ${unit.split('|')[0]}` : null;
+};
+
+const extractProductMentions = (transcriptText: string, keywords: string[]): string[] => {
+  const text = cleanInsightText(transcriptText);
+  if (!text) return [];
+
+  const productConfigs = [
+    { label: 'หมอนหนุน', pattern: '(?:หมอน\\s*หนุน|หมอนหนุน)', unit: 'ใบ' },
+    { label: 'หมอนข้าง', pattern: '(?:หมอน\\s*ข้าง|หมอนข้าง)', unit: 'ใบ' },
+    { label: 'ผ้าห่ม', pattern: 'ผ้าห่ม', unit: 'ผืน|ชุด|อัน' },
+    { label: 'ผ้านวม', pattern: 'ผ้านวม', unit: 'ผืน|ชุด|อัน' },
+    { label: 'ผ้าปู', pattern: 'ผ้าปู', unit: 'ชุด|ผืน|อัน' },
+    { label: 'ผ้ารองกันเปื้อน', pattern: 'ผ้ารองกันเปื้อน', unit: 'ชิ้น|ชุด|อัน' },
+    { label: 'ชุดเครื่องนอน', pattern: 'ชุดเครื่องนอน', unit: 'ชุด' },
+    { label: 'ท็อปเปอร์', pattern: 'ท็อปเปอร์', unit: 'อัน|ชิ้น' },
+    { label: 'MIDAS', pattern: '(?:midas|ไมดาส)', unit: 'ชิ้น|ชุด|อัน' },
+    { label: 'Bedgear', pattern: '(?:bedgear|เบดเกียร์)', unit: 'ชิ้น|ชุด|อัน' },
+  ] as const;
+
+  const mentions: string[] = [];
+  const seen = new Set<string>();
+  const add = (value?: string | null) => {
+    const normalized = cleanInsightText(value);
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    mentions.push(normalized);
+  };
+
+  productConfigs.forEach((config) => {
+    add(extractCountedProductMention(text, config.label, config.pattern, config.unit));
+    if (new RegExp(config.pattern, 'iu').test(text)) add(config.label);
+  });
+
+  keywords.forEach((keyword) => {
+    const normalized = cleanInsightText(keyword);
+    if (!normalized || normalized.length < 2) return;
+    const lower = normalized.toLowerCase();
+    if (/(midas|bedgear|mattress|หมอน|ผ้าห่ม|ผ้านวม|ผ้าปู|ท็อปเปอร์)/iu.test(lower)) add(normalized);
+  });
+
+  const condensedMentions = mentions.filter((mention) => {
+    const lowerMention = mention.toLowerCase();
+    return !productConfigs.some((config) => {
+      const lowerLabel = config.label.toLowerCase();
+      return lowerMention === lowerLabel && mentions.some((item) => item.toLowerCase().startsWith(`${lowerLabel} `));
+    });
+  });
+
+  return condensedMentions.slice(0, 5);
+};
+
+const pickSpecificTopicCandidate = (values: Array<string | undefined>): string => {
+  for (const value of values) {
+    const normalized = normalizeSummaryPointText(value);
+    if (!normalized || isUnknownLabel(normalized) || isBroadTopicLabel(normalized)) continue;
+    return normalized;
+  }
+  return '';
+};
+
+const buildDerivedSummaryData = (params: {
+  transcriptText: string;
+  intent?: string;
+  topicReason?: string;
+  summaryPoints: string[];
+  keyInsights?: string;
+  keywords: string[];
+}): DerivedSummaryData => {
+  const transcriptText = cleanInsightText(params.transcriptText);
+  const evidenceText = cleanInsightText([
+    transcriptText,
+    params.intent,
+    params.topicReason,
+    params.keyInsights,
+    ...params.summaryPoints,
+    ...params.keywords,
+  ].join(' '));
+
+  const topicRule = inferTranscriptTopicRule(evidenceText);
+  const productMentions = extractProductMentions(evidenceText, params.keywords);
+  const topicProductPhrase = productMentions.slice(0, 2).join(' / ');
+  const productPhrase = productMentions.length > 0 ? productMentions.slice(0, 3).join(', ') : 'รายการสินค้าในเคส';
+  const specificTopicCandidate = pickSpecificTopicCandidate([
+    params.topicReason,
+    params.intent,
+    ...params.summaryPoints,
+    params.keyInsights,
+  ]);
+
+  const topic = topicRule?.label
+    ? `${topicRule.label}${topicProductPhrase ? ` - ${topicProductPhrase}` : ''}`
+    : (specificTopicCandidate || normalizeSummaryPointText(params.intent) || '-');
+
+  let contactReason = specificTopicCandidate ? `สาเหตุ: ${specificTopicCandidate}` : 'สาเหตุ: ยังสรุปจาก transcript ไม่ชัดเจน';
+  if (topicRule?.id === 'billing') {
+    contactReason = `ลูกค้าต้องการตรวจสอบว่ายอดของ ${productPhrase} ควรคิดรวมในบิลหรือเป็นรายการที่จ่ายแยก`;
+  } else if (topicRule?.id === 'usage') {
+    contactReason = `ลูกค้าต้องการยืนยันว่า ${productPhrase} ส่วนใดถูกใช้แล้ว และส่วนใดยังไม่ได้แกะ`;
+  } else if (topicRule?.id === 'delivery') {
+    contactReason = `ลูกค้าต้องการเช็กจำนวนสินค้าและของแถมที่ได้รับจริง เช่น ${productPhrase}`;
+  } else if (topicRule?.id === 'warranty') {
+    contactReason = `ลูกค้าติดต่อเรื่องเคลมหรือประกันของ ${productPhrase}`;
+  } else if (topicRule?.id === 'order') {
+    contactReason = `ลูกค้าต้องการตรวจสอบรายการสั่งซื้อของ ${productPhrase}`;
+  }
+
+  const insightParts: string[] = [];
+  if (topicRule?.id === 'billing') insightParts.push('บทสนทนาโฟกัสที่การเทียบยอดในบิลกับสินค้าที่ได้รับจริง');
+  else if (topicRule?.id === 'usage') insightParts.push('บทสนทนาโฟกัสที่การแยกรายการที่เปิดใช้แล้วกับรายการที่ยังไม่ได้แกะ');
+  else if (topicRule?.id === 'delivery') insightParts.push('บทสนทนาโฟกัสที่การตรวจสอบจำนวนสินค้าและของแถมที่ได้รับ');
+  else if (specificTopicCandidate) insightParts.push(`ประเด็นหลักคือ ${specificTopicCandidate}`);
+
+  if (productMentions.length > 0) insightParts.push(`รายการที่ถูกพูดถึงชัดคือ ${productPhrase}`);
+  if (/(?:สลิป|บิล|รูดการ์ด|โอน|ชำระ)/iu.test(evidenceText)) insightParts.push('มีการอ้างถึงสลิปหรือหลักฐานชำระเงินเพื่อนำมาเทียบรายการต่อ');
+  if (/(?:ยังไม่ได้แกะ|ไม่ได้ใช้)/iu.test(evidenceText) && /(?:ใช้ไปแล้ว|แกะใช้|เปิดใช้)/iu.test(evidenceText)) {
+    insightParts.push('มีการแยกรายการที่ใช้แล้วออกจากของที่ยังไม่ถูกเปิดใช้');
+  }
+
+  const keyInsight = insightParts.length > 0
+    ? `${insightParts.join('. ')}.`
+    : (normalizeSummaryPointText(params.keyInsights) || contactReason);
+
+  const overviewPoints = normalizeKeywordList([
+    normalizeSummaryPointText(contactReason),
+    productMentions.length > 0 ? `รายการที่พูดถึง: ${productPhrase}` : '',
+    /(?:สลิป|บิล|รูดการ์ด|โอน|ชำระ)/iu.test(evidenceText) ? 'มีการตรวจสอบสลิปหรือหลักฐานชำระเงินประกอบ' : '',
+    /(?:ยังไม่ได้แกะ|ไม่ได้ใช้)/iu.test(evidenceText) ? 'มีการระบุรายการที่ยังไม่ได้แกะหรือยังไม่ได้ใช้' : '',
+  ].filter(Boolean)).slice(0, 4);
+
+  return {
+    topic,
+    contactReason,
+    keyInsight,
+    overviewPoints,
+  };
+};
+
+type AnomalyLevel = 'normal' | 'watch' | 'high';
+
+interface SummaryInsightData {
+  anomaly: {
+    level: AnomalyLevel;
+    label: string;
+    reasons: string[];
+  };
+}
+
+const ANOMALY_TERMS = [
+  'ไม่พอใจ', 'ร้องเรียน', 'โวย', 'ด่า', 'หยาบ', 'แย่มาก', 'ห่วย', 'โมโห', 'เสียเวลา',
+  'ฟ้อง', 'ผู้จัดการ', 'หัวหน้า', 'ไม่รับผิดชอบ', 'เถียง', 'ทะเลาะ', 'ต่อว่า',
+  'complain', 'angry', 'rude', 'bad service', 'supervisor', 'manager',
+];
+
+const cleanInsightText = (value: unknown): string =>
+  String(value || '').replace(/\s+/g, ' ').trim();
+
+const buildSummaryInsight = (params: {
+  segments: TranscriptSegment[];
+  sentiment?: string;
+  csatScore?: number;
+  qaScore?: number;
+  isEscalated?: boolean;
+}): SummaryInsightData => {
+  const transcriptText = params.segments.map((segment) => segment.textValue).join(' ');
+  const matchedAnomalyTerms = ANOMALY_TERMS
+    .filter((term) => transcriptText.toLowerCase().includes(term.toLowerCase()))
+    .slice(0, 4);
+  const sentimentLower = cleanInsightText(params.sentiment).toLowerCase();
+  const isNegative = sentimentLower.includes('negative');
+  const lowCsat = typeof params.csatScore === 'number' && params.csatScore > 0 && params.csatScore <= 2;
+  const lowQa = typeof params.qaScore === 'number' && params.qaScore > 0 && params.qaScore <= 5;
+  const anomalyReasons = [
+    params.isEscalated ? 'รายการนี้ถูกระบุว่าเป็นเคส escalated' : '',
+    isNegative ? 'Sentiment เป็น negative' : '',
+    lowCsat ? `CSAT ต่ำ (${params.csatScore}/5)` : '',
+    lowQa ? `QA ต่ำ (${params.qaScore}/10)` : '',
+    matchedAnomalyTerms.length ? `พบคำ/บริบทเสี่ยง: ${matchedAnomalyTerms.join(', ')}` : '',
+  ].filter(Boolean);
+  const anomalyLevel: AnomalyLevel = params.isEscalated || lowCsat || matchedAnomalyTerms.length >= 2
+    ? 'high'
+    : (isNegative || lowQa || matchedAnomalyTerms.length > 0 ? 'watch' : 'normal');
+
+  return {
+    anomaly: {
+      level: anomalyLevel,
+      label: anomalyLevel === 'high'
+        ? 'พบความเสี่ยง'
+        : anomalyLevel === 'watch'
+          ? 'ควรเฝ้าระวัง'
+          : 'ไม่พบสัญญาณผิดปกติชัดเจน',
+      reasons: anomalyReasons.length ? anomalyReasons : ['ไม่พบคำหยาบ การโต้เถียง หรือสัญญาณ escalation จากข้อมูลที่มี'],
+    },
+  };
 };
 
 const extractPhoneFromFilename = (filename?: string): string | null => {
@@ -685,6 +1021,7 @@ export default function FileAnalysisDetail() {
           primary_category: typeof topicPayload.primary_category === 'string' ? topicPayload.primary_category : 'Unknown',
           secondary_categories: Array.isArray(topicPayload.secondary_categories) ? topicPayload.secondary_categories as string[] : [],
           confidence: typeof topicPayload.confidence === 'number' ? topicPayload.confidence : 0,
+          reason: typeof topicPayload.reason === 'string' ? topicPayload.reason : '',
         },
         qaScore: {
           overall_score: typeof qaPayload.overall_score === 'number' ? qaPayload.overall_score : 0,
@@ -708,7 +1045,7 @@ export default function FileAnalysisDetail() {
           sentiment_indicators: ['-'],
           urgency_level: '-',
         },
-        topic: { primary_category: '-', secondary_categories: ['-'], confidence: 0 },
+        topic: { primary_category: '-', secondary_categories: ['-'], confidence: 0, reason: '' },
         qaScore: {
           overall_score: 0,
           grade: '-',
@@ -768,11 +1105,13 @@ export default function FileAnalysisDetail() {
     return `${m}:${sec}`;
   };
 
-  const fullTranscript = analysis?.transcription
-    ?.map((line) => pickFullTranscriptionText(line))
-    .filter(Boolean)
-    .join(' ')
-    .trim() || '';
+  const fullTranscript = cleanTranscriptText(
+    analysis?.full_transcript || analysis?.transcription
+      ?.map((line) => pickFullTranscriptionText(line))
+      .filter(Boolean)
+      .join(' ')
+      .trim() || ''
+  );
 
   const brandKeywords = collectBrandKeywords(analysis, enhancedAnalysis, fullTranscript);
   const primaryBrand = !isUnknownLabel(analysis?.brand_name)
@@ -845,6 +1184,40 @@ export default function FileAnalysisDetail() {
 
   const safeSummaryPoints = sanitizeSummaryPoints(analysis?.summary_points);
   const safeSummaryText = String(analysis?.summary || '').trim();
+  const derivedSummary = useMemo(
+    () => buildDerivedSummaryData({
+      transcriptText: fullTranscript,
+      intent: analysis?.intent,
+      topicReason: enhancedAnalysis?.topic.reason,
+      summaryPoints: safeSummaryPoints,
+      keyInsights: analysis?.key_insights,
+      keywords: conversationKeywords,
+    }),
+    [analysis?.intent, analysis?.key_insights, conversationKeywords, enhancedAnalysis?.topic.reason, fullTranscript, safeSummaryPoints]
+  );
+  const summaryInsight = useMemo(
+    () => buildSummaryInsight({
+      segments: transcriptSegments,
+      sentiment: analysis?.sentiment,
+      csatScore: analysis?.csat_score,
+      qaScore: analysis?.qa_score,
+      isEscalated: analysis?.is_escalated,
+    }),
+    [
+      analysis?.csat_score,
+      analysis?.is_escalated,
+      analysis?.qa_score,
+      analysis?.sentiment,
+      transcriptSegments,
+    ]
+  );
+  const summaryKeywordChips = conversationKeywords.slice(0, 8);
+  const topicIntentValue = derivedSummary.topic;
+  const contactReasonSentence = derivedSummary.contactReason;
+  const displayKeyInsight = derivedSummary.keyInsight || normalizeSummaryPointText(analysis?.key_insights) || '-';
+  const summaryOverviewPoints = safeSummaryPoints.length >= 2
+    ? safeSummaryPoints
+    : normalizeKeywordList([...safeSummaryPoints, ...derivedSummary.overviewPoints]).slice(0, 4);
   const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   // ── AI re-analysis ──
@@ -1096,16 +1469,66 @@ export default function FileAnalysisDetail() {
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
                   <div className="flex items-center space-x-3 mb-1">
                     <Sparkles className="text-slate-800" size={24} />
-                    <h2 className="text-lg font-bold text-slate-800">Conversation Summary</h2>
+                    <h2 className="text-lg font-bold text-slate-800">Summary Insight</h2>
                   </div>
                   <p className="text-[10px] text-slate-400 mb-5 ml-9">วิเคราะห์โดย Llama 3.3 จากข้อมูล Speech-to-Text ของ Whisper</p>
-                  {safeSummaryPoints.length > 0 ? (
-                    <ul className="space-y-3.5 text-slate-600 text-sm list-disc pl-5 marker:text-slate-300">
-                      {safeSummaryPoints.map((point, i) => <li key={i}>{point}</li>)}
-                    </ul>
-                  ) : (
-                    <p className="text-slate-500 text-sm">{safeSummaryText || '-'}</p>
-                  )}
+                  <p className="text-[10px] text-blue-500 mb-5 ml-9">จัดรูปแบบจาก transcript และผลวิเคราะห์เดิมเท่านั้น ไม่แก้ไขเสียงหรือผลถอดคำ</p>
+                  <div className="mb-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                      <div className="mb-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        <Tag size={13} /> Topic/Intent Detection
+                      </div>
+                      <p className="text-sm font-semibold text-slate-800">{topicIntentValue}</p>
+                      <p className="mt-1 text-[11px] text-slate-400">ระบุสาเหตุการติดต่อ</p>
+                      <p className="mt-2 rounded-lg bg-white px-3 py-2 text-xs font-medium leading-relaxed text-slate-700 ring-1 ring-slate-200">
+                        {contactReasonSentence}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                      <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        <Key size={13} /> Keywords
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {summaryKeywordChips.length > 0 ? summaryKeywordChips.map((keyword) => (
+                          <span key={keyword} className="rounded-full bg-white px-2 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
+                            {keyword}
+                          </span>
+                        )) : <span className="text-sm text-slate-400">-</span>}
+                      </div>
+                    </div>
+                    <div className={`rounded-xl border px-4 py-3 ${
+                      summaryInsight.anomaly.level === 'high'
+                        ? 'border-red-200 bg-red-50'
+                        : summaryInsight.anomaly.level === 'watch'
+                          ? 'border-amber-200 bg-amber-50'
+                          : 'border-emerald-200 bg-emerald-50'
+                    }`}>
+                      <div className="mb-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        <AlertCircle size={13} /> Anomaly Detection
+                      </div>
+                      <p className={`text-sm font-bold ${
+                        summaryInsight.anomaly.level === 'high'
+                          ? 'text-red-700'
+                          : summaryInsight.anomaly.level === 'watch'
+                            ? 'text-amber-700'
+                            : 'text-emerald-700'
+                      }`}>{summaryInsight.anomaly.label}</p>
+                    </div>
+                  </div>
+
+                  <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-blue-500">ภาพรวม</p>
+                    {summaryOverviewPoints.length > 0 ? (
+                      <ul className="space-y-2 text-sm font-semibold leading-relaxed text-slate-800">
+                        {summaryOverviewPoints.map((point, index) => (
+                          <li key={`${point}-${index}`}>{point}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm font-semibold leading-relaxed text-slate-800">{safeSummaryText || '-'}</p>
+                    )}
+                  </div>
+
                 </div>
 
                 {/* ── Transcription Detail (Whisper STT) ── */}
@@ -1354,7 +1777,7 @@ export default function FileAnalysisDetail() {
                 </div>
 
                 {/* ── Key Insights (Llama) ── */}
-                {analysis?.key_insights && (
+                {displayKeyInsight !== '-' && (
                   <div className="bg-blue-800 rounded-2xl p-6 text-white relative overflow-hidden shadow-md">
                     <div className="absolute -bottom-6 -right-4 text-[90px] font-bold text-blue-700/40 leading-none select-none pointer-events-none">💡</div>
                     <div className="relative z-10">
@@ -1362,7 +1785,7 @@ export default function FileAnalysisDetail() {
                         <div className="bg-blue-700/50 p-2 rounded-lg"><Lightbulb size={20} className="text-white" /></div>
                         <h2 className="text-lg font-bold">Key Insights</h2>
                       </div>
-                      <p className="text-sm text-blue-100 leading-relaxed whitespace-pre-wrap">{analysis.key_insights}</p>
+                      <p className="text-sm text-blue-100 leading-relaxed whitespace-pre-wrap">{displayKeyInsight}</p>
                       {analysis.wav2vec2_emotion && (
                         <div className="mt-4 pt-3 border-t border-blue-700/50">
                           <p className="text-[10px] text-blue-300 font-bold uppercase mb-2">Wav2Vec2 Emotion Analysis</p>
