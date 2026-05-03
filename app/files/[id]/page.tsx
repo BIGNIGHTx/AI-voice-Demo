@@ -20,6 +20,16 @@ interface TranscriptionLine {
   text?: string;
 }
 
+interface DeepInsight {
+  customer_need?: string;
+  pain_point?: string;
+  root_cause?: string;
+  expectation?: string;
+  risk_level?: string;
+  recommended_action?: string;
+  confidence?: number;
+}
+
 interface AnalysisData {
   analysis_id: string;
   file_id: string;
@@ -44,6 +54,7 @@ interface AnalysisData {
   key_insights: string;
   intent: string;
   keywords: string[];
+  deep_insight?: DeepInsight | null;
   action_items?: string[];
   is_escalated?: boolean;
   wav2vec2_emotion: { dominant: string; scores: { positive: number; neutral: number; negative: number } };
@@ -776,6 +787,81 @@ const ANOMALY_TERMS = [
 const cleanInsightText = (value: unknown): string =>
   String(value || '').replace(/\s+/g, ' ').trim();
 
+const normalizeDeepInsight = (raw: unknown): DeepInsight | null => {
+  let source = raw;
+  if (typeof source === 'string') {
+    const trimmed = source.trim();
+    if (!trimmed) return null;
+    try {
+      source = JSON.parse(trimmed);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!source || typeof source !== 'object') return null;
+  const data = source as Record<string, unknown>;
+  const confidenceValue = Number(data.confidence);
+  const confidence = Number.isFinite(confidenceValue)
+    ? Math.max(0, Math.min(100, Math.round(confidenceValue)))
+    : undefined;
+  const insight: DeepInsight = {
+    customer_need: cleanInsightText(data.customer_need),
+    pain_point: cleanInsightText(data.pain_point),
+    root_cause: cleanInsightText(data.root_cause),
+    expectation: cleanInsightText(data.expectation),
+    risk_level: cleanInsightText(data.risk_level).toLowerCase(),
+    recommended_action: cleanInsightText(data.recommended_action),
+    confidence,
+  };
+
+  return Object.entries(insight).some(([, value]) => value !== undefined && value !== '') ? insight : null;
+};
+
+const hasDeepInsight = (insight?: DeepInsight | null): boolean => {
+  if (!insight) return false;
+  return Boolean(
+    insight.customer_need ||
+    insight.pain_point ||
+    insight.root_cause ||
+    insight.expectation ||
+    insight.recommended_action
+  );
+};
+
+const getDeepInsightRisk = (riskLevel?: string) => {
+  const level = cleanInsightText(riskLevel).toLowerCase();
+  if (level === 'high') {
+    return {
+      label: 'ความเสี่ยงสูง',
+      badgeClass: 'bg-red-100 text-red-700 ring-red-200',
+      dotClass: 'bg-red-500',
+    };
+  }
+  if (level === 'medium') {
+    return {
+      label: 'ความเสี่ยงกลาง',
+      badgeClass: 'bg-amber-100 text-amber-700 ring-amber-200',
+      dotClass: 'bg-amber-500',
+    };
+  }
+  return {
+    label: level === 'low' ? 'ความเสี่ยงต่ำ' : 'ยังไม่ระบุความเสี่ยง',
+    badgeClass: 'bg-emerald-100 text-emerald-700 ring-emerald-200',
+    dotClass: 'bg-emerald-500',
+  };
+};
+
+const buildDeepInsightRows = (insight?: DeepInsight | null) => {
+  if (!insight) return [];
+  return [
+    { label: 'ปัญหาหลัก', value: insight.pain_point },
+    { label: 'สาเหตุที่น่าจะเกิด', value: insight.root_cause },
+    { label: 'สิ่งที่ลูกค้าคาดหวัง', value: insight.expectation },
+    { label: 'สิ่งที่ควรทำต่อ', value: insight.recommended_action },
+  ].filter((row): row is { label: string; value: string } => Boolean(row.value));
+};
+
 const buildSummaryInsight = (params: {
   segments: TranscriptSegment[];
   sentiment?: string;
@@ -908,6 +994,11 @@ export default function FileAnalysisDetail() {
           ...data.analysis,
           summary: summaryLooksLikeTranscript ? '' : rawSummary,
           summary_points: normalizedSummaryPoints,
+          deep_insight: normalizeDeepInsight(
+            data.analysis.deep_insight ??
+            data.analysis.deep_insight_json ??
+            data.analysis.analysis_detail?.deep_insight
+          ),
           transcription: normalizeTranscription(data.analysis),
         };
         setAnalysis(normalizedAnalysis);
@@ -1215,6 +1306,10 @@ export default function FileAnalysisDetail() {
   const topicIntentValue = derivedSummary.topic;
   const contactReasonSentence = derivedSummary.contactReason;
   const displayKeyInsight = derivedSummary.keyInsight || normalizeSummaryPointText(analysis?.key_insights) || '-';
+  const deepInsight = analysis?.deep_insight || null;
+  const showDeepInsight = hasDeepInsight(deepInsight);
+  const deepInsightRisk = getDeepInsightRisk(deepInsight?.risk_level);
+  const deepInsightRows = buildDeepInsightRows(deepInsight);
   const summaryOverviewPoints = safeSummaryPoints.length >= 2
     ? safeSummaryPoints
     : normalizeKeywordList([...safeSummaryPoints, ...derivedSummary.overviewPoints]).slice(0, 4);
@@ -1515,6 +1610,49 @@ export default function FileAnalysisDetail() {
                       }`}>{summaryInsight.anomaly.label}</p>
                     </div>
                   </div>
+
+                  {showDeepInsight && (
+                    <div className="mb-5 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-4">
+                      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex items-start gap-2">
+                          <Lightbulb size={16} className="mt-0.5 shrink-0 text-indigo-600" />
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">อินไซต์ลูกค้า</p>
+                            <p className="mt-0.5 text-xs font-medium text-indigo-500">เจาะสิ่งที่ลูกค้าต้องการจริงและสิ่งที่ควรทำต่อ</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ${deepInsightRisk.badgeClass}`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${deepInsightRisk.dotClass}`} />
+                            {deepInsightRisk.label}
+                          </span>
+                          {typeof deepInsight?.confidence === 'number' && (
+                            <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-indigo-600 ring-1 ring-indigo-100">
+                              ความมั่นใจ {deepInsight.confidence}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {deepInsight?.customer_need && (
+                        <div className="mb-3 rounded-lg bg-white px-3 py-2 ring-1 ring-indigo-100">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">ลูกค้าต้องการอะไร</p>
+                          <p className="mt-1 text-sm font-bold leading-relaxed text-slate-800">{deepInsight.customer_need}</p>
+                        </div>
+                      )}
+
+                      {deepInsightRows.length > 0 && (
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          {deepInsightRows.map((row) => (
+                            <div key={row.label} className="rounded-lg bg-white/80 px-3 py-2 ring-1 ring-indigo-100">
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{row.label}</p>
+                              <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-700">{row.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
                     <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-blue-500">ภาพรวม</p>
