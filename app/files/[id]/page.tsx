@@ -955,6 +955,13 @@ const buildDeepInsightRows = (insight?: DeepInsight | null) => {
   ].filter((row): row is { label: string; value: string } => Boolean(row.value));
 };
 
+const splitNumberedInsightLines = (value: string): string[] =>
+  value
+    .replace(/\s+(?=\d+\.\s)/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
 const buildSummaryInsight = (params: {
   segments: TranscriptSegment[];
   sentiment?: string;
@@ -1758,12 +1765,12 @@ export default function FileAnalysisDetail() {
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ${deepInsightRisk.badgeClass}`}>
+                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ring-1 ${deepInsightRisk.badgeClass}`}>
                             <span className={`h-1.5 w-1.5 rounded-full ${deepInsightRisk.dotClass}`} />
                             {deepInsightRisk.label}
                           </span>
                           {typeof deepInsight?.confidence === 'number' && (
-                            <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-indigo-600 ring-1 ring-indigo-100">
+                            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-indigo-600 ring-1 ring-indigo-100">
                               ความมั่นใจ {deepInsight.confidence}%
                             </span>
                           )}
@@ -1782,7 +1789,15 @@ export default function FileAnalysisDetail() {
                           {deepInsightRows.map((row) => (
                             <div key={row.label} className="rounded-lg bg-white/80 px-3 py-2 ring-1 ring-indigo-100">
                               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{row.label}</p>
-                              <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-700">{row.value}</p>
+                              {row.label === 'สิ่งที่ควรทำต่อ' ? (
+                                <div className="mt-1 space-y-1 text-sm font-semibold leading-relaxed text-slate-700">
+                                  {splitNumberedInsightLines(row.value).map((line) => (
+                                    <p key={line}>{line}</p>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="mt-1 text-sm font-semibold leading-relaxed text-slate-700">{row.value}</p>
+                              )}
                             </div>
                           ))}
                         </div>

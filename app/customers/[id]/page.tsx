@@ -72,6 +72,8 @@ interface WarrantyItem {
   purchase_date: string;
   delivery_date?: string;
   date_of_delivery?: string;
+  warranty_end_date?: string;
+  expiry_date_of_warranty?: string;
   order_number?: string;
   status: string;
   sale_channel?: string;
@@ -704,9 +706,47 @@ export default function CustomerDetailPage() {
     }
     return expiryDate.toLocaleDateString('th-TH', {
       year: 'numeric',
-      month: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+  };
+
+  const formatWarrantyDetailDate = (value?: string | null) => {
+    const normalized = normalizeDateForInput(value);
+    if (!normalized) return '-';
+
+    const date = new Date(`${normalized}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return value || '-';
+
+    return date.toLocaleDateString('th-TH', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+  };
+
+  const formatWarrantyDisplayDate = (value?: string | null) => {
+    const normalized = normalizeDateForInput(value);
+    if (!normalized) return '-';
+
+    const date = new Date(`${normalized}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return value || '-';
+
+    return date.toLocaleDateString('th-TH', {
+      year: 'numeric',
+      month: 'long',
       day: 'numeric',
     });
+  };
+
+  const getWarrantyDeliveryDate = (warranty: WarrantyItem) =>
+    normalizeTextInput(warranty.delivery_date || warranty.date_of_delivery) || normalizeTextInput(warranty.purchase_date);
+
+  const getWarrantyExpiryDisplayDate = (warranty: WarrantyItem, baseDate: string) => {
+    const explicitExpiry = normalizeTextInput(warranty.expiry_date_of_warranty || warranty.warranty_end_date);
+    if (explicitExpiry) return formatWarrantyDetailDate(explicitExpiry);
+
+    return calculateExpiryDate(baseDate, warranty.warranty_period);
   };
 
   const fullName = [customer.first_name, customer.last_name].filter(Boolean).join(' ').trim();
@@ -1036,8 +1076,10 @@ export default function CustomerDetailPage() {
                 </div>
               ) : (
                 warranties.map((warranty, index) => {
-                  const statusMeta = getWarrantyStatusMeta(warranty.status, warranty.purchase_date, warranty.warranty_period);
+                  const warrantyDeliveryDate = getWarrantyDeliveryDate(warranty);
+                  const statusMeta = getWarrantyStatusMeta(warranty.status, warrantyDeliveryDate, warranty.warranty_period);
                   const previewImage = getApiAssetUrl(warranty.images?.[0]?.url);
+                  const expiryDate = getWarrantyExpiryDisplayDate(warranty, warrantyDeliveryDate);
 
                   return (
                     <article
@@ -1118,8 +1160,8 @@ export default function CustomerDetailPage() {
 
                         <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
                           <div>
-                            <p className="mb-1 text-[9px] font-bold uppercase text-slate-400">Purchase Date</p>
-                            <p className="text-sm font-bold text-slate-800">{formatDisplayDate(warranty.purchase_date)}</p>
+                            <p className="mb-1 text-[9px] font-bold uppercase text-slate-400">Delivery Date</p>
+                            <p className="text-sm font-bold text-slate-800">{formatWarrantyDisplayDate(warrantyDeliveryDate)}</p>
                           </div>
                           <div>
                             <p className="mb-1 text-[9px] font-bold uppercase text-slate-400">Warranty</p>
@@ -1135,7 +1177,7 @@ export default function CustomerDetailPage() {
                           </div>
                           <div>
                             <p className="mb-1 text-[9px] font-bold uppercase text-slate-400">Expiry</p>
-                            <p className="text-sm font-bold text-slate-800">{calculateExpiryDate(warranty.purchase_date, warranty.warranty_period)}</p>
+                            <p className="text-sm font-bold text-slate-800">{expiryDate}</p>
                           </div>
                         </div>
                       </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import {
   Folder,
@@ -77,6 +78,16 @@ interface AgentRow {
   avg_qa_score: number;
   avg_csat_score: number;
   total_calls: number;
+  positive_calls?: number;
+  negative_calls?: number;
+  resolution_rate?: number;
+  avg_handling_time?: number;
+}
+
+interface CaseScoreRow {
+  qa?: number;
+  csat?: number;
+  loading?: boolean;
 }
 
 interface BrandRow {
@@ -120,6 +131,62 @@ const toNum = (value: unknown): number => {
 
 const toText = (value: unknown, fallback = ''): string =>
   typeof value === 'string' && value.trim() ? value : fallback;
+
+const toOptionalNum = (value: unknown): number | undefined => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'string') {
+    const cleaned = value.trim().replace(/,/g, '');
+    if (!cleaned || ['-', 'n/a', 'na', 'null', 'undefined'].includes(cleaned.toLowerCase())) return undefined;
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+};
+
+const isRealScore = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+const AGENT_CASE_SCORE_CACHE_KEY = 'dashboard-agent-case-scores-v3';
+
+const readAgentCaseScoreCache = (): Record<string, CaseScoreRow> => {
+  if (typeof window === 'undefined') return {};
+
+  try {
+    const raw = window.sessionStorage.getItem(AGENT_CASE_SCORE_CACHE_KEY);
+    if (!raw) return {};
+
+    const parsed: unknown = JSON.parse(raw);
+    if (!isObject(parsed)) return {};
+
+    return Object.entries(parsed).reduce<Record<string, CaseScoreRow>>((acc, [fileId, value]) => {
+      if (!isObject(value)) return acc;
+      acc[fileId] = {
+        qa: toOptionalNum(value.qa),
+        csat: toOptionalNum(value.csat),
+        loading: false
+      };
+      return acc;
+    }, {});
+  } catch {
+    return {};
+  }
+};
+
+const writeAgentCaseScoreCache = (scores: Record<string, CaseScoreRow>) => {
+  if (typeof window === 'undefined') return;
+
+  const serializable = Object.fromEntries(
+    Object.entries(scores)
+      .filter(([, score]) => score.qa !== undefined || score.csat !== undefined)
+      .map(([fileId, score]) => [fileId, { qa: score.qa, csat: score.csat }])
+  );
+
+  try {
+    window.sessionStorage.setItem(AGENT_CASE_SCORE_CACHE_KEY, JSON.stringify(serializable));
+  } catch {
+    // Cache is only for avoiding repeat spinners on Dashboard navigation.
+  }
+};
 
 const compactText = (value: unknown): string =>
   String(value || '')
@@ -291,88 +358,104 @@ const fetchJson = async (url: string): Promise<unknown> => {
   return response.json();
 };
 
-const AgentCaseCard = ({ file }: { file: AudioFileRow }) => {
-  const [scores, setScores] = useState<{ qa?: number; csat?: number }>({
-    qa: file.qa_score,
-    csat: file.csat_score
-  });
-  const [loading, setLoading] = useState(!file.qa_score && !file.csat_score);
+const fetchScoreJson = async (url: string, timeoutMs = 30000): Promise<unknown> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  useEffect(() => {
-    if (file.qa_score !== undefined && file.csat_score !== undefined) return;
+  try {
+    const response = await fetch(url, { cache: 'no-store', signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} for ${url}`);
+    }
+    return response.json();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
 
-    const loadScores = async () => {
-      try {
-        const [qaRes, csatRes] = await Promise.allSettled([
-          fetchJson(`${API_BASE}/api/v1/ai/qa-score/${file.file_id}`),
-          fetchJson(`${API_BASE}/api/v1/ai/csat/${file.file_id}`)
-        ]);
+const SCORE_CONTAINER_KEYS = [
+  'analysis',
+  'analysis_detail',
+  'data',
+  'result',
+  'payload',
+  'scores',
+  'qa_score',
+  'csat',
+  'score'
+] as const;
 
-        const newScores: { qa?: number; csat?: number } = {};
-        if (qaRes.status === 'fulfilled') {
-          const data = qaRes.value as any;
-          const val = data?.qa_score ?? data?.score;
-          if (val !== undefined) newScores.qa = toNum(val);
-        }
-        if (csatRes.status === 'fulfilled') {
-          const data = csatRes.value as any;
-          const val = data?.csat_score ?? data?.score;
-          if (val !== undefined) newScores.csat = toNum(val);
-        }
+const extractScoreByKeys = (
+  payload: unknown,
+  scoreKeys: readonly string[],
+  seen = new WeakSet<object>()
+): number | undefined => {
+  const primitive = toOptionalNum(payload);
+  if (primitive !== undefined) return primitive;
+  if (!isObject(payload)) return undefined;
+  if (seen.has(payload)) return undefined;
+  seen.add(payload);
 
-        setScores(prev => ({ ...prev, ...newScores }));
-      } catch (err) {
-        console.error('Error fetching scores for file', file.file_id, err);
-      } finally {
-        setLoading(false);
-      }
-    };
+  for (const key of scoreKeys) {
+    const raw = payload[key];
+    const value = toOptionalNum(raw);
+    if (value !== undefined) return value;
+    if (isObject(raw)) {
+      const nested = extractScoreByKeys(raw, scoreKeys, seen);
+      if (nested !== undefined) return nested;
+    }
+  }
 
-    loadScores();
-  }, [file.file_id, file.qa_score, file.csat_score]);
+  for (const key of SCORE_CONTAINER_KEYS) {
+    const source = payload[key];
+    if (!isObject(source)) continue;
+    const nested = extractScoreByKeys(source, scoreKeys, seen);
+    if (nested !== undefined) return nested;
+  }
 
-  return (
-    <Link href={`/files/${file.file_id}`}>
-      <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-200/60 shadow-[0_2px_8px_-3px_rgba(0,0,0,0.03)] hover:shadow-md hover:border-indigo-100 hover:-translate-y-0.5 transition-all cursor-pointer">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-50 to-blue-100/50 text-indigo-600 border border-indigo-100 flex items-center justify-center font-bold text-sm shrink-0 shadow-sm">
-            {(file.agent_name || 'U').charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <p className="font-bold text-[14px] text-slate-800 truncate max-w-[120px]">{file.agent_name}</p>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-medium">{file.brand || 'No Brand'}</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${file.sentiment === 'positive' ? 'bg-emerald-50 text-emerald-600' : file.sentiment === 'negative' ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-500'}`}>
-                {file.sentiment}
-              </span>
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-col gap-1.5 border-l border-slate-100 pl-4 min-w-[70px]">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">QA</span>
-            {loading ? (
-              <Loader2 className="w-3 h-3 animate-spin text-slate-300" />
-            ) : (
-              <span className={`font-bold text-[13px] ${(scores.qa ?? 0) >= 80 ? 'text-emerald-600' : (scores.qa ?? 0) >= 50 ? 'text-amber-500' : 'text-slate-400'}`}>
-                {scores.qa !== undefined ? scores.qa.toFixed(1) : '-'}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">CSAT</span>
-            {loading ? (
-              <Loader2 className="w-3 h-3 animate-spin text-slate-300" />
-            ) : (
-              <span className={`font-bold text-[13px] ${(scores.csat ?? 0) >= 4 ? 'text-blue-600' : (scores.csat ?? 0) > 0 ? 'text-amber-500' : 'text-slate-400'}`}>
-                {scores.csat !== undefined ? scores.csat.toFixed(1) : '-'}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-    </Link>
-  );
+  return undefined;
+};
+
+const extractQaScore = (payload: unknown): number | undefined =>
+  extractScoreByKeys(payload, ['qa_score', 'overall_score', 'quality_score', 'qa', 'score']);
+
+const extractCsatScore = (payload: unknown): number | undefined =>
+  extractScoreByKeys(payload, ['csat_score', 'customer_satisfaction_score', 'satisfaction_score', 'csat', 'score']);
+
+const fetchCaseScores = async (file: AudioFileRow, cached?: CaseScoreRow): Promise<{ fileId: string; qa?: number; csat?: number }> => {
+  let qa = file.qa_score ?? cached?.qa;
+  let csat = file.csat_score ?? cached?.csat;
+  const fileId = encodeURIComponent(file.file_id);
+
+  if (qa === undefined || csat === undefined) {
+    const [qaResult, csatResult] = await Promise.allSettled([
+      qa === undefined
+        ? fetchScoreJson(`${API_BASE}/api/v1/ai/qa-score/${fileId}`)
+        : Promise.resolve(null),
+      csat === undefined
+        ? fetchScoreJson(`${API_BASE}/api/v1/ai/csat/${fileId}`)
+        : Promise.resolve(null)
+    ]);
+
+    if (qa === undefined && qaResult.status === 'fulfilled') {
+      qa = extractQaScore(qaResult.value);
+    }
+    if (csat === undefined && csatResult.status === 'fulfilled') {
+      csat = extractCsatScore(csatResult.value);
+    }
+  }
+
+  if (qa === undefined || csat === undefined) {
+    try {
+      const detail = await fetchScoreJson(`${API_BASE}/api/v1/audio/detail/${fileId}`, 45000);
+      qa = qa ?? extractQaScore(detail);
+      csat = csat ?? extractCsatScore(detail);
+    } catch {
+      // Keep any score already found from the lean endpoints.
+    }
+  }
+
+  return { fileId: file.file_id, qa, csat };
 };
 
 const getErrorMessage = (reason: unknown): string => {
@@ -450,8 +533,8 @@ const normalizeAudioFiles = (payload: unknown): AudioFileRow[] =>
       status: toText(item.status, 'UNKNOWN').toUpperCase(),
       date: toText(item.analyzed_date ?? item.upload_date ?? item.date ?? item.call_datetime ?? item.call_date),
       agent_name: toText(item.agent_name ?? item.agent ?? item.agent_id, 'Unknown Agent'),
-      qa_score: item.qa_score !== undefined ? toNum(item.qa_score) : undefined,
-      csat_score: item.csat_score !== undefined ? toNum(item.csat_score) : undefined
+      qa_score: extractQaScore(item),
+      csat_score: extractCsatScore(item)
     };
   });
 
@@ -481,7 +564,11 @@ const normalizeAgents = (payload: unknown): AgentRow[] =>
       agent_name: toText(item.agent_name),
       avg_qa_score: toNum(item.avg_qa_score ?? item.qa_score),
       avg_csat_score: toNum(item.avg_csat_score ?? item.csat_score),
-      total_calls: toNum(item.total_calls ?? item.calls ?? item.count)
+      total_calls: toNum(item.total_calls ?? item.calls ?? item.count),
+      positive_calls: toNum(item.positive_calls),
+      negative_calls: toNum(item.negative_calls),
+      resolution_rate: toNum(item.resolution_rate),
+      avg_handling_time: toNum(item.avg_handling_time)
     };
   });
 
@@ -567,11 +654,12 @@ const shiftSelectedDate = (value: Date, type: FilterType, delta: number) => {
 };
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [filterType, setFilterType] = useState<FilterType>('Day');
   const [selectedDate, setSelectedDate] = useState(() => getReferenceDate('Day'));
 
   const [audioFiles, setAudioFiles] = useState<AudioFileRow[]>([]);
-  const [agentPerformance, setAgentPerformance] = useState<AgentRow[]>([]);
+  const [, setAgentPerformance] = useState<AgentRow[]>([]);
   const [brandIntelligence, setBrandIntelligence] = useState<BrandRow[]>([]);
   const [topicDistribution, setTopicDistribution] = useState<TopicRow[]>([]);
 
@@ -579,10 +667,17 @@ export default function DashboardPage() {
   const [keywordLoading, setKeywordLoading] = useState(false);
   const [keywordSampleCount, setKeywordSampleCount] = useState(0);
   const keywordCacheRef = useRef<Map<string, string[]>>(new Map());
+  const [caseScores, setCaseScores] = useState<Record<string, CaseScoreRow>>(() => readAgentCaseScoreCache());
+  const caseScoresRef = useRef<Record<string, CaseScoreRow>>({});
+  const requestedCaseScoreIdsRef = useRef<Set<string>>(new Set());
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [endpointStatus, setEndpointStatus] = useState<EndpointStatusMap>({});
+
+  useEffect(() => {
+    caseScoresRef.current = caseScores;
+  }, [caseScores]);
 
   useEffect(() => {
     const load = async () => {
@@ -695,6 +790,104 @@ export default function DashboardPage() {
       topBrandShare: totalFiles > 0 && topBrand ? Math.round((topBrand.count / totalFiles) * 100) : 0
     };
   }, [brandDistribution]);
+
+  const agentCaseRows = useMemo(
+    () => filteredAudioFiles.slice(0, 15),
+    [filteredAudioFiles]
+  );
+
+  useEffect(() => {
+    const requestedIds = requestedCaseScoreIdsRef.current;
+    const targets = agentCaseRows.filter((file) => {
+      if (requestedIds.has(file.file_id)) return false;
+      const cached = caseScoresRef.current[file.file_id];
+      const hasQaScore = file.qa_score !== undefined || cached?.qa !== undefined;
+      const hasCsatScore = file.csat_score !== undefined || cached?.csat !== undefined;
+      if (hasQaScore && hasCsatScore) return false;
+      return !cached?.loading;
+    });
+
+    if (targets.length === 0) return;
+
+    targets.forEach((file) => requestedIds.add(file.file_id));
+    setCaseScores((prev) => {
+      const next = { ...prev };
+      targets.forEach((file) => {
+        const current = next[file.file_id] || {};
+        next[file.file_id] = {
+          qa: file.qa_score ?? current.qa,
+          csat: file.csat_score ?? current.csat,
+          loading: true
+        };
+      });
+      caseScoresRef.current = next;
+      return next;
+    });
+
+    let active = true;
+
+    void runWithConcurrencyLimit(targets, 15, async (file) => {
+      const cached = caseScoresRef.current[file.file_id];
+      const currentQa = file.qa_score ?? cached?.qa;
+      const currentCsat = file.csat_score ?? cached?.csat;
+      const [qaResult, csatResult] = await Promise.allSettled([
+        currentQa === undefined
+          ? fetchScoreJson(`${API_BASE}/api/v1/ai/qa-score/${file.file_id}`)
+          : Promise.resolve(null),
+        currentCsat === undefined
+          ? fetchScoreJson(`${API_BASE}/api/v1/ai/csat/${file.file_id}`)
+          : Promise.resolve(null)
+      ]);
+
+      const result = {
+        fileId: file.file_id,
+        qa: currentQa ?? (qaResult.status === 'fulfilled' ? extractQaScore(qaResult.value) : undefined),
+        csat: currentCsat ?? (csatResult.status === 'fulfilled' ? extractCsatScore(csatResult.value) : undefined)
+      };
+
+      requestedIds.delete(file.file_id);
+      if (active) {
+        setCaseScores((prev) => {
+          const next = {
+            ...prev,
+            [result.fileId]: {
+              qa: result.qa,
+              csat: result.csat,
+              loading: false
+            }
+          };
+          caseScoresRef.current = next;
+          writeAgentCaseScoreCache(next);
+          return next;
+        });
+      }
+
+      return result;
+    }).catch(() => {
+      targets.forEach((file) => requestedIds.delete(file.file_id));
+      if (!active) return;
+
+      setCaseScores((prev) => {
+        const next = { ...prev };
+        targets.forEach((file) => {
+          const current = next[file.file_id] || {};
+          next[file.file_id] = {
+            qa: file.qa_score ?? current.qa,
+            csat: file.csat_score ?? current.csat,
+            loading: false
+          };
+        });
+        caseScoresRef.current = next;
+        writeAgentCaseScoreCache(next);
+        return next;
+      });
+    });
+
+    return () => {
+      active = false;
+      targets.forEach((file) => requestedIds.delete(file.file_id));
+    };
+  }, [agentCaseRows]);
 
   const failedEndpoints = useMemo(
     () => Object.entries(endpointStatus).filter(([, status]) => !status.ok),
@@ -1239,28 +1432,116 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Fourth Row: Agent Performance (Per Case) */}
-          <div className="mt-6 bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-100">
-            <div className="flex items-center justify-between mb-6">
+          {/* Fourth Row: Agent Performance */}
+          <div className="mt-6 bg-white rounded-xl p-4 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-100">
+            <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="font-semibold text-[17px] text-slate-800 flex items-center gap-2">
-                  <div className="w-1.5 h-5 rounded-full bg-[#4F46E5]"></div>
+                <h3 className="font-semibold text-sm text-slate-800 flex items-center gap-2">
+                  <div className="w-1 h-4 rounded-full bg-[#4F46E5]"></div>
                   Agent Performance
                 </h3>
-                <p className="text-[12px] text-slate-500 mt-1 ml-3.5">แสดงข้อมูลรายเคส (1 สายต่อ 1 เคส)</p>
+                <p className="text-[11px] text-slate-500 mt-1 ml-3">รายเคสจากไฟล์จริง กด File ID เพื่อเปิด Transcript</p>
               </div>
-              <div className="text-[12px] font-medium text-slate-500 px-3 py-1 bg-slate-50 rounded-full border border-slate-100">
-                {Math.min(filteredAudioFiles.length, 30)} Recent Cases
+              <div className="text-[11px] font-medium text-slate-500 px-2.5 py-1 bg-slate-50 rounded-full border border-slate-100">
+                {agentCaseRows.length} Recent Cases
               </div>
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[350px] overflow-y-auto pr-2 pb-2">
-              {filteredAudioFiles.length > 0 ? (
-                filteredAudioFiles.slice(0, 30).map((file, idx) => (
-                  <AgentCaseCard key={idx} file={file} />
-                ))
+
+            <div className="max-h-[260px] overflow-y-auto rounded-lg border border-slate-100">
+              {agentCaseRows.length > 0 ? (
+                <table className="w-full text-left text-xs">
+                  <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase tracking-[0.14em] text-slate-400">
+                    <tr>
+                      <th className="px-3 py-2 font-bold">File</th>
+                      <th className="px-3 py-2 font-bold">Brand</th>
+                      <th className="px-3 py-2 font-bold">Agent</th>
+                      <th className="px-3 py-2 font-bold">Sentiment</th>
+                      <th className="px-3 py-2 text-right font-bold">QA</th>
+                      <th className="px-3 py-2 text-right font-bold">CSAT</th>
+                      <th className="px-3 py-2 text-right font-bold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {agentCaseRows.map((file) => {
+                      const score = caseScores[file.file_id];
+                      const qaScore = file.qa_score ?? score?.qa;
+                      const csatScore = file.csat_score ?? score?.csat;
+                      const hasQaScore = typeof qaScore === 'number' && Number.isFinite(qaScore);
+                      const hasCsatScore = typeof csatScore === 'number' && Number.isFinite(csatScore);
+                      const sentimentClass =
+                        file.sentiment === 'positive'
+                          ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                          : file.sentiment === 'negative'
+                            ? 'bg-rose-50 text-rose-600 border-rose-100'
+                            : 'bg-slate-50 text-slate-500 border-slate-100';
+                      const statusClass =
+                        file.status === 'COMPLETE'
+                          ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                          : 'bg-amber-50 text-amber-600 border-amber-100';
+
+                      return (
+                        <tr
+                          key={file.file_id}
+                          role="link"
+                          tabIndex={0}
+                          onClick={() => router.push(`/files/${file.file_id}`)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              router.push(`/files/${file.file_id}`);
+                            }
+                          }}
+                          className="cursor-pointer hover:bg-slate-50/70 focus:bg-slate-50/70 focus:outline-none"
+                        >
+                          <td className="px-3 py-2">
+                            <Link
+                              href={`/files/${file.file_id}`}
+                              onClick={(event) => event.stopPropagation()}
+                              className="font-bold text-indigo-600 hover:text-indigo-700 hover:underline"
+                            >
+                              #{file.file_id.slice(0, 8)}
+                            </Link>
+                            <p className="mt-0.5 text-[10px] text-slate-400">{file.date ? file.date.slice(0, 10) : 'Transcript'}</p>
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className="inline-flex max-w-[110px] items-center rounded-md bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase text-blue-600">
+                              <span className="truncate">{file.brand || 'Unknown'}</span>
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-[10px] font-bold text-indigo-600 ring-1 ring-indigo-100">
+                                {(file.agent_name || 'A').charAt(0).toUpperCase()}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="max-w-[150px] truncate font-bold text-slate-700">{file.agent_name || 'Unknown Agent'}</p>
+                                <p className="text-[10px] text-slate-400">case detail</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className={`inline-flex rounded-md border px-2 py-1 text-[10px] font-bold uppercase ${sentimentClass}`}>
+                              {file.sentiment || 'neutral'}
+                            </span>
+                          </td>
+                          <td className={`px-3 py-2 text-right font-bold ${qaScore && qaScore >= 7 ? 'text-emerald-600' : qaScore && qaScore >= 5 ? 'text-amber-600' : qaScore ? 'text-rose-500' : 'text-slate-400'}`}>
+                            {hasQaScore ? qaScore.toFixed(1) : '-'}
+                          </td>
+                          <td className={`px-3 py-2 text-right font-bold ${csatScore && csatScore >= 4 ? 'text-emerald-600' : csatScore && csatScore >= 3 ? 'text-amber-600' : csatScore ? 'text-rose-500' : 'text-slate-400'}`}>
+                            {hasCsatScore ? csatScore.toFixed(1) : '-'}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <span className={`inline-flex rounded-md border px-2 py-1 text-[10px] font-bold uppercase ${statusClass}`}>
+                              {file.status || 'UNKNOWN'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               ) : (
-                <div className="col-span-full text-center text-slate-400 text-sm py-10">No recent cases available</div>
+                <div className="text-center text-slate-400 text-xs py-8">No case data available</div>
               )}
             </div>
           </div>
