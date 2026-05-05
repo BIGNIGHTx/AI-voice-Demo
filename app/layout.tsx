@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Montserrat, Sarabun } from "next/font/google";
+import { Montserrat, Sarabun, Great_Vibes } from "next/font/google";
 
 import AppClientShell from '@/components/auth/AppClientShell';
 import "./globals.css";
@@ -17,6 +17,13 @@ const sarabun = Sarabun({
   display: "swap",
 });
 
+const greatVibes = Great_Vibes({
+  weight: ["400"],
+  subsets: ["latin"],
+  variable: "--font-great-vibes",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "AI Voice File Manager",
   description: "AI Voice Analysis Platform",
@@ -28,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="th" className={`${montserrat.variable} ${sarabun.variable}`}>
+    <html lang="th" className={`${montserrat.variable} ${sarabun.variable} ${greatVibes.variable}`}>
       <body className="font-sans antialiased">
         {children}
         <AppClientShell />

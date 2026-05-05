@@ -1072,19 +1072,69 @@ export default function DashboardPage() {
       <main ref={mainRef} className="flex-1 overflow-auto p-4 sm:p-5 lg:p-6">
         <div className="max-w-full mx-auto space-y-6">
 
-          <div className="mb-6 flex flex-col justify-between gap-5 md:flex-row md:items-center">
-            <div className="flex items-center gap-4 sm:gap-5">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/50 to-indigo-100/20 shadow-[0_4px_15px_-3px_rgba(99,102,241,0.1),inset_0_2px_4px_rgba(255,255,255,1),inset_0_-2px_6px_rgba(99,102,241,0.1)] sm:h-14 sm:w-14">
-                <LayoutDashboard size={26} strokeWidth={1.5} className="text-indigo-500 drop-shadow-sm" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-slate-800 sm:text-3xl">Voice Analytics Dashboard</h1>
-                <div className="flex items-center gap-2 text-slate-400 text-xs font-medium uppercase tracking-wider">
-                  <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Backend Analysis</span>
-                  <span>•</span>
-                  <span>มุมมอง {filterType}</span>
-                  <span>•</span>
-                  <span>{dateLabel}</span>
+          <div className="mb-6 flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+            <div className="relative">
+              {/* Decorative Frame */}
+              <div className="absolute left-0 top-1 bottom-[34px] w-px bg-gradient-to-b from-indigo-400 to-transparent opacity-60"></div>
+              {/* 4-Point Star top-left */}
+              <svg className="absolute -left-[5.5px] top-0 w-3 h-3 text-indigo-500 opacity-80" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C12 0 12 10.5 24 12C24 12 12 13.5 12 24C12 24 12 13.5 0 12C0 12 12 10.5 12 0Z" />
+              </svg>
+              {/* Dot and horizontal line bottom-left */}
+              <div className="absolute left-0 bottom-8 w-1.5 h-1.5 rounded-full bg-indigo-500 -ml-[2px] opacity-80"></div>
+              <div className="absolute left-1.5 bottom-[34.5px] right-24 h-px bg-gradient-to-r from-indigo-400 via-indigo-200 to-transparent opacity-60"></div>
+              
+              {/* Right Decorative Graphics (Swirls) */}
+              <svg className="absolute -right-4 top-0 w-32 h-24 text-indigo-300 pointer-events-none opacity-40 mix-blend-multiply hidden sm:block" viewBox="0 0 200 100" fill="none" stroke="currentColor">
+                <path d="M150,80 Q100,80 120,40 T180,20" strokeWidth="0.5" fill="none"/>
+                <path d="M130,90 Q80,90 90,50 T160,10" strokeWidth="0.5" fill="none"/>
+                <path d="M160,70 C130,50 180,30 190,50 C200,70 170,90 140,80" strokeWidth="0.5" fill="none"/>
+                <path d="M170,30 Q175,20 180,30 Q175,40 170,30Z" fill="currentColor" stroke="none" opacity="0.5"/>
+                <path d="M185,45 Q195,40 195,50 Q185,60 185,45Z" fill="currentColor" stroke="none" opacity="0.4"/>
+                <path d="M165,65 Q175,60 180,70 Q170,80 165,65Z" fill="currentColor" stroke="none" opacity="0.6"/>
+                <path d="M140,65 C140,65 140,75 145,75 C145,75 140,75 140,85 C140,85 140,75 135,75 C135,75 140,75 140,65Z" fill="#4F46E5" stroke="none"/>
+                <circle cx="160" cy="25" r="1.5" fill="currentColor"/>
+                <circle cx="150" cy="15" r="1" fill="currentColor"/>
+                <circle cx="185" cy="85" r="1.5" fill="currentColor"/>
+              </svg>
+
+              <div className="pl-6 pt-2 pb-6 relative z-10">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <h1 className="text-[24px] sm:text-[28px] md:text-[32px] font-black tracking-tight text-[#4F46E5] leading-none">Voice</h1>
+                  <h1 className="text-[24px] sm:text-[28px] md:text-[32px] font-black tracking-tight text-[#0F172A] leading-none">Analytics</h1>
+                  <span 
+                    className="text-[32px] sm:text-[38px] md:text-[44px] leading-none ml-1 sm:ml-1.5 relative top-1.5 sm:top-2" 
+                    style={{ 
+                      fontFamily: 'var(--font-great-vibes), cursive', 
+                      background: 'linear-gradient(to right, #0F172A, #4F46E5, #8B5CF6)', 
+                      WebkitBackgroundClip: 'text', 
+                      WebkitTextFillColor: 'transparent',
+                      padding: '8px 12px 8px 0',
+                      lineHeight: '1.2'
+                    }}
+                  >
+                    Dashboard
+                  </span>
+                </div>
+
+                <div className="mt-8 flex flex-wrap items-center gap-x-3 gap-y-2 text-[10px] sm:text-xs font-bold tracking-[0.2em] text-[#818CF8] uppercase">
+                  <span>BACKEND ANALYSIS</span>
+                  <span className="text-indigo-200">|</span>
+                  <span>
+                    {filterType === 'Day' 
+                      ? selectedDate.toLocaleDateString('th-TH', { weekday: 'long' }) 
+                      : filterType === 'Month'
+                        ? selectedDate.toLocaleDateString('th-TH', { month: 'long' })
+                        : `ปี ${selectedDate.toLocaleDateString('th-TH', { year: 'numeric' })}`}
+                  </span>
+                  <span className="text-indigo-200">|</span>
+                  <span>
+                    {filterType === 'Day'
+                      ? selectedDate.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).toUpperCase()
+                      : filterType === 'Month'
+                        ? selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase()
+                        : selectedDate.toLocaleDateString('en-US', { year: 'numeric' }).toUpperCase()}
+                  </span>
                 </div>
               </div>
             </div>

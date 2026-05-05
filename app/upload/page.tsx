@@ -202,7 +202,56 @@ export default function UploadPage() {
     <div className="flex h-screen bg-white overflow-hidden">
       <Sidebar />
       <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
-        <h1 className="mb-6 text-2xl font-semibold text-slate-800 sm:mb-8 sm:text-3xl">Upload File</h1>
+        <div className="mb-8 flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+          <div className="relative">
+            {/* Decorative Frame */}
+            <div className="absolute left-0 top-1 bottom-[34px] w-px bg-gradient-to-b from-orange-400 to-transparent opacity-60"></div>
+            {/* 4-Point Star top-left */}
+            <svg className="absolute -left-[5.5px] top-0 w-3 h-3 text-orange-500 opacity-80" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C12 0 12 10.5 24 12C24 12 12 13.5 12 24C12 24 12 13.5 0 12C0 12 12 10.5 12 0Z" />
+            </svg>
+            {/* Dot and horizontal line bottom-left */}
+            <div className="absolute left-0 bottom-8 w-1.5 h-1.5 rounded-full bg-orange-500 -ml-[2px] opacity-80"></div>
+            <div className="absolute left-1.5 bottom-[34.5px] right-24 h-px bg-gradient-to-r from-orange-400 via-orange-200 to-transparent opacity-60"></div>
+            
+            {/* Right Decorative Graphics (Swirls) */}
+            <svg className="absolute -right-4 top-0 w-32 h-24 text-orange-300 pointer-events-none opacity-40 mix-blend-multiply hidden sm:block" viewBox="0 0 200 100" fill="none" stroke="currentColor">
+              <path d="M150,80 Q100,80 120,40 T180,20" strokeWidth="0.5" fill="none"/>
+              <path d="M130,90 Q80,90 90,50 T160,10" strokeWidth="0.5" fill="none"/>
+              <path d="M160,70 C130,50 180,30 190,50 C200,70 170,90 140,80" strokeWidth="0.5" fill="none"/>
+              <path d="M140,65 C140,65 140,75 145,75 C145,75 140,75 140,85 C140,85 140,75 135,75 C135,75 140,75 140,65Z" fill="#EA580C" stroke="none"/>
+              <circle cx="160" cy="25" r="1.5" fill="currentColor"/>
+              <circle cx="150" cy="15" r="1" fill="currentColor"/>
+              <circle cx="185" cy="85" r="1.5" fill="currentColor"/>
+            </svg>
+
+            <div className="pl-6 pt-2 pb-6 relative z-10">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <h1 className="text-[24px] sm:text-[28px] md:text-[32px] font-black tracking-tight text-[#EA580C] leading-none">Upload</h1>
+                <h1 className="text-[24px] sm:text-[28px] md:text-[32px] font-black tracking-tight text-[#0F172A] leading-none">Asset</h1>
+                <span 
+                  className="text-[32px] sm:text-[38px] md:text-[44px] leading-none ml-1 sm:ml-1.5 relative top-1.5 sm:top-2" 
+                  style={{ 
+                    fontFamily: 'var(--font-great-vibes), cursive', 
+                    background: 'linear-gradient(to right, #0F172A, #EA580C, #FB923C)', 
+                    WebkitBackgroundClip: 'text', 
+                    WebkitTextFillColor: 'transparent',
+                    padding: '8px 12px 8px 0',
+                    lineHeight: '1.2'
+                  }}
+                >
+                  Media
+                </span>
+              </div>
+
+              <div className="mt-8 flex flex-wrap items-center gap-x-3 gap-y-2 text-[10px] sm:text-xs font-bold tracking-[0.2em] text-[#EA580C] uppercase">
+                <span>NEW CONTENT PROCESSING</span>
+                <span className="text-orange-200">|</span>
+                <span>MAX 500MB PER FILE</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div className="flex flex-col gap-6 xl:flex-row xl:gap-8">
           {/* Upload Area */}

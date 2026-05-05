@@ -553,54 +553,89 @@ export default function WarrantyDatabasePage() {
       <Sidebar />
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-full space-y-6 p-4 sm:p-5 lg:p-6">
-          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:p-7">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div className="flex items-start gap-4">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-600">
-                  <Shield size={28} strokeWidth={2.4} />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-black leading-tight tracking-tight text-slate-900">
-                    Warranty <span className="text-blue-600">Database</span>
-                  </h1>
-                  <p className="mt-1 text-sm font-medium text-slate-500">
-                    ลงทะเบียนประกันเองจากหน้านี้ ข้อมูลจะผูกกับเบอร์โทรลูกค้าและส่งเข้า Qdrant ผ่าน Backend
-                  </p>
-                </div>
-              </div>
+          <div className="mb-8 flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+            <div className="relative">
+              {/* Decorative Frame */}
+              <div className="absolute left-0 top-1 bottom-[34px] w-px bg-gradient-to-b from-violet-400 to-transparent opacity-60"></div>
+              {/* 4-Point Star top-left */}
+              <svg className="absolute -left-[5.5px] top-0 w-3 h-3 text-violet-500 opacity-80" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C12 0 12 10.5 24 12C24 12 12 13.5 12 24C12 24 12 13.5 0 12C0 12 12 10.5 12 0Z" />
+              </svg>
+              {/* Dot and horizontal line bottom-left */}
+              <div className="absolute left-0 bottom-8 w-1.5 h-1.5 rounded-full bg-violet-500 -ml-[2px] opacity-80"></div>
+              <div className="absolute left-1.5 bottom-[34.5px] right-24 h-px bg-gradient-to-r from-violet-400 via-violet-200 to-transparent opacity-60"></div>
+              
+              {/* Right Decorative Graphics (Swirls) */}
+              <svg className="absolute -right-4 top-0 w-32 h-24 text-violet-300 pointer-events-none opacity-40 mix-blend-multiply hidden sm:block" viewBox="0 0 200 100" fill="none" stroke="currentColor">
+                <path d="M150,80 Q100,80 120,40 T180,20" strokeWidth="0.5" fill="none"/>
+                <path d="M130,90 Q80,90 90,50 T160,10" strokeWidth="0.5" fill="none"/>
+                <path d="M160,70 C130,50 180,30 190,50 C200,70 170,90 140,80" strokeWidth="0.5" fill="none"/>
+                <path d="M140,65 C140,65 140,75 145,75 C145,75 140,75 140,85 C140,85 140,75 135,75 C135,75 140,75 140,65Z" fill="#7C3AED" stroke="none"/>
+                <circle cx="160" cy="25" r="1.5" fill="currentColor"/>
+                <circle cx="150" cy="15" r="1" fill="currentColor"/>
+                <circle cx="185" cy="85" r="1.5" fill="currentColor"/>
+              </svg>
 
-              <div className="flex flex-wrap items-center gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => syncWarrantyToQdrant()}
-                  disabled={syncing}
-                  className={`inline-flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-[13px] font-bold shadow-sm transition-all ${
-                    syncing
-                      ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400'
-                      : 'border-blue-100 bg-white text-blue-600 hover:border-blue-300 hover:bg-blue-50'
-                  }`}
-                >
-                  {syncing ? <Loader2 size={17} className="animate-spin" /> : <RefreshCw size={17} strokeWidth={2.5} />}
-                  {syncing ? 'กำลังซิงค์...' : 'ซิงค์ Qdrant'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFormError(null);
-                    setFormData(createDefaultFormData());
-                    setShowAddModal(true);
-                  }}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-[13px] font-bold text-white shadow-sm transition-all hover:bg-blue-700"
-                >
-                  <Plus size={18} strokeWidth={3} />
-                  ลงทะเบียนประกัน
-                </button>
+              <div className="pl-6 pt-2 pb-6 relative z-10">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <h1 className="text-[24px] sm:text-[28px] md:text-[32px] font-black tracking-tight text-[#7C3AED] leading-none">Warranty</h1>
+                  <h1 className="text-[24px] sm:text-[28px] md:text-[32px] font-black tracking-tight text-[#0F172A] leading-none">Database</h1>
+                  <span 
+                    className="text-[32px] sm:text-[38px] md:text-[44px] leading-none ml-1 sm:ml-1.5 relative top-1.5 sm:top-2" 
+                    style={{ 
+                      fontFamily: 'var(--font-great-vibes), cursive', 
+                      background: 'linear-gradient(to right, #0F172A, #7C3AED, #A78BFA)', 
+                      WebkitBackgroundClip: 'text', 
+                      WebkitTextFillColor: 'transparent',
+                      padding: '8px 12px 8px 0',
+                      lineHeight: '1.2'
+                    }}
+                  >
+                    Inventory
+                  </span>
+                </div>
+
+                <div className="mt-8 flex flex-wrap items-center gap-x-3 gap-y-2 text-[10px] sm:text-xs font-bold tracking-[0.2em] text-[#7C3AED] uppercase">
+                  <span>CENTRALIZED WARRANTY SYSTEM</span>
+                  <span className="text-violet-200">|</span>
+                  <span>{warranties.length} RECORDS MANAGED</span>
+                </div>
               </div>
             </div>
 
+            <div className="flex flex-wrap items-center gap-3 md:justify-end">
+              <button
+                type="button"
+                onClick={() => syncWarrantyToQdrant()}
+                disabled={syncing}
+                className={`inline-flex shrink-0 items-center gap-2 rounded-xl border px-5 py-3 text-[13px] font-bold shadow-sm transition-all ${
+                  syncing
+                    ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400'
+                    : 'border-violet-100 bg-white text-violet-600 hover:border-violet-300 hover:bg-violet-50 hover:shadow-md'
+                }`}
+              >
+                {syncing ? <Loader2 size={17} className="animate-spin" /> : <RefreshCw size={17} strokeWidth={2.5} />}
+                {syncing ? 'กำลังซิงค์...' : 'ซิงค์ Qdrant'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFormError(null);
+                  setFormData(createDefaultFormData());
+                  setShowAddModal(true);
+                }}
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-violet-600 px-6 py-3 text-[13px] font-bold text-white shadow-[0_2px_10px_-3px_rgba(124,58,237,0.3)] transition-all hover:bg-violet-700 hover:shadow-lg active:scale-[0.98]"
+              >
+                <Plus size={18} strokeWidth={3} />
+                ลงทะเบียนประกัน
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:p-7">
             {notice && (
               <div
-                className={`mt-5 rounded-2xl border px-4 py-3 text-sm font-semibold ${
+                className={`mb-5 rounded-2xl border px-4 py-3 text-sm font-semibold ${
                   notice.type === 'success'
                     ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                     : 'border-rose-200 bg-rose-50 text-rose-700'
@@ -610,7 +645,7 @@ export default function WarrantyDatabasePage() {
               </div>
             )}
 
-            <div className="mt-6 flex flex-col gap-4 border-t border-slate-100 pt-6 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 p-3.5 pr-7">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white">
@@ -654,7 +689,7 @@ export default function WarrantyDatabasePage() {
                 />
               </div>
             </div>
-          </section>
+          </div>
 
           <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
             <div className="overflow-x-auto">

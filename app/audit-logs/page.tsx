@@ -216,37 +216,38 @@ export default function AuditLogsPage() {
 
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-full p-5 sm:p-6 lg:p-8">
-          <section className="mb-6 rounded-[24px] border border-white bg-gradient-to-br from-white via-[#fcfdfe] to-[#f4f7f9] p-6 text-slate-800 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] ring-1 ring-slate-100 sm:p-7">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="space-y-3">
-                <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-sky-200/80 bg-sky-50 px-3 py-1 text-[11px] font-bold tracking-wide text-sky-600 shadow-sm">
-                  <History className="h-3 w-3" strokeWidth={2.5} />
-                  Audit Trail
-                </span>
-                <div className="space-y-1.5">
-                  <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-[26px]">ประวัติการใช้งานระบบ</h1>
-                  <p className="max-w-xl text-[13px] font-medium leading-relaxed text-slate-500 lg:text-sm">
-                    หน้านี้ใช้ดูว่าใคร login, logout, สมัครสมาชิก หรือเปิดหน้าไหนในระบบบ้าง เพื่อใช้ตรวจสอบย้อนหลังได้จริงจากฐานข้อมูล
+          <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:p-7">
+            <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+              <div className="flex items-start gap-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-600">
+                  <History size={28} strokeWidth={2.4} />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-black leading-tight tracking-tight text-slate-900">
+                    Audit <span className="text-blue-600">Logs</span>
+                  </h1>
+                  <p className="mt-1 text-sm font-medium text-slate-500">
+                    ตรวจสอบประวัติการใช้งานและกิจกรรมทั้งหมดในระบบ
                   </p>
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2.5 sm:flex-row lg:mt-2">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <button
                   type="button"
                   onClick={handleClearLogs}
                   disabled={clearing || refreshing}
-                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-[13px] font-bold text-rose-600 shadow-sm transition-all hover:border-rose-300 hover:bg-rose-50 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-rose-100 bg-white px-5 py-2.5 text-[13px] font-bold text-rose-600 shadow-sm transition-all hover:bg-rose-50 disabled:opacity-50"
                 >
                   {clearing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" strokeWidth={2.5} />}
-                  {clearing ? 'กำลังล้าง log...' : 'Clear Logs'}
+                  {clearing ? 'กำลังล้าง...' : 'Clear Logs'}
                 </button>
 
                 <button
                   type="button"
                   onClick={() => void loadLogs(true)}
                   disabled={refreshing || clearing}
-                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-sky-200 bg-white px-4 py-2.5 text-[13px] font-bold text-sky-600 shadow-sm transition-all hover:border-sky-300 hover:bg-sky-50 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-sky-100 bg-white px-5 py-2.5 text-[13px] font-bold text-sky-600 shadow-sm transition-all hover:bg-sky-50 disabled:opacity-50"
                 >
                   {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" strokeWidth={2.5} />}
                   {refreshing ? 'กำลังรีเฟรช...' : 'รีเฟรชข้อมูล'}
@@ -256,59 +257,39 @@ export default function AuditLogsPage() {
 
             <div className="mt-8 grid gap-4 grid-cols-2 lg:grid-cols-4">
               {/* Card 1: Total Events */}
-              <div className="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] transition-all hover:-translate-y-0.5 hover:shadow-md sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3.5 mb-2 sm:mb-0">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-100 bg-slate-50">
-                    <Activity className="h-5 w-5 text-slate-500" strokeWidth={1.5} />
-                  </div>
-                  <span className="text-[12px] font-bold text-slate-700 hidden sm:inline-block">Total Events</span>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 transition-all hover:bg-white hover:shadow-md">
+                <div className="flex items-center gap-3 text-slate-500 mb-3">
+                  <Activity size={18} />
+                  <span className="text-xs font-bold uppercase tracking-wider">Total Events</span>
                 </div>
-                <div className="text-left sm:text-right">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 sm:hidden">Total Events</p>
-                  <p className="text-3xl font-black leading-none text-slate-900">{stats.total}</p>
-                </div>
+                <div className="text-3xl font-black text-slate-900">{stats.total}</div>
               </div>
 
               {/* Card 2: Logins Today */}
-              <div className="flex flex-col rounded-2xl border border-sky-200/70 bg-gradient-to-r from-sky-50/50 to-white p-4 shadow-[0_4px_20px_-4px_rgba(14,165,233,0.08)] transition-all hover:-translate-y-0.5 hover:shadow-md hover:shadow-sky-500/10 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3.5 mb-2 sm:mb-0">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-200/50 bg-sky-100/50">
-                    <LogIn className="h-5 w-5 text-sky-600" strokeWidth={1.5} />
-                  </div>
-                  <span className="text-[12px] font-bold text-sky-800 hidden sm:inline-block">Logins Today</span>
+              <div className="rounded-2xl border border-blue-100 bg-blue-50/30 p-4 transition-all hover:bg-white hover:shadow-md">
+                <div className="flex items-center gap-3 text-blue-600 mb-3">
+                  <LogIn size={18} />
+                  <span className="text-xs font-bold uppercase tracking-wider">Logins Today</span>
                 </div>
-                <div className="text-left sm:text-right">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-sky-500/80 sm:hidden">Logins</p>
-                  <p className="text-3xl font-black leading-none text-sky-700">{stats.loginsToday}</p>
-                </div>
+                <div className="text-3xl font-black text-blue-700">{stats.loginsToday}</div>
               </div>
 
               {/* Card 3: Failed Login */}
-              <div className="flex flex-col rounded-2xl border border-rose-200/70 bg-gradient-to-r from-rose-50/50 to-white p-4 shadow-[0_4px_20px_-4px_rgba(244,63,94,0.08)] transition-all hover:-translate-y-0.5 hover:shadow-md hover:shadow-rose-500/10 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3.5 mb-2 sm:mb-0">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-rose-200/50 bg-rose-100/50">
-                    <AlertCircle className="h-5 w-5 text-rose-600" strokeWidth={1.5} />
-                  </div>
-                  <span className="text-[12px] font-bold text-rose-800 hidden sm:inline-block">Failed Login</span>
+              <div className="rounded-2xl border border-rose-100 bg-rose-50/30 p-4 transition-all hover:bg-white hover:shadow-md">
+                <div className="flex items-center gap-3 text-rose-600 mb-3">
+                  <AlertCircle size={18} />
+                  <span className="text-xs font-bold uppercase tracking-wider">Failed Login</span>
                 </div>
-                <div className="text-left sm:text-right">
-                   <p className="text-[10px] font-bold uppercase tracking-widest text-rose-500/80 sm:hidden">Failed</p>
-                  <p className="text-3xl font-black leading-none text-rose-700">{stats.failedLogins}</p>
-                </div>
+                <div className="text-3xl font-black text-rose-700">{stats.failedLogins}</div>
               </div>
 
               {/* Card 4: Page Views */}
-              <div className="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] transition-all hover:-translate-y-0.5 hover:shadow-md sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3.5 mb-2 sm:mb-0">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-100 bg-slate-50">
-                    <MousePointerClick className="h-5 w-5 text-slate-400" strokeWidth={1.5} />
-                  </div>
-                  <span className="text-[12px] font-bold text-slate-700 hidden sm:inline-block">Page Views</span>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 transition-all hover:bg-white hover:shadow-md">
+                <div className="flex items-center gap-3 text-slate-500 mb-3">
+                  <MousePointerClick size={18} />
+                  <span className="text-xs font-bold uppercase tracking-wider">Page Views</span>
                 </div>
-                <div className="text-left sm:text-right">
-                   <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 sm:hidden">Views</p>
-                  <p className="text-3xl font-black leading-none text-slate-900">{stats.pageViews}</p>
-                </div>
+                <div className="text-3xl font-black text-slate-900">{stats.pageViews}</div>
               </div>
             </div>
           </section>

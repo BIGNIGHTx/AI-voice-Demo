@@ -48,27 +48,29 @@ export default function SidebarUserPanel({ user, loading }: SidebarUserPanelProp
 
   return (
     <div className="border-t border-slate-200 p-2 sm:p-4">
-      <div className="rounded-3xl bg-slate-900 p-3 text-white shadow-[0_10px_30px_rgba(15,23,42,0.28)] sm:p-4">
+      <div className="rounded-3xl bg-white p-3 text-slate-800 border border-slate-200 shadow-sm sm:p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-sky-500 text-sm font-bold text-white">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-sm font-bold text-white shadow-md shadow-blue-200">
             {initials}
           </div>
           <div className="hidden min-w-0 sm:block">
-            <p className="truncate text-sm font-semibold">{user.name}</p>
-            <p className="truncate text-xs text-slate-300">{user.email}</p>
+            <p className="truncate text-sm font-bold text-slate-900">{user.name}</p>
+            <p className="truncate text-xs text-slate-500">{user.email}</p>
           </div>
         </div>
 
-        <div className="mt-3 hidden items-center justify-between rounded-2xl bg-white/10 px-3 py-2 text-xs text-slate-200 sm:flex">
-          <span>สิทธิ์การใช้งาน</span>
-          <span className="rounded-full bg-white/10 px-2 py-1 uppercase tracking-wide">{user.role}</span>
+        <div className="mt-3 hidden items-center justify-between rounded-2xl bg-slate-50 px-3 py-2 text-xs text-slate-600 sm:flex border border-slate-100">
+          <span className="font-medium">สิทธิ์การใช้งาน</span>
+          <span className="rounded-lg bg-white px-2 py-1 uppercase tracking-wider font-bold text-[10px] text-blue-700 border border-blue-100">
+            {user.role}
+          </span>
         </div>
 
         <button
           type="button"
           onClick={handleLogout}
           disabled={loggingOut}
-          className="mt-3 hidden w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-3 py-2.5 text-sm font-semibold transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-70 sm:flex"
+          className="mt-3 hidden w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 hover:text-rose-600 hover:border-rose-100 disabled:cursor-not-allowed disabled:opacity-50 sm:flex"
         >
           {loggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
           {loggingOut ? 'กำลังออกจากระบบ...' : 'ออกจากระบบ'}
@@ -78,7 +80,7 @@ export default function SidebarUserPanel({ user, loading }: SidebarUserPanelProp
           type="button"
           onClick={handleLogout}
           disabled={loggingOut}
-          className="mt-3 flex h-10 w-full items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-70 sm:hidden"
+          className="mt-3 flex h-10 w-full items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition-all hover:bg-slate-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50 sm:hidden"
           aria-label="ออกจากระบบ"
         >
           {loggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}

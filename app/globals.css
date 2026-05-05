@@ -18,6 +18,21 @@ main {
   min-width: 0;
 }
 
+/* Global Pointer for Interactive Elements */
+button, 
+[role="button"],
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+select {
+  cursor: pointer;
+}
+
+button:disabled,
+[role="button"]:disabled {
+  cursor: not-allowed;
+}
+
 /* ── Global page content container ── */
 .page-content {
   max-width: 1280px;

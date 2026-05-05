@@ -267,39 +267,62 @@ export default function WarrantyDetailPage() {
 
         <div className="mx-auto max-w-5xl space-y-5 px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
           
-          {/* Header & Actions */}
-          <div className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:flex-row md:items-center sm:p-6">
-            <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${sentimentBadge.cls} sm:h-12 sm:w-12`}>
-                <ShieldCheck size={24} />
-              </div>
-              <div className="min-w-0">
-                <h1 className="flex flex-wrap items-center gap-2 text-xl font-bold tracking-tight text-slate-800 sm:text-2xl">
-                  {warranty.brand || 'ข้อมูลการวิเคราะห์'}
-                  {warranty.product_category && (
-                    <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-700">
-                      {warranty.product_category}
-                    </span>
-                  )}
-                  {!isManualWarranty && (
-                    <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${sentimentBadge.cls}`}>
-                      <CheckCircle2 size={12} /> {sentimentBadge.label}
-                    </span>
-                  )}
-                </h1>
-                <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-                  <FileAudio size={14} className="text-blue-500" /> ถอดความจากไฟล์เสียง:
-                  <span className="cursor-pointer font-semibold text-blue-600 hover:underline" onClick={() => router.push(`/files/${fileId}`)}>{fileId.slice(0, 18)}...</span>
-                </p>
+          <div className="mb-8 flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+            <div className="relative">
+              {/* Decorative Frame */}
+              <div className="absolute left-0 top-1 bottom-[34px] w-px bg-gradient-to-b from-purple-400 to-transparent opacity-60"></div>
+              {/* 4-Point Star top-left */}
+              <svg className="absolute -left-[5.5px] top-0 w-3 h-3 text-purple-500 opacity-80" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C12 0 12 10.5 24 12C24 12 12 13.5 12 24C12 24 12 13.5 0 12C0 12 12 10.5 12 0Z" />
+              </svg>
+              {/* Dot and horizontal line bottom-left */}
+              <div className="absolute left-0 bottom-8 w-1.5 h-1.5 rounded-full bg-purple-500 -ml-[2px] opacity-80"></div>
+              <div className="absolute left-1.5 bottom-[34.5px] right-24 h-px bg-gradient-to-r from-purple-400 via-purple-200 to-transparent opacity-60"></div>
+              
+              {/* Right Decorative Graphics (Swirls) */}
+              <svg className="absolute -right-4 top-0 w-32 h-24 text-purple-300 pointer-events-none opacity-40 mix-blend-multiply hidden sm:block" viewBox="0 0 200 100" fill="none" stroke="currentColor">
+                <path d="M150,80 Q100,80 120,40 T180,20" strokeWidth="0.5" fill="none"/>
+                <path d="M130,90 Q80,90 90,50 T160,10" strokeWidth="0.5" fill="none"/>
+                <path d="M160,70 C130,50 180,30 190,50 C200,70 170,90 140,80" strokeWidth="0.5" fill="none"/>
+                <path d="M140,65 C140,65 140,75 145,75 C145,75 140,75 140,85 C140,85 140,75 135,75 C135,75 140,75 140,65Z" fill="#7C3AED" stroke="none"/>
+                <circle cx="160" cy="25" r="1.5" fill="currentColor"/>
+                <circle cx="150" cy="15" r="1" fill="currentColor"/>
+                <circle cx="185" cy="85" r="1.5" fill="currentColor"/>
+              </svg>
+
+              <div className="pl-6 pt-2 pb-6 relative z-10">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <h1 className="text-[24px] sm:text-[28px] md:text-[32px] font-black tracking-tight text-[#7C3AED] leading-none">Analysis</h1>
+                  <h1 className="text-[24px] sm:text-[28px] md:text-[32px] font-black tracking-tight text-[#0F172A] leading-none">Detail</h1>
+                  <span 
+                    className="text-[32px] sm:text-[38px] md:text-[44px] leading-none ml-1 sm:ml-1.5 relative top-1.5 sm:top-2" 
+                    style={{ 
+                      fontFamily: 'var(--font-great-vibes), cursive', 
+                      background: 'linear-gradient(to right, #0F172A, #7C3AED, #A78BFA)', 
+                      WebkitBackgroundClip: 'text', 
+                      WebkitTextFillColor: 'transparent',
+                      padding: '8px 12px 8px 0',
+                      lineHeight: '1.2'
+                    }}
+                  >
+                    Insights
+                  </span>
+                </div>
+
+                <div className="mt-8 flex flex-wrap items-center gap-x-3 gap-y-2 text-[10px] sm:text-xs font-bold tracking-[0.2em] text-[#7C3AED] uppercase">
+                  <span>AI DATA INSIGHTS</span>
+                  <span className="text-purple-200">|</span>
+                  <span>REF: {fileId.slice(0, 12).toUpperCase()}</span>
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 border-t border-slate-100 pt-4 md:border-t-0 md:pt-0">
+            <div className="flex items-center gap-3 md:justify-end">
               <button 
                 onClick={() => router.push(`/files/${fileId}`)}
-                className="flex cursor-pointer items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+                className="flex cursor-pointer items-center gap-2 rounded-xl bg-purple-600 px-5 py-3 text-[13px] font-bold text-white shadow-[0_2px_10px_-3px_rgba(124,58,237,0.3)] transition-all hover:bg-purple-700 hover:shadow-lg active:scale-[0.98]"
               >
-                <FileAudio size={16} /> ดูไฟล์เสียง
+                <FileAudio size={16} strokeWidth={2.5} /> ดูไฟล์เสียงต้นฉบับ
               </button>
             </div>
           </div>

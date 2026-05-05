@@ -775,26 +775,68 @@ export default function CustomerDetailPage() {
           </div>
 
           {/* --- Header Profile --- */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div className="flex items-center gap-4">
-              <div className="relative w-20 h-20 bg-rose-400 rounded-2xl overflow-hidden border-2 border-white shadow-sm flex-shrink-0">
-                <div className="w-full h-full bg-red-400 flex items-end justify-center">
-                   <div className="w-12 h-16 bg-slate-800 rounded-t-3xl opacity-50"></div>
+          <div className="mb-8 flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+            <div className="relative">
+              {/* Decorative Frame */}
+              <div className="absolute left-0 top-1 bottom-[34px] w-px bg-gradient-to-b from-teal-400 to-transparent opacity-60"></div>
+              {/* 4-Point Star top-left */}
+              <svg className="absolute -left-[5.5px] top-0 w-3 h-3 text-teal-500 opacity-80" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C12 0 12 10.5 24 12C24 12 12 13.5 12 24C12 24 12 13.5 0 12C0 12 12 10.5 12 0Z" />
+              </svg>
+              {/* Dot and horizontal line bottom-left */}
+              <div className="absolute left-0 bottom-8 w-1.5 h-1.5 rounded-full bg-teal-500 -ml-[2px] opacity-80"></div>
+              <div className="absolute left-1.5 bottom-[34.5px] right-24 h-px bg-gradient-to-r from-teal-400 via-teal-200 to-transparent opacity-60"></div>
+              
+              {/* Right Decorative Graphics (Swirls) */}
+              <svg className="absolute -right-4 top-0 w-32 h-24 text-teal-300 pointer-events-none opacity-40 mix-blend-multiply hidden sm:block" viewBox="0 0 200 100" fill="none" stroke="currentColor">
+                <path d="M150,80 Q100,80 120,40 T180,20" strokeWidth="0.5" fill="none"/>
+                <path d="M130,90 Q80,90 90,50 T160,10" strokeWidth="0.5" fill="none"/>
+                <path d="M160,70 C130,50 180,30 190,50 C200,70 170,90 140,80" strokeWidth="0.5" fill="none"/>
+                <path d="M140,65 C140,65 140,75 145,75 C145,75 140,75 140,85 C140,85 140,75 135,75 C135,75 140,75 140,65Z" fill="#0D9488" stroke="none"/>
+                <circle cx="160" cy="25" r="1.5" fill="currentColor"/>
+                <circle cx="150" cy="15" r="1" fill="currentColor"/>
+                <circle cx="185" cy="85" r="1.5" fill="currentColor"/>
+              </svg>
+
+              <div className="pl-6 pt-2 pb-6 relative z-10">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <h1 className="text-[24px] sm:text-[28px] md:text-[32px] font-black tracking-tight text-[#0D9488] leading-none">Customer</h1>
+                  <h1 className="text-[24px] sm:text-[28px] md:text-[32px] font-black tracking-tight text-[#0F172A] leading-none">Profile</h1>
+                  <span 
+                    className="text-[32px] sm:text-[38px] md:text-[44px] leading-none ml-1 sm:ml-1.5 relative top-1.5 sm:top-2" 
+                    style={{ 
+                      fontFamily: 'var(--font-great-vibes), cursive', 
+                      background: 'linear-gradient(to right, #0F172A, #0D9488, #2DD4BF)', 
+                      WebkitBackgroundClip: 'text', 
+                      WebkitTextFillColor: 'transparent',
+                      padding: '8px 12px 8px 0',
+                      lineHeight: '1.2'
+                    }}
+                  >
+                    Detail
+                  </span>
                 </div>
-                <div className="absolute bottom-[-4px] right-[-4px] bg-blue-600 rounded-full p-1 border-2 border-white">
-                  <CheckCircle2 size={12} className="text-white" />
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-slate-400 tracking-wider mb-1">PRIVATE CLIENT</p>
-                <h1 className="text-2xl font-bold text-slate-800 mb-2">{displayName}</h1>
-                <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500 font-medium">
-                  <span className="bg-slate-200/50 px-2 py-1 rounded-md">ID: {customer.customer_id}</span>
-                  <span className="flex items-center gap-1">📞 {customer.phone}</span>
-                  {customer.nickname && <span className="flex items-center gap-1">@ {customer.nickname}</span>}
+
+                <div className="mt-8 flex flex-wrap items-center gap-x-3 gap-y-2 text-[10px] sm:text-xs font-bold tracking-[0.2em] text-[#0D9488] uppercase">
+                  <span>CLIENT INFORMATION</span>
+                  <span className="text-teal-200">|</span>
+                  <span>ID: {customer.customer_id}</span>
                 </div>
               </div>
             </div>
+
+            <div className="flex flex-wrap items-center gap-4 sm:gap-6 md:justify-end">
+              <div className="text-right">
+                <div className="text-2xl font-black tracking-tight text-slate-800 sm:text-3xl">{displayName}</div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ชื่อลูกค้า</div>
+              </div>
+              <div className="hidden h-10 w-px bg-slate-200 sm:block"></div>
+              <div className="text-right">
+                <div className="text-2xl font-black tracking-tight text-teal-600 sm:text-3xl">{customer.phone}</div>
+                <div className="text-[10px] font-bold text-teal-500 uppercase tracking-widest">เบอร์โทรศัพท์</div>
+              </div>
+            </div>
+          </div>
             <div className="flex items-center gap-3 w-full md:w-auto">
               <button 
                 onClick={openCreateWarrantyModal}
