@@ -674,6 +674,10 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [endpointStatus, setEndpointStatus] = useState<EndpointStatusMap>({});
+  
+  const [isRefreshingTable, setIsRefreshingTable] = useState(false);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     caseScoresRef.current = caseScores;
@@ -828,22 +832,7 @@ export default function DashboardPage() {
 
     void runWithConcurrencyLimit(targets, 15, async (file) => {
       const cached = caseScoresRef.current[file.file_id];
-      const currentQa = file.qa_score ?? cached?.qa;
-      const currentCsat = file.csat_score ?? cached?.csat;
-      const [qaResult, csatResult] = await Promise.allSettled([
-        currentQa === undefined
-          ? fetchScoreJson(`${API_BASE}/api/v1/ai/qa-score/${file.file_id}`)
-          : Promise.resolve(null),
-        currentCsat === undefined
-          ? fetchScoreJson(`${API_BASE}/api/v1/ai/csat/${file.file_id}`)
-          : Promise.resolve(null)
-      ]);
-
-      const result = {
-        fileId: file.file_id,
-        qa: currentQa ?? (qaResult.status === 'fulfilled' ? extractQaScore(qaResult.value) : undefined),
-        csat: currentCsat ?? (csatResult.status === 'fulfilled' ? extractCsatScore(csatResult.value) : undefined)
-      };
+      const result = await fetchCaseScores(file, cached);
 
       requestedIds.delete(file.file_id);
       if (active) {
@@ -888,6 +877,44 @@ export default function DashboardPage() {
       targets.forEach((file) => requestedIds.delete(file.file_id));
     };
   }, [agentCaseRows]);
+
+  const handleManualRefresh = async () => {
+    if (isRefreshingTable) return;
+    
+    // Save current scroll position of the main layout container
+    const mainScrollTop = mainRef.current?.scrollTop || 0;
+    
+    setIsRefreshingTable(true);
+    try {
+      requestedCaseScoreIdsRef.current.clear();
+      setCaseScores((prev) => {
+        const next = { ...prev };
+        Object.keys(next).forEach((key) => {
+          if (next[key].qa === undefined || next[key].csat === undefined) {
+            delete next[key];
+          }
+        });
+        caseScoresRef.current = next;
+        return next;
+      });
+
+      const freshItems = await fetchAllAudioFiles();
+      const freshFiles = normalizeAudioFiles({ files: freshItems });
+      setAudioFiles(freshFiles);
+      
+      // Force main container scroll position to stay intact
+      setTimeout(() => {
+        if (mainRef.current) mainRef.current.scrollTo({ top: mainScrollTop, behavior: 'instant' });
+      }, 0);
+      setTimeout(() => {
+        if (mainRef.current) mainRef.current.scrollTo({ top: mainScrollTop, behavior: 'instant' });
+      }, 50);
+    } catch {
+      // ignore
+    } finally {
+      setIsRefreshingTable(false);
+    }
+  };
 
   const failedEndpoints = useMemo(
     () => Object.entries(endpointStatus).filter(([, status]) => !status.ok),
@@ -1042,7 +1069,7 @@ export default function DashboardPage() {
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-800">
       <Sidebar />
-      <main className="flex-1 overflow-auto p-4 sm:p-5 lg:p-6">
+      <main ref={mainRef} className="flex-1 overflow-auto p-4 sm:p-5 lg:p-6">
         <div className="max-w-full mx-auto space-y-6">
 
           <div className="mb-6 flex flex-col justify-between gap-5 md:flex-row md:items-center">
@@ -1294,23 +1321,23 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
-                
+
                 <div className="w-full lg:w-72 bg-gradient-to-b from-[#f8faff] to-white rounded-[24px] p-6 border border-blue-50 flex flex-col items-center justify-center text-center relative overflow-hidden shrink-0 shadow-[0_4px_20px_-4px_rgba(74,133,246,0.05)]">
                   {/* Decorative background curves */}
                   <div className="absolute bottom-0 left-0 right-0 h-32 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNDQwIDMyMCI+PHBhdGggZmlsbD0iI2YxZjZmZiIgZmlsbC1vcGFjaXR5PSIxIiBkPSJNMCAyMjRsMTIwLTUuM2MxMjAtNS4zIDM2MC0xNiA2MDAtNS40IDIzOSAxMC43IDQ4MCA0Mi43IDYwMCA1OC43bDEyMCAxNnY5NkgwaHoiPjwvcGF0aD48L3N2Zz4=')] bg-cover bg-bottom opacity-70"></div>
                   <div className="absolute bottom-0 left-0 right-0 h-24 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNDQwIDMyMCI+PHBhdGggZmlsbD0iI2U1ZjBwdIiIGZpbGwtb3BhY2l0eT0iMC42IiBkPSJNMCAxNjBsMTIwIDUuM2MxMjAgNS4zIDM2MCAxNiA2MDAgNS40IDIzOS0xMC43IDQ4MC00Mi43IDYwMC01OC43bDEyMC0xNnYxOTJIMHoiPjwvcGF0aD48L3N2Zz4=')] bg-cover bg-bottom"></div>
-                  
+
                   <div className="h-20 w-20 bg-white rounded-full flex items-center justify-center mb-6 shadow-[0_8px_30px_rgba(74,133,246,0.15)] relative z-10 border border-blue-50">
                     <div className="h-14 w-14 bg-blue-50 rounded-full flex items-center justify-center">
                       <Flame size={28} className="text-[#4a85f6] fill-[#4a85f6]" strokeWidth={1.5} />
                     </div>
                   </div>
-                  
+
                   <span className="text-[11px] font-bold text-[#4a85f6] bg-white border border-blue-100 px-4 py-1.5 rounded-full mb-6 relative z-10 shadow-sm">Key Insight</span>
-                  
+
                   <p className="text-[15px] font-medium text-slate-600 leading-[1.8] relative z-10">
-                    คำว่า <span className="font-bold text-[#4a85f6] text-[17px]">"{keywordFrequency[0].keyword}"</span><br/>
-                    ถูกกล่าวถึงมากที่สุด<br/>
+                    คำว่า <span className="font-bold text-[#4a85f6] text-[17px]">"{keywordFrequency[0].keyword}"</span><br />
+                    ถูกกล่าวถึงมากที่สุด<br />
                     คิดเป็น <span className="font-bold text-[#4a85f6] text-xl">{keywordFrequency[0].percentage}%</span> ของทั้งหมด
                   </p>
                 </div>
@@ -1442,12 +1469,29 @@ export default function DashboardPage() {
                 </h3>
                 <p className="text-[11px] text-slate-500 mt-1 ml-3">รายเคสจากไฟล์จริง กด File ID เพื่อเปิด Transcript</p>
               </div>
-              <div className="text-[11px] font-medium text-slate-500 px-2.5 py-1 bg-slate-50 rounded-full border border-slate-100">
-                {agentCaseRows.length} Recent Cases
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (!isRefreshingTable) void handleManualRefresh();
+                  }}
+                  className={`flex items-center justify-center p-1.5 rounded-md transition-colors ${
+                    isRefreshingTable 
+                      ? 'text-indigo-400 bg-indigo-50/50 cursor-default' 
+                      : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 cursor-pointer'
+                  }`}
+                  title="Refresh Table"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isRefreshingTable ? 'animate-spin text-indigo-600' : ''}`} />
+                </button>
+                <div className="text-[11px] font-medium text-slate-500 px-2.5 py-1 bg-slate-50 rounded-full border border-slate-100">
+                  {agentCaseRows.length} Recent Cases
+                </div>
               </div>
             </div>
 
-            <div className="max-h-[260px] overflow-y-auto rounded-lg border border-slate-100">
+            <div ref={tableContainerRef} className="max-h-[260px] overflow-y-auto rounded-lg border border-slate-100">
               {agentCaseRows.length > 0 ? (
                 <table className="w-full text-left text-xs">
                   <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase tracking-[0.14em] text-slate-400">
