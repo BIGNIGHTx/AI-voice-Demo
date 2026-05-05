@@ -741,11 +741,11 @@ export default function WarrantyDatabasePage() {
                       </td>
                       <td className="px-6 py-5">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500">
                             <User size={14} />
                           </div>
                           <div>
-                            <span className="block text-sm font-bold text-slate-800">{item.customer_name || '-'}</span>
+                            <span className="block whitespace-nowrap text-sm font-bold text-slate-800">{item.customer_name || '-'}</span>
                             <span className="mt-0.5 block text-xs font-medium text-slate-400">อ้างอิงจากเบอร์โทร</span>
                           </div>
                         </div>
@@ -782,10 +782,10 @@ export default function WarrantyDatabasePage() {
                             event.stopPropagation();
                             setSearchTerm(item.customer_phone || '');
                           }}
-                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                          className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
                           title="กรองรายการด้วยเบอร์นี้"
                         >
-                          <SearchIcon size={14} />
+                          <SearchIcon size={14} className="shrink-0" />
                           กรองเบอร์
                         </button>
                       </td>

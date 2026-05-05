@@ -93,7 +93,12 @@ const getMetadataSummary = (metadata: string | null) => {
   return null;
 };
 
-const getTargetText = (log: AuditLogRow) => log.target || log.routePath || '-';
+const getAccountActionSummary = (log: AuditLogRow) => {
+  const account = log.user?.name || log.user?.email || 'ไม่ระบุ';
+  const action = actionLabels[log.action] ?? log.action;
+
+  return `Account ${account} ทำรายการ: ${action}`;
+};
 
 export default function AuditLogsPage() {
   const [logs, setLogs] = useState<AuditLogRow[]>([]);
@@ -223,10 +228,10 @@ export default function AuditLogsPage() {
                   <History size={28} strokeWidth={2.4} />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-black leading-tight tracking-tight text-slate-900">
-                    Audit <span className="text-blue-600">Logs</span>
+                  <h1 className="text-[28px] font-black leading-none tracking-tight text-slate-950 sm:text-[32px]">
+                    Audit <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">Logs</span>
                   </h1>
-                  <p className="mt-1 text-sm font-medium text-slate-500">
+                  <p className="mt-2 text-[13px] font-semibold leading-5 text-slate-500">
                     ตรวจสอบประวัติการใช้งานและกิจกรรมทั้งหมดในระบบ
                   </p>
                 </div>
@@ -337,8 +342,6 @@ export default function AuditLogsPage() {
           ) : (
             <div className="space-y-3">
               {filteredLogs.map((log) => {
-                const metadataSummary = getMetadataSummary(log.metadata);
-
                 return (
                   <article key={log.id} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -350,17 +353,11 @@ export default function AuditLogsPage() {
                           <span className="text-xs font-medium text-slate-400">{formatDateTime(log.createdAt)}</span>
                         </div>
 
-                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">ผู้ใช้</p>
                             <p className="mt-2 text-sm font-semibold text-slate-900">{log.user?.name ?? 'ไม่ระบุผู้ใช้'}</p>
                             <p className="text-sm text-slate-500">{log.user?.email ?? '-'}</p>
-                          </div>
-
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">เป้าหมาย</p>
-                            <p className="mt-2 break-all text-sm font-medium text-slate-800">{getTargetText(log)}</p>
-                            <p className="text-sm text-slate-500">{log.routePath ? `Route: ${log.routePath}` : 'ไม่มี route เพิ่มเติม'}</p>
                           </div>
 
                           <div>
@@ -371,7 +368,7 @@ export default function AuditLogsPage() {
 
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">รายละเอียดเพิ่ม</p>
-                            <p className="mt-2 text-sm text-slate-700">{metadataSummary ?? 'ไม่มี metadata เพิ่มเติม'}</p>
+                            <p className="mt-2 text-sm font-medium text-slate-800">{getAccountActionSummary(log)}</p>
                           </div>
                         </div>
                       </div>
