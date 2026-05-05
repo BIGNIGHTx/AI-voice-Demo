@@ -113,6 +113,31 @@ interface FileData {
   upload_date: string;
 }
 
+interface CustomerWarrantyPreviewItem {
+  file_id?: string;
+  registration_no?: string;
+  brand?: string;
+  model?: string;
+  product_category?: string;
+  category?: string;
+  size?: string;
+  serial_no?: string;
+  customer_phone?: string;
+  warranty_period?: string;
+  purchase_date?: string;
+  date_of_purchase?: string;
+  delivery_date?: string;
+  date_of_delivery?: string;
+  order_number?: string;
+  status?: string;
+  sale_channel?: string;
+  warranty_source?: string;
+  warranty_start_date?: string;
+  warranty_end_date?: string;
+  expiry_date_of_warranty?: string;
+  registrationDate?: string;
+}
+
 type ConversationRole = 'Agent' | 'Customer';
 
 interface SpeakerResolutionContext {
@@ -499,6 +524,74 @@ const sanitizeSummaryPoints = (points: unknown): string[] => {
     if (cleaned.length >= 4) break;
   }
   return cleaned;
+};
+
+const normalizeWarrantyText = (value?: string | null): string => {
+  const text = String(value ?? '').trim();
+  return ['', '-', 'n/a', 'none', 'null', 'undefined', 'unknown'].includes(text.toLowerCase()) ? '' : text;
+};
+
+const normalizePhoneDigits = (value: unknown): string => String(value ?? '').replace(/\D/g, '');
+
+const isVisibleCustomerWarrantyRecord = (item: CustomerWarrantyPreviewItem): boolean => {
+  const registrationNo = normalizeWarrantyText(item.registration_no).toUpperCase();
+  const orderNumber = normalizeWarrantyText(item.order_number).toUpperCase();
+  const source = normalizeWarrantyText(item.warranty_source).toLowerCase();
+  const status = normalizeWarrantyText(item.status).toUpperCase();
+
+  return status !== 'DELETED' &&
+    !registrationNo.startsWith('DELETED-') &&
+    !registrationNo.startsWith('AUTO-') &&
+    !orderNumber.startsWith('CALL-') &&
+    !source.includes('audio') &&
+    !source.includes('voice') &&
+    !source.includes('analysis');
+};
+
+const isActiveWarrantyStatus = (status?: string | null): boolean => {
+  const normalized = normalizeWarrantyText(status).toUpperCase();
+  return ['ACTIVE', 'PENDING', 'INFERRED', 'UNDER_WARRANTY', 'ACTIVE_WARRANTY'].includes(normalized);
+};
+
+const formatWarrantyDate = (value?: string | null): string => {
+  const text = normalizeWarrantyText(value);
+  if (!text) return '';
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(text)) return text;
+
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return text;
+
+  return date.toLocaleDateString('th-TH', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+};
+
+const getWarrantyExpiryDate = (dateValue?: string | null, period?: string | null): Date | null => {
+  const dateText = normalizeWarrantyText(dateValue);
+  if (!dateText) return null;
+
+  const date = new Date(dateText);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const monthsMatch = normalizeWarrantyText(period).match(/(\d+)/);
+  const months = monthsMatch ? Number.parseInt(monthsMatch[1], 10) : 0;
+  if (!months) return null;
+
+  const expiryDate = new Date(date);
+  expiryDate.setMonth(expiryDate.getMonth() + months);
+  return expiryDate;
+};
+
+const getWarrantyProductLabel = (item: CustomerWarrantyPreviewItem): string => {
+  const values = [
+    normalizeWarrantyText(item.brand),
+    normalizeWarrantyText(item.model || item.product_category || item.category),
+    normalizeWarrantyText(item.size),
+  ].filter(Boolean);
+
+  return values.length ? values.join(' / ') : 'สินค้าไม่ระบุรุ่น';
 };
 
 type TranscriptTopicId = 'billing' | 'usage' | 'delivery' | 'warranty' | 'order' | 'info';
@@ -957,6 +1050,9 @@ export default function FileAnalysisDetail() {
   const [error, setError] = useState<string | null>(null);
   const [enhancedAnalysis, setEnhancedAnalysis] = useState<EnhancedAnalysis | null>(null);
   const [loadingEnhanced, setLoadingEnhanced] = useState(false);
+  const [customerWarrantyPreview, setCustomerWarrantyPreview] = useState<CustomerWarrantyPreviewItem[]>([]);
+  const [loadingCustomerWarranties, setLoadingCustomerWarranties] = useState(false);
+  const [customerWarrantyError, setCustomerWarrantyError] = useState<string | null>(null);
 
   // Audio player state
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1229,14 +1325,58 @@ export default function FileAnalysisDetail() {
     () => findActiveTranscriptIndex(transcriptSegments, currentTime),
     [currentTime, transcriptSegments]
   );
-  const currentFileRouteId = String(fileData?.file_id || analysis?.file_id || fileId || '');
   const customerPhoneForWarranty = String(parsedPhoneFromFilename || fileData?.customer_phone || analysis?.customer_phone || '').trim();
-  const warrantyAutoId = currentFileRouteId
-    .substring(0, 8)
-    .toUpperCase();
-  const customerWarrantyHref = customerPhoneForWarranty && currentFileRouteId
-    ? `/customers/CUST-${customerPhoneForWarranty}/warranty/${currentFileRouteId}`
-    : '#';
+  const normalizedCustomerPhoneForWarranty = normalizePhoneDigits(customerPhoneForWarranty);
+  const customerProfileHref = normalizedCustomerPhoneForWarranty ? `/customers/CUST-${normalizedCustomerPhoneForWarranty}` : '#';
+  const hasWarrantyInfo = customerWarrantyPreview.length > 0;
+
+  useEffect(() => {
+    const normalizedPhone = normalizePhoneDigits(customerPhoneForWarranty);
+    if (!normalizedPhone) {
+      setCustomerWarrantyPreview([]);
+      setCustomerWarrantyError(null);
+      setLoadingCustomerWarranties(false);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function fetchCustomerWarranties() {
+      setLoadingCustomerWarranties(true);
+      setCustomerWarrantyError(null);
+      try {
+        const customerId = `CUST-${normalizedPhone}`;
+        const res = await fetch(`${API_BASE}/api/v1/customers/${encodeURIComponent(customerId)}`, {
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+
+        if (res.status === 404) {
+          setCustomerWarrantyPreview([]);
+          return;
+        }
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        const warranties = Array.isArray(data?.warranties) ? data.warranties : [];
+        setCustomerWarrantyPreview(warranties.filter(isVisibleCustomerWarrantyRecord));
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        setCustomerWarrantyPreview([]);
+        setCustomerWarrantyError('โหลดข้อมูลประกันไม่ได้');
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoadingCustomerWarranties(false);
+        }
+      }
+    }
+
+    fetchCustomerWarranties();
+
+    return () => controller.abort();
+  }, [customerPhoneForWarranty]);
 
 
   useEffect(() => {
@@ -1274,7 +1414,6 @@ export default function FileAnalysisDetail() {
     .slice(0, 16);
 
   const safeSummaryPoints = sanitizeSummaryPoints(analysis?.summary_points);
-  const safeSummaryText = String(analysis?.summary || '').trim();
   const derivedSummary = useMemo(
     () => buildDerivedSummaryData({
       transcriptText: fullTranscript,
@@ -1310,9 +1449,6 @@ export default function FileAnalysisDetail() {
   const showDeepInsight = hasDeepInsight(deepInsight);
   const deepInsightRisk = getDeepInsightRisk(deepInsight?.risk_level);
   const deepInsightRows = buildDeepInsightRows(deepInsight);
-  const summaryOverviewPoints = safeSummaryPoints.length >= 2
-    ? safeSummaryPoints
-    : normalizeKeywordList([...safeSummaryPoints, ...derivedSummary.overviewPoints]).slice(0, 4);
   const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   // ── AI re-analysis ──
@@ -1654,19 +1790,6 @@ export default function FileAnalysisDetail() {
                     </div>
                   )}
 
-                  <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
-                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-blue-500">ภาพรวม</p>
-                    {summaryOverviewPoints.length > 0 ? (
-                      <ul className="space-y-2 text-sm font-semibold leading-relaxed text-slate-800">
-                        {summaryOverviewPoints.map((point, index) => (
-                          <li key={`${point}-${index}`}>{point}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm font-semibold leading-relaxed text-slate-800">{safeSummaryText || '-'}</p>
-                    )}
-                  </div>
-
                 </div>
 
                 {/* ── Transcription Detail (Whisper STT) ── */}
@@ -1811,37 +1934,137 @@ export default function FileAnalysisDetail() {
 
                     <div className="col-span-2 pt-3 border-t border-slate-100">
                       <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-2">Warranty Information</p>
-                      <div className="rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-sky-50 p-4 shadow-sm">
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                          <div className="rounded-lg border border-white/80 bg-white/80 p-3 shadow-sm">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Serial No.</p>
-                            <p className="mt-1 text-xs font-bold text-slate-800 font-mono tracking-tight break-all">{analysis?.serial_no || '-'}</p>
+                      <div className={`rounded-xl border p-4 shadow-sm ${
+                        hasWarrantyInfo
+                          ? 'border-emerald-200 bg-emerald-50'
+                          : 'border-slate-200 bg-slate-50'
+                      }`}>
+                        <div className="flex flex-col gap-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                                  loadingCustomerWarranties
+                                    ? 'bg-blue-400'
+                                    : hasWarrantyInfo
+                                      ? 'bg-emerald-500'
+                                      : 'bg-slate-300'
+                                }`} />
+                                <p className={`text-sm font-bold ${hasWarrantyInfo ? 'text-emerald-700' : 'text-slate-600'}`}>
+                                  {loadingCustomerWarranties
+                                    ? 'กำลังโหลดข้อมูลประกัน'
+                                    : hasWarrantyInfo
+                                      ? `เบอร์นี้มีประกัน ${customerWarrantyPreview.length} รายการ`
+                                      : 'เบอร์นี้ยังไม่มีประกัน'}
+                                </p>
+                              </div>
+                              <p className="text-xs font-semibold text-slate-500">
+                                เบอร์ {displayPhone || '-'}
+                              </p>
+                            </div>
+                            <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                              hasWarrantyInfo
+                                ? 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200'
+                                : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200'
+                            }`}>
+                              {hasWarrantyInfo
+                                ? `${customerWarrantyPreview.length} WARRANTY`
+                                : 'NO WARRANTY'}
+                            </span>
                           </div>
-                          <div className="rounded-lg border border-blue-200 bg-blue-600 p-3 shadow-sm">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-blue-100">Auto ID</p>
+
+                          {loadingCustomerWarranties ? (
+                            <div className="rounded-lg border border-white/80 bg-white/80 px-3 py-3 shadow-sm">
+                              <p className="text-xs font-semibold text-slate-500">กำลังดึงรายการประกันจริงของลูกค้า...</p>
+                            </div>
+                          ) : customerWarrantyError ? (
+                            <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-3 shadow-sm">
+                              <p className="text-xs font-semibold text-amber-700">{customerWarrantyError}</p>
+                            </div>
+                          ) : hasWarrantyInfo ? (
+                            <div className="space-y-2">
+                              {customerWarrantyPreview.map((item, index) => {
+                                const statusText = normalizeWarrantyText(item.status) || 'ACTIVE';
+                                const registrationNo = normalizeWarrantyText(item.registration_no);
+                                const orderNumber = normalizeWarrantyText(item.order_number);
+                                const serialNo = normalizeWarrantyText(item.serial_no);
+                                const deliveryDate = formatWarrantyDate(item.delivery_date || item.date_of_delivery);
+                                const calculatedExpiryDate = getWarrantyExpiryDate(
+                                  item.delivery_date || item.date_of_delivery || item.purchase_date || item.date_of_purchase,
+                                  item.warranty_period
+                                );
+                                const expiryDate = formatWarrantyDate(item.expiry_date_of_warranty || item.warranty_end_date) ||
+                                  (calculatedExpiryDate ? formatWarrantyDate(calculatedExpiryDate.toISOString()) : '');
+
+                                return (
+                                  <div key={`${item.file_id || registrationNo || orderNumber || index}`} className="rounded-lg border border-emerald-100 bg-white px-3 py-3 shadow-sm">
+                                    <div className="mb-2 flex items-start justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-bold leading-snug text-slate-800">{getWarrantyProductLabel(item)}</p>
+                                        <p className="mt-1 text-[11px] font-semibold leading-relaxed text-slate-500">
+                                          ทะเบียน {registrationNo || '-'}
+                                        </p>
+                                        {orderNumber && (
+                                          <p className="mt-1 text-[11px] font-semibold leading-relaxed text-slate-500">
+                                            Order {orderNumber}
+                                          </p>
+                                        )}
+                                        {serialNo && (
+                                          <p className="mt-1 text-[11px] font-semibold leading-relaxed text-slate-500">
+                                            SN {serialNo}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                                        isActiveWarrantyStatus(item.status)
+                                          ? 'bg-emerald-100 text-emerald-700'
+                                          : 'bg-slate-100 text-slate-500'
+                                      }`}>
+                                        {statusText}
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div className="rounded-md bg-slate-50 px-2.5 py-2">
+                                        <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">วันที่ส่ง</p>
+                                        <p className="mt-1 text-[11px] font-bold text-slate-700">{deliveryDate || '-'}</p>
+                                      </div>
+                                      <div className="rounded-md bg-slate-50 px-2.5 py-2">
+                                        <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">วันที่หมดประกัน</p>
+                                        <p className="mt-1 text-[11px] font-bold text-slate-700">{expiryDate || '-'}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="rounded-lg border border-white/80 bg-white/80 px-3 py-2 shadow-sm">
+                              <p className="text-xs font-semibold leading-relaxed text-slate-600">
+                                ยังไม่พบข้อมูลประกันของเบอร์นี้ในระบบ
+                              </p>
+                            </div>
+                          )}
+
+                          {normalizedCustomerPhoneForWarranty ? (
                             <a
-                              href={customerWarrantyHref}
-                              className="mt-1 inline-flex items-center rounded-md bg-white/15 px-2.5 py-1 text-[10px] font-bold text-white transition-all hover:bg-white hover:text-blue-700 font-mono"
+                              href={customerProfileHref}
+                              className={`inline-flex w-full items-center justify-center rounded-lg px-3 py-2 text-xs font-bold transition-all active:scale-[0.99] ${
+                                hasWarrantyInfo
+                                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                  : 'bg-slate-800 text-white hover:bg-slate-900'
+                              }`}
                             >
-                              AUTO-{warrantyAutoId}
+                              เปิดข้อมูลลูกค้า
                             </a>
-                          </div>
-                          <div className="rounded-lg border border-white/80 bg-white/80 p-3 shadow-sm">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Start Date</p>
-                            <p className="mt-1 text-xs font-bold text-slate-800">{analysis?.warranty_start_date || '-'}</p>
-                          </div>
-                          <div className="rounded-lg border border-white/80 bg-white/80 p-3 shadow-sm">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Registration Date</p>
-                            <p className="mt-1 text-xs font-bold text-slate-800">{analysis?.registrationDate || '-'}</p>
-                          </div>
-                          <div className="rounded-lg border border-white/80 bg-white/80 p-3 shadow-sm">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">End Date</p>
-                            <p className="mt-1 text-xs font-bold text-slate-800">{analysis?.warranty_end_date || '-'}</p>
-                          </div>
-                          <div className="rounded-lg border border-white/80 bg-white/80 p-3 shadow-sm">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Expiry Date</p>
-                            <p className="mt-1 text-xs font-bold text-slate-800">{analysis?.expiry_date_of_warranty || '-'}</p>
-                          </div>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled
+                              className="inline-flex w-full cursor-not-allowed items-center justify-center rounded-lg bg-slate-200 px-3 py-2 text-xs font-bold text-slate-500"
+                            >
+                              ไม่พบเบอร์ลูกค้า
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>

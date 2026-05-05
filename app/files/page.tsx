@@ -296,8 +296,10 @@ export default function FilesPage() {
   };
 
   const startAutoAnalysis = useCallback(async (fileId: string) => {
-    const response = await fetch(`${API_BASE}/api/v1/ai/analyze/${fileId}`, {
+    const response = await fetch('/api/background-analysis', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileId }),
     });
 
     if (!response.ok) {
@@ -361,18 +363,6 @@ export default function FilesPage() {
           },
         });
 
-        await startAutoAnalysis(serverFileId);
-
-        await logClientActivity({
-          action: 'AUDIO_ANALYSIS_REQUESTED',
-          target: serverFileId,
-          routePath: '/files',
-          metadata: {
-            fileName: selectedFile.name,
-            source: 'files-page-auto-analysis',
-          },
-        });
-
         setLocalUploads((prev) => prev.map((item) => (
           item.temp_id === upload.temp_id
             ? {
@@ -383,6 +373,35 @@ export default function FilesPage() {
             }
             : item
         )));
+
+        void startAutoAnalysis(serverFileId)
+          .then(async () => {
+            await logClientActivity({
+              action: 'AUDIO_ANALYSIS_REQUESTED',
+              target: serverFileId,
+              routePath: '/files',
+              metadata: {
+                fileName: selectedFile.name,
+                source: 'files-page-auto-analysis',
+              },
+            });
+
+            void fetchFiles(true);
+          })
+          .catch((analysisError: unknown) => {
+            const baseMessage = analysisError instanceof Error ? analysisError.message : 'à¹€à¸£à¸´à¹ˆà¸¡à¸§à¸´à¹€à¸„à¸£à¸²à¸°à¸«à¹Œà¸­à¸±à¸•à¹‚à¸™à¸¡à¸±à¸•à¸´à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ';
+            setError(`à¸­à¸±à¸›à¹‚à¸«à¸¥à¸”à¹à¸¥à¹‰à¸§ à¹à¸•à¹ˆà¹€à¸£à¸´à¹ˆà¸¡à¸§à¸´à¹€à¸„à¸£à¸²à¸°à¸«à¹Œà¸­à¸±à¸•à¹‚à¸™à¸¡à¸±à¸•à¸´à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ: ${baseMessage}`);
+            setLocalUploads((prev) => prev.map((item) => (
+              item.temp_id === upload.temp_id
+                ? {
+                  ...item,
+                  status: 'ERROR',
+                  server_file_id: serverFileId || item.server_file_id,
+                  error: baseMessage,
+                }
+                : item
+            )));
+          });
 
         void fetchFiles(true);
       } catch (uploadError: unknown) {

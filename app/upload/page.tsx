@@ -147,26 +147,34 @@ export default function UploadPage() {
           },
         });
 
-        const analysisRes = await fetch(`${API_BASE}/api/v1/ai/analyze/${serverFileId}`, {
-          method: 'POST',
-        });
-
-        if (!analysisRes.ok) throw new Error(await getApiErrorMessage(analysisRes));
-        await analysisRes.json().catch(() => null);
-
-        await logClientActivity({
-          action: 'AUDIO_ANALYSIS_REQUESTED',
-          target: serverFileId,
-          routePath: '/upload',
-          metadata: {
-            fileName: item.name,
-            source: 'upload-page-auto-analysis',
-          },
-        });
-
         setQueue(prev => prev.map(f =>
           f.id === item.id ? { ...f, status: 'done' as const } : f
         ));
+
+        void fetch('/api/background-analysis', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileId: serverFileId }),
+        })
+          .then(async (analysisRes) => {
+            if (!analysisRes.ok) throw new Error(await getApiErrorMessage(analysisRes));
+
+            await logClientActivity({
+              action: 'AUDIO_ANALYSIS_REQUESTED',
+              target: serverFileId,
+              routePath: '/upload',
+              metadata: {
+                fileName: item.name,
+                source: 'upload-page-auto-analysis',
+              },
+            });
+          })
+          .catch((err: unknown) => {
+            const baseMessage = getErrorMessage(err);
+            setQueue(prev => prev.map(f =>
+              f.id === item.id ? { ...f, status: 'error' as const, error: `Upload complete but auto analysis failed: ${baseMessage}` } : f
+            ));
+          });
       } catch (err: unknown) {
         const baseMessage = getErrorMessage(err);
         const errorMessage = serverFileId

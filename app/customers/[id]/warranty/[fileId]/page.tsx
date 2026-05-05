@@ -191,6 +191,27 @@ export default function WarrantyDetailPage() {
     }
   };
 
+  const formatThaiBuddhistDate = (dateStr?: string | null) => {
+    if (!dateStr) return null;
+    const text = String(dateStr).trim();
+    const slashDate = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (slashDate) {
+      const day = slashDate[1].padStart(2, '0');
+      const month = slashDate[2].padStart(2, '0');
+      const year = Number(slashDate[3]);
+      return `${day}/${month}/${year < 2400 ? year + 543 : year}`;
+    }
+
+    const date = new Date(text);
+    if (Number.isNaN(date.getTime())) return text;
+
+    return date.toLocaleDateString('th-TH', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+  };
+
   const formatDuration = (seconds?: number | null) => {
     if (seconds === null || seconds === undefined || Number.isNaN(Number(seconds))) return null;
     const mins = Math.floor(Number(seconds) / 60);
@@ -305,9 +326,9 @@ export default function WarrantyDetailPage() {
                       <InfoRow label="Sale Channel" value={warranty.sale_channel} bg />
                       <InfoRow label="Order Number" value={warranty.order_number} />
                       <InfoRow label="Status" value={warranty.status} />
-                      <InfoRow label="Registration Date" value={warranty.registrationDate} bg />
-                      <InfoRow label="Delivery Date" value={warranty.date_of_delivery} />
-                      <InfoRow label="Expiry Date" value={warranty.expiry_date_of_warranty} bg />
+                      <InfoRow label="Registration Date" value={formatThaiBuddhistDate(warranty.registrationDate)} bg />
+                      <InfoRow label="Delivery Date" value={formatThaiBuddhistDate(warranty.date_of_delivery)} />
+                      <InfoRow label="Expiry Date" value={formatThaiBuddhistDate(warranty.expiry_date_of_warranty)} bg />
                     </div>
                   </>
                 ) : (
