@@ -274,49 +274,51 @@ export default function CustomersPage() {
                 </div>
               </div>
             </div>
+          </div>
 
-            <div className="flex flex-wrap items-center gap-4 sm:gap-6 md:justify-end">
-              <div className="text-right">
+          {/* Filter Tabs */}
+          <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => { setWarrantyFilter('all'); setPage(1); }}
+                className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${warrantyFilter === 'all'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  }`}
+              >
+                ทั้งหมด ({total})
+              </button>
+              <button
+                onClick={() => { setWarrantyFilter('with'); setPage(1); }}
+                className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${warrantyFilter === 'with'
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  }`}
+              >
+                มีประกัน ({totalWithWarranty})
+              </button>
+              <button
+                onClick={() => { setWarrantyFilter('without'); setPage(1); }}
+                className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${warrantyFilter === 'without'
+                  ? 'bg-slate-600 text-white shadow-md'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  }`}
+              >
+                ไม่มีประกัน ({totalWithoutWarranty})
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4 sm:gap-6 lg:justify-end">
+              <div className="text-left lg:text-right">
                 <div className="text-2xl font-black tracking-tight text-slate-800 sm:text-3xl">{total.toLocaleString()}</div>
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Customer</div>
               </div>
               <div className="hidden h-10 w-px bg-slate-200 sm:block"></div>
-              <div className="text-right">
+              <div className="text-left lg:text-right">
                 <div className="text-2xl font-black tracking-tight text-emerald-600 sm:text-3xl">{totalWithWarranty}</div>
                 <div className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">มีประกัน</div>
               </div>
             </div>
-          </div>
-
-          {/* Filter Tabs */}
-          <div className="flex gap-2 mb-4">
-            <button
-              onClick={() => { setWarrantyFilter('all'); setPage(1); }}
-              className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${warrantyFilter === 'all'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-                }`}
-            >
-              ทั้งหมด ({total})
-            </button>
-            <button
-              onClick={() => { setWarrantyFilter('with'); setPage(1); }}
-              className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${warrantyFilter === 'with'
-                ? 'bg-emerald-600 text-white shadow-md'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-                }`}
-            >
-              มีประกัน ({totalWithWarranty})
-            </button>
-            <button
-              onClick={() => { setWarrantyFilter('without'); setPage(1); }}
-              className={`px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${warrantyFilter === 'without'
-                ? 'bg-slate-600 text-white shadow-md'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-                }`}
-            >
-              ไม่มีประกัน ({totalWithoutWarranty})
-            </button>
           </div>
 
           {/* Search Bar */}

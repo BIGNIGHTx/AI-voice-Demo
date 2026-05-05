@@ -2,17 +2,24 @@
 
 import Sidebar from '@/components/Sidebar';
 import {
-  CheckCircle2,
-  History,
-  Pencil,
-  Plus,
-  Filter,
-  ListOrdered,
-  ChevronRight,
+  AtSign,
+  Cake,
+  CalendarDays,
   ChevronLeft,
-  Package,
+  ChevronRight,
+  History,
   ImagePlus,
-  Trash2
+  Mail,
+  MapPin,
+  MoreVertical,
+  Package,
+  Pencil,
+  Phone,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  User,
+  VenusAndMars
 } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect, useCallback, type ChangeEvent } from 'react';
@@ -43,6 +50,8 @@ interface CustomerDetail {
   district: string;
   province: string;
   postcode: string;
+  created_at?: string | null;
+  createdAt?: string | null;
   suggested_brand?: string;
   suggested_agent_id?: string;
   suggested_sale_channel?: string;
@@ -751,6 +760,32 @@ export default function CustomerDetailPage() {
 
   const fullName = [customer.first_name, customer.last_name].filter(Boolean).join(' ').trim();
   const displayName = fullName || customer.nickname || customer.phone || customer.customer_id;
+  const customerCreatedAt = normalizeTextInput(customer.created_at || customer.createdAt);
+  const memberSinceDisplay = customerCreatedAt ? formatDisplayDate(customerCreatedAt) : '-';
+  const memberDurationDisplay = (() => {
+    if (!customerCreatedAt) return '-';
+
+    const startDate = new Date(customerCreatedAt);
+    if (Number.isNaN(startDate.getTime())) return '-';
+
+    const today = new Date();
+    let months = (today.getFullYear() - startDate.getFullYear()) * 12 + today.getMonth() - startDate.getMonth();
+    if (today.getDate() < startDate.getDate()) months -= 1;
+    if (months <= 0) return 'น้อยกว่า 1 เดือน';
+
+    const years = Math.floor(months / 12);
+    const remainingMonths = months % 12;
+    return [
+      years > 0 ? `${years} ปี` : null,
+      remainingMonths > 0 ? `${remainingMonths} เดือน` : null,
+    ].filter(Boolean).join(' ');
+  })();
+  const addressLines = [
+    normalizeTextInput(customer.address),
+    [normalizeTextInput(customer.district), normalizeTextInput(customer.province)].filter(Boolean).join(' '),
+    normalizeTextInput(customer.postcode),
+  ].filter(Boolean);
+  const shortAddress = addressLines.length ? addressLines.join(' ') : '-';
   const editingWarranty = warranties.find((item) => item.file_id === editingWarrantyFileId) || null;
   const warrantyFormStatusMeta = getWarrantyStatusMeta(
     warrantyForm.status,
@@ -759,341 +794,311 @@ export default function CustomerDetailPage() {
   );
 
   return (
-    <div className="flex h-screen bg-[#f4f7f9] overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-[#f4f7f9]">
       <Sidebar />
-      <main className="flex-1 overflow-auto p-4 sm:p-5 lg:p-6 font-sans text-slate-800">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6">
-          
-          <div className="flex items-center justify-between">
+      <main className="relative flex-1 overflow-auto font-sans text-slate-800">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-72 overflow-hidden">
+          <div className="absolute -right-10 top-0 h-56 w-[720px] rounded-bl-full border-b border-teal-100/70" />
+          <div className="absolute right-16 top-0 h-44 w-[560px] rounded-bl-full border-b border-teal-100/60" />
+          <div className="absolute right-60 top-0 h-32 w-[380px] rounded-bl-full border-b border-teal-100/50" />
+        </div>
+
+        <div className="relative mx-auto flex w-full max-w-[1440px] flex-col gap-5 px-5 py-5 lg:px-8 lg:py-7">
+          <div className="flex items-center justify-between gap-4">
             <button
               onClick={() => router.push('/customers')}
-              className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-500 transition-colors hover:text-blue-600"
+              className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-500 transition-colors hover:text-teal-600"
             >
               <ChevronLeft size={18} />
               กลับไปหน้ารายชื่อลูกค้า
             </button>
+
+            <div className="hidden items-center gap-3 sm:flex">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-600 text-sm font-black text-white shadow-sm">
+                N
+              </div>
+              <div className="leading-tight">
+                <p className="text-sm font-black text-slate-800">Natcha</p>
+                <p className="text-xs font-semibold text-slate-400">Admin</p>
+              </div>
+              <ChevronRight size={15} className="rotate-90 text-slate-400" />
+            </div>
           </div>
 
-          {/* --- Header Profile --- */}
-          <div className="mb-8 flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
-            <div className="relative">
-              {/* Decorative Frame */}
-              <div className="absolute left-0 top-1 bottom-[34px] w-px bg-gradient-to-b from-teal-400 to-transparent opacity-60"></div>
-              {/* 4-Point Star top-left */}
-              <svg className="absolute -left-[5.5px] top-0 w-3 h-3 text-teal-500 opacity-80" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0C12 0 12 10.5 24 12C24 12 12 13.5 12 24C12 24 12 13.5 0 12C0 12 12 10.5 12 0Z" />
-              </svg>
-              {/* Dot and horizontal line bottom-left */}
-              <div className="absolute left-0 bottom-8 w-1.5 h-1.5 rounded-full bg-teal-500 -ml-[2px] opacity-80"></div>
-              <div className="absolute left-1.5 bottom-[34.5px] right-24 h-px bg-gradient-to-r from-teal-400 via-teal-200 to-transparent opacity-60"></div>
-              
-              {/* Right Decorative Graphics (Swirls) */}
-              <svg className="absolute -right-4 top-0 w-32 h-24 text-teal-300 pointer-events-none opacity-40 mix-blend-multiply hidden sm:block" viewBox="0 0 200 100" fill="none" stroke="currentColor">
-                <path d="M150,80 Q100,80 120,40 T180,20" strokeWidth="0.5" fill="none"/>
-                <path d="M130,90 Q80,90 90,50 T160,10" strokeWidth="0.5" fill="none"/>
-                <path d="M160,70 C130,50 180,30 190,50 C200,70 170,90 140,80" strokeWidth="0.5" fill="none"/>
-                <path d="M140,65 C140,65 140,75 145,75 C145,75 140,75 140,85 C140,85 140,75 135,75 C135,75 140,75 140,65Z" fill="#0D9488" stroke="none"/>
-                <circle cx="160" cy="25" r="1.5" fill="currentColor"/>
-                <circle cx="150" cy="15" r="1" fill="currentColor"/>
-                <circle cx="185" cy="85" r="1.5" fill="currentColor"/>
-              </svg>
+          <section className="relative">
+            <div className="absolute left-0 top-3 bottom-0 w-px bg-gradient-to-b from-teal-400 via-teal-200 to-transparent" />
+            <svg className="absolute -left-[5.5px] top-2 h-3 w-3 text-teal-500" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C12 0 12 10.5 24 12C24 12 12 13.5 12 24C12 24 12 13.5 0 12C0 12 12 10.5 12 0Z" />
+            </svg>
+            <div className="absolute -left-[3px] bottom-2 h-1.5 w-1.5 rounded-full bg-teal-500" />
+            <div className="pl-9">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <h1 className="text-[24px] font-black leading-none tracking-tight text-[#0D9488] sm:text-[28px] md:text-[32px]">Customer</h1>
+                <h1 className="text-[24px] font-black leading-none tracking-tight text-[#0F172A] sm:text-[28px] md:text-[32px]">Profile</h1>
+                <span
+                  className="relative top-1.5 ml-1 text-[32px] leading-none sm:top-2 sm:ml-1.5 sm:text-[38px] md:text-[44px]"
+                  style={{
+                    fontFamily: 'var(--font-great-vibes), cursive',
+                    background: 'linear-gradient(to right, #0F172A, #0D9488, #2DD4BF)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    padding: '8px 12px 8px 0',
+                    lineHeight: '1.2',
+                  }}
+                >
+                  Detail
+                </span>
+              </div>
+              <div className="mt-8 flex flex-wrap items-center gap-x-3 gap-y-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#0D9488] sm:text-xs">
+                <span>CLIENT INFORMATION</span>
+                <span className="text-teal-200">|</span>
+                <span>ID: {customer.customer_id}</span>
+              </div>
+            </div>
+          </section>
 
-              <div className="pl-6 pt-2 pb-6 relative z-10">
-                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                  <h1 className="text-[24px] sm:text-[28px] md:text-[32px] font-black tracking-tight text-[#0D9488] leading-none">Customer</h1>
-                  <h1 className="text-[24px] sm:text-[28px] md:text-[32px] font-black tracking-tight text-[#0F172A] leading-none">Profile</h1>
-                  <span 
-                    className="text-[32px] sm:text-[38px] md:text-[44px] leading-none ml-1 sm:ml-1.5 relative top-1.5 sm:top-2" 
-                    style={{ 
-                      fontFamily: 'var(--font-great-vibes), cursive', 
-                      background: 'linear-gradient(to right, #0F172A, #0D9488, #2DD4BF)', 
-                      WebkitBackgroundClip: 'text', 
-                      WebkitTextFillColor: 'transparent',
-                      padding: '8px 12px 8px 0',
-                      lineHeight: '1.2'
+          <div className="flex justify-end">
+            <button
+              onClick={openCreateWarrantyModal}
+              className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#4b5563] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700 sm:w-auto"
+            >
+              <Plus size={18} />
+              เพิ่มรายการใหม่
+            </button>
+          </div>
+
+          <section className="grid gap-4 lg:grid-cols-[minmax(320px,1.35fr)_repeat(4,minmax(150px,0.62fr))]">
+            <div className="rounded-[22px] border border-teal-100 bg-gradient-to-br from-teal-50 via-white to-emerald-50 p-6 shadow-sm">
+              <div className="flex items-center gap-5">
+                <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-teal-600 shadow-sm">
+                  <User size={48} strokeWidth={1.8} />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="truncate text-2xl font-black tracking-tight text-slate-900">{displayName}</h2>
+                  <p className="mt-1 text-sm font-bold text-slate-400">เบอร์โทรศัพท์</p>
+                  <p className="mt-2 text-2xl font-black tracking-tight text-teal-600">{customer.phone || '-'}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[22px] border border-slate-100 bg-white p-5 shadow-sm">
+              <div className="flex h-full flex-col justify-between gap-7">
+                <div>
+                  <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-teal-50 text-teal-600">
+                    <ShieldCheck size={24} />
+                  </div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">WARRANTIES</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-800">{warranties.length}</p>
+                  <p className="mt-1 text-xs text-slate-500">รายการประกันสินค้าทั้งหมด</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[22px] border border-slate-100 bg-white p-5 shadow-sm">
+              <div className="flex h-full flex-col justify-between gap-7">
+                <div>
+                  <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-violet-50 text-violet-600">
+                    <Phone size={24} />
+                  </div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">CALLS</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-800">{callHistory.length}</p>
+                  <p className="mt-1 text-xs text-slate-500">ประวัติการติดต่อศูนย์บริการ</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[22px] border border-slate-100 bg-white p-5 shadow-sm">
+              <div className="flex h-full flex-col justify-between gap-7">
+                <div>
+                  <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-orange-50 text-orange-500">
+                    <CalendarDays size={24} />
+                  </div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">MEMBER SINCE</p>
+                  <p className="mt-2 text-xl font-bold text-slate-800">{memberSinceDisplay}</p>
+                  <p className="mt-1 text-xs text-slate-500">เป็นสมาชิกมาแล้ว</p>
+                </div>
+                <p className="text-sm font-bold text-slate-700">{memberDurationDisplay}</p>
+              </div>
+            </div>
+
+            <div className="rounded-[22px] border border-slate-100 bg-white p-5 shadow-sm">
+              <div className="flex h-full flex-col justify-between gap-5">
+                <div>
+                  <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-sky-50 text-sky-600">
+                    <MapPin size={24} />
+                  </div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">ADDRESS</p>
+                  <p className="mt-2 line-clamp-3 text-sm font-semibold leading-6 text-slate-800">{shortAddress}</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="grid items-start gap-5 lg:grid-cols-[430px_minmax(0,1fr)]">
+            <div className="space-y-5">
+            <div id="personal-info" className="rounded-[22px] border border-slate-100 bg-white p-6 shadow-sm">
+              <div className="mb-6 flex items-center justify-between gap-3">
+                <h3 className="text-lg font-bold text-slate-800">ข้อมูลส่วนตัว</h3>
+                {!isEditing ? (
+                  <button
+                    onClick={() => {
+                      setEditForm({
+                        first_name: normalizeTextInput(customer.first_name),
+                        last_name: normalizeTextInput(customer.last_name),
+                        nickname: normalizeTextInput(customer.nickname),
+                        phone: normalizeTextInput(customer.phone),
+                        email: normalizeTextInput(customer.email),
+                        gender: normalizeTextInput(customer.gender),
+                        date_of_birth: normalizeDateForInput(customer.date_of_birth),
+                        address: normalizeTextInput(customer.address),
+                        district: normalizeTextInput(customer.district),
+                        province: normalizeTextInput(customer.province),
+                        postcode: normalizeTextInput(customer.postcode),
+                      });
+                      setIsEditing(true);
                     }}
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-100"
                   >
-                    Detail
-                  </span>
-                </div>
-
-                <div className="mt-8 flex flex-wrap items-center gap-x-3 gap-y-2 text-[10px] sm:text-xs font-bold tracking-[0.2em] text-[#0D9488] uppercase">
-                  <span>CLIENT INFORMATION</span>
-                  <span className="text-teal-200">|</span>
-                  <span>ID: {customer.customer_id}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-4 sm:gap-6 md:justify-end">
-              <div className="text-right">
-                <div className="text-2xl font-black tracking-tight text-slate-800 sm:text-3xl">{displayName}</div>
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ชื่อลูกค้า</div>
-              </div>
-              <div className="hidden h-10 w-px bg-slate-200 sm:block"></div>
-              <div className="text-right">
-                <div className="text-2xl font-black tracking-tight text-teal-600 sm:text-3xl">{customer.phone}</div>
-                <div className="text-[10px] font-bold text-teal-500 uppercase tracking-widest">เบอร์โทรศัพท์</div>
-              </div>
-            </div>
-          </div>
-            <div className="flex items-center gap-3 w-full md:w-auto">
-              <button 
-                onClick={openCreateWarrantyModal}
-                className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#4b5563] px-5 py-2.5 font-semibold text-white shadow-sm transition hover:bg-slate-700 md:flex-none"
-              >
-                <Plus size={18} /> เพิ่มรายการใหม่
-              </button>
-            </div>
-          </div>
-
-          {/* --- Top Stats Row --- */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
-              <div className="flex justify-between items-start mb-4">
-                <div className="bg-blue-50 text-blue-600 p-2 rounded-lg">
-                  <CheckCircle2 size={24} />
-                </div>
-                <span className="text-xs font-bold text-slate-400 tracking-wider">WARRANTIES</span>
-              </div>
-              <div>
-                <div className="text-3xl font-bold text-slate-800">{warranties.length}</div>
-                <p className="text-xs text-slate-500 mt-1">รายการประกันสินค้าทั้งหมด</p>
-              </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
-              <div className="flex justify-between items-start mb-4">
-                <div className="bg-slate-100 text-slate-500 p-2 rounded-lg">
-                  <History size={24} />
-                </div>
-                <span className="text-xs font-bold text-slate-400 tracking-wider">CALLS</span>
-              </div>
-              <div>
-                <div className="text-3xl font-bold text-slate-800">{callHistory.length}</div>
-                <p className="text-xs text-slate-500 mt-1">ประวัติการติดต่อศูนย์บริการ</p>
-              </div>
-            </div>
-
-          </div>
-
-          {/* --- Main Content Grid --- */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-            
-            {/* Left Column */}
-            <div className="space-y-6">
-              {/* Personal Info Card */}
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-bold text-slate-800 text-lg">ข้อมูลส่วนตัว</h3>
-                  {!isEditing ? (
-                    <button 
-                      onClick={() => {
-                        setEditForm({
-                          first_name: normalizeTextInput(customer.first_name),
-                          last_name: normalizeTextInput(customer.last_name),
-                          nickname: normalizeTextInput(customer.nickname),
-                          phone: normalizeTextInput(customer.phone),
-                          email: normalizeTextInput(customer.email),
-                          gender: normalizeTextInput(customer.gender),
-                          date_of_birth: normalizeDateForInput(customer.date_of_birth),
-                          address: normalizeTextInput(customer.address),
-                          district: normalizeTextInput(customer.district),
-                          province: normalizeTextInput(customer.province),
-                          postcode: normalizeTextInput(customer.postcode),
-                        });
-                        setIsEditing(true);
-                      }}
-                      className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-100"
+                    <Pencil size={14} /> แก้ไขข้อมูล
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsEditing(false)}
+                      className="cursor-pointer rounded-xl px-3 py-2 text-xs font-bold text-slate-400 transition hover:bg-slate-50 hover:text-slate-600"
+                      disabled={savingProfile}
                     >
-                      <Pencil size={14} /> แก้ไขข้อมูล
+                      ยกเลิก
                     </button>
+                    <button
+                      onClick={handleSaveProfile}
+                      className="cursor-pointer rounded-xl bg-teal-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-teal-700 disabled:opacity-60"
+                      disabled={savingProfile}
+                    >
+                      {savingProfile ? 'กำลังบันทึก...' : 'บันทึก'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-x-6 gap-y-5">
+                <div className="space-y-2">
+                  <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-400"><User size={13} className="text-teal-500" /> FIRST NAME / ชื่อ</p>
+                  {isEditing ? (
+                    <input className="w-full border-b border-teal-200 bg-transparent py-1 text-sm font-semibold text-slate-800 outline-none focus:border-teal-500" value={editForm.first_name || ''} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} />
                   ) : (
-                    <div className="flex gap-2">
-                       <button 
-                        onClick={() => setIsEditing(false)}
-                        className="cursor-pointer px-2 py-1 text-xs font-bold text-slate-400 hover:text-slate-600"
-                        disabled={savingProfile}
-                      >
-                        ยกเลิก
-                      </button>
-                      <button 
-                        onClick={handleSaveProfile}
-                        className="cursor-pointer rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700"
-                        disabled={savingProfile}
-                      >
-                        {savingProfile ? 'กำลังบันทึก...' : 'บันทึก'}
-                      </button>
-                    </div>
+                    <p className="text-sm font-semibold text-slate-800">{customer.first_name || '-'}</p>
                   )}
                 </div>
-                
-                <div className="grid grid-cols-2 gap-y-6 gap-x-4">
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 mb-1">FIRST NAME / ชื่อ</p>
-                    {isEditing ? (
-                      <input 
-                        className="w-full text-sm font-semibold text-slate-800 border-b border-blue-200 outline-none focus:border-blue-500 py-1 bg-transparent"
-                        value={editForm.first_name || ''}
-                        onChange={(e) => setEditForm({...editForm, first_name: e.target.value})}
-                      />
-                    ) : (
-                      <p className="font-semibold text-slate-800">{customer.first_name || '-'}</p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 mb-1">LAST NAME / นามสกุล</p>
-                    {isEditing ? (
-                      <input 
-                        className="w-full text-sm font-semibold text-slate-800 border-b border-blue-200 outline-none focus:border-blue-500 py-1 bg-transparent"
-                        value={editForm.last_name || ''}
-                        onChange={(e) => setEditForm({...editForm, last_name: e.target.value})}
-                      />
-                    ) : (
-                      <p className="font-semibold text-slate-800">{customer.last_name || '-'}</p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 mb-1">NICKNAME / ชื่อเล่น</p>
-                    {isEditing ? (
-                      <input 
-                        className="w-full text-sm font-semibold text-slate-800 border-b border-blue-200 outline-none focus:border-blue-500 py-1 bg-transparent"
-                        value={editForm.nickname || ''}
-                        onChange={(e) => setEditForm({...editForm, nickname: e.target.value})}
-                      />
-                    ) : (
-                      <p className="font-semibold text-slate-800">{customer.nickname || '-'}</p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 mb-1">PHONE / เบอร์โทร</p>
-                    {isEditing ? (
-                      <input 
-                        className="w-full text-sm font-semibold text-slate-800 border-b border-blue-200 outline-none focus:border-blue-500 py-1 bg-transparent"
-                        value={editForm.phone || ''}
-                        onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
-                      />
-                    ) : (
-                      <p className="font-semibold text-slate-800">{customer.phone || '-'}</p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 mb-1">GENDER / เพศ</p>
-                    {isEditing ? (
-                      <select 
-                        className="w-full text-sm font-semibold text-slate-800 border-b border-blue-200 outline-none focus:border-blue-500 py-1 bg-transparent"
-                        value={editForm.gender || ''}
-                        onChange={(e) => setEditForm({...editForm, gender: e.target.value})}
-                      >
-                        <option value="">โปรดเลือก</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    ) : (
-                      <p className="font-semibold text-slate-800">{customer.gender || '-'}</p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 mb-1">BIRTHDAY / วันเกิด</p>
-                    {isEditing ? (
-                      <input 
-                        type="date"
-                        className="w-full text-sm font-semibold text-slate-800 border-b border-blue-200 outline-none focus:border-blue-500 py-1 bg-transparent"
-                        value={editForm.date_of_birth || ''}
-                        onChange={(e) => setEditForm({...editForm, date_of_birth: e.target.value})}
-                      />
-                    ) : (
-                      <p className="font-semibold text-slate-800">{formatDisplayDate(customer.date_of_birth)}</p>
-                    )}
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-[10px] font-bold text-slate-400 mb-1">EMAIL / อีเมล</p>
-                    {isEditing ? (
-                      <input 
-                        className="w-full text-sm font-semibold text-slate-800 border-b border-blue-200 outline-none focus:border-blue-500 py-1 bg-transparent"
-                        value={editForm.email || ''}
-                        onChange={(e) => setEditForm({...editForm, email: e.target.value})}
-                      />
-                    ) : (
-                      <p className="font-semibold text-slate-800 truncate">{customer.email || '-'}</p>
-                    )}
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-[10px] font-bold text-slate-400 mb-1">ADDRESS / ที่อยู่</p>
-                    {isEditing ? (
-                      <textarea 
-                        className="w-full text-sm font-semibold text-slate-800 border-b border-blue-200 outline-none focus:border-blue-500 py-1 bg-transparent resize-none"
-                        rows={2}
-                        value={editForm.address || ''}
-                        onChange={(e) => setEditForm({...editForm, address: e.target.value})}
-                      />
-                    ) : (
-                      <p className="text-sm font-semibold text-slate-800 leading-relaxed">{customer.address || '-'}</p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 mb-1">DISTRICT / เขต-อำเภอ</p>
-                    {isEditing ? (
-                      <input 
-                        className="w-full text-sm font-semibold text-slate-800 border-b border-blue-200 outline-none focus:border-blue-500 py-1 bg-transparent"
-                        value={editForm.district || ''}
-                        onChange={(e) => setEditForm({...editForm, district: e.target.value})}
-                      />
-                    ) : (
-                      <p className="font-semibold text-slate-800">{customer.district || '-'}</p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 mb-1">PROVINCE / จังหวัด</p>
-                    {isEditing ? (
-                      <input 
-                        className="w-full text-sm font-semibold text-slate-800 border-b border-blue-200 outline-none focus:border-blue-500 py-1 bg-transparent"
-                        value={editForm.province || ''}
-                        onChange={(e) => setEditForm({...editForm, province: e.target.value})}
-                      />
-                    ) : (
-                      <p className="font-semibold text-slate-800">{customer.province || '-'}</p>
-                    )}
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-[10px] font-bold text-slate-400 mb-1">POSTCODE / รหัสไปรษณีย์</p>
-                    {isEditing ? (
-                      <input 
-                        className="w-full text-sm font-semibold text-slate-800 border-b border-blue-200 outline-none focus:border-blue-500 py-1 bg-transparent"
-                        value={editForm.postcode || ''}
-                        onChange={(e) => setEditForm({...editForm, postcode: e.target.value})}
-                      />
-                    ) : (
-                      <p className="font-semibold text-slate-800">{customer.postcode || '-'}</p>
-                    )}
-                  </div>
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">LAST NAME / นามสกุล</p>
+                  {isEditing ? (
+                    <input className="w-full border-b border-teal-200 bg-transparent py-1 text-sm font-semibold text-slate-800 outline-none focus:border-teal-500" value={editForm.last_name || ''} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} />
+                  ) : (
+                    <p className="text-sm font-semibold text-slate-800">{customer.last_name || '-'}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-400"><AtSign size={13} className="text-teal-500" /> NICKNAME / ชื่อเล่น</p>
+                  {isEditing ? (
+                    <input className="w-full border-b border-teal-200 bg-transparent py-1 text-sm font-semibold text-slate-800 outline-none focus:border-teal-500" value={editForm.nickname || ''} onChange={(e) => setEditForm({ ...editForm, nickname: e.target.value })} />
+                  ) : (
+                    <p className="text-sm font-semibold text-slate-800">{customer.nickname || '-'}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">PHONE / เบอร์โทร</p>
+                  {isEditing ? (
+                    <input className="w-full border-b border-teal-200 bg-transparent py-1 text-sm font-semibold text-slate-800 outline-none focus:border-teal-500" value={editForm.phone || ''} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
+                  ) : (
+                    <p className="text-sm font-semibold text-slate-800">{customer.phone || '-'}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-400"><VenusAndMars size={13} className="text-teal-500" /> GENDER / เพศ</p>
+                  {isEditing ? (
+                    <select className="w-full border-b border-teal-200 bg-transparent py-1 text-sm font-semibold text-slate-800 outline-none focus:border-teal-500" value={editForm.gender || ''} onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })}>
+                      <option value="">โปรดเลือก</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  ) : (
+                    <p className="text-sm font-semibold text-slate-800">{customer.gender || '-'}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-400"><Cake size={13} className="text-teal-500" /> BIRTHDAY / วันเกิด</p>
+                  {isEditing ? (
+                    <input type="date" className="w-full border-b border-teal-200 bg-transparent py-1 text-sm font-semibold text-slate-800 outline-none focus:border-teal-500" value={editForm.date_of_birth || ''} onChange={(e) => setEditForm({ ...editForm, date_of_birth: e.target.value })} />
+                  ) : (
+                    <p className="text-sm font-semibold text-slate-800">{formatDisplayDate(customer.date_of_birth)}</p>
+                  )}
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-400"><Mail size={13} className="text-teal-500" /> EMAIL / อีเมล</p>
+                  {isEditing ? (
+                    <input className="w-full border-b border-teal-200 bg-transparent py-1 text-sm font-semibold text-slate-800 outline-none focus:border-teal-500" value={editForm.email || ''} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+                  ) : (
+                    <p className="truncate text-sm font-semibold text-slate-800">{customer.email || '-'}</p>
+                  )}
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-400"><MapPin size={13} className="text-teal-500" /> ADDRESS / ที่อยู่</p>
+                  {isEditing ? (
+                    <textarea className="w-full resize-none border-b border-teal-200 bg-transparent py-1 text-sm font-semibold text-slate-800 outline-none focus:border-teal-500" rows={2} value={editForm.address || ''} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} />
+                  ) : (
+                    <p className="text-sm font-semibold leading-relaxed text-slate-800">{customer.address || '-'}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">DISTRICT / เขต-อำเภอ</p>
+                  {isEditing ? (
+                    <input className="w-full border-b border-teal-200 bg-transparent py-1 text-sm font-semibold text-slate-800 outline-none focus:border-teal-500" value={editForm.district || ''} onChange={(e) => setEditForm({ ...editForm, district: e.target.value })} />
+                  ) : (
+                    <p className="text-sm font-semibold text-slate-800">{customer.district || '-'}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">PROVINCE / จังหวัด</p>
+                  {isEditing ? (
+                    <input className="w-full border-b border-teal-200 bg-transparent py-1 text-sm font-semibold text-slate-800 outline-none focus:border-teal-500" value={editForm.province || ''} onChange={(e) => setEditForm({ ...editForm, province: e.target.value })} />
+                  ) : (
+                    <p className="text-sm font-semibold text-slate-800">{customer.province || '-'}</p>
+                  )}
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-400"><CalendarDays size={13} className="text-teal-500" /> REGISTERED / ลงทะเบียนเมื่อ</p>
+                  <p className="text-sm font-semibold text-slate-800">{memberSinceDisplay}</p>
                 </div>
               </div>
+            </div>
 
-              {/* Added Call History as a secondary section */}
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                <div className="flex items-center justify-between mb-4">
-                   <h3 className="font-bold text-slate-800 text-lg">ประวัติการติดต่อ</h3>
-                   <span className="text-xs bg-slate-100 px-2 py-1 rounded-md font-bold text-slate-500">{callHistory.length}</span>
+              <div className="rounded-[22px] border border-slate-100 bg-white p-6 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <History size={18} className="text-slate-500" />
+                    <h3 className="text-lg font-bold text-slate-800">ประวัติการติดต่อ</h3>
+                  </div>
+                  <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-500">{callHistory.length}</span>
                 </div>
                 <div className="max-h-80 space-y-3 overflow-y-auto pr-2">
                   {callHistory.length === 0 ? (
-                    <p className="text-sm text-slate-400 text-center py-4 italic">ไม่พบประวัติการโทร</p>
+                    <p className="py-4 text-center text-sm italic text-slate-400">ไม่พบประวัติการโทร</p>
                   ) : (
                     callHistory.map((call, idx) => (
-                      <Link 
-                        key={idx} 
+                      <Link
+                        key={call.file_id || idx}
                         href={`/files/${call.file_id}`}
-                        className="block p-3 rounded-xl border border-slate-50 hover:bg-slate-50 transition drop-shadow-sm bg-white"
+                        className="block rounded-xl border border-slate-50 bg-white p-3 shadow-sm transition hover:bg-slate-50"
                       >
-                        <div className="flex justify-between items-start mb-1">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${call.type === 'inbound' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                        <div className="mb-1 flex items-start justify-between">
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${call.type === 'inbound' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
                             {(call.type || 'Unknown').toUpperCase()}
                           </span>
-                          <span className="text-[10px] text-slate-400 font-medium">{call.date}</span>
+                          <span className="text-[10px] font-medium text-slate-400">{call.date}</span>
                         </div>
-                        <p className="text-xs font-bold text-slate-700 truncate">ID: {call.file_id}</p>
+                        <p className="truncate text-xs font-bold text-slate-700">ID: {call.file_id}</p>
                       </Link>
                     ))
                   )}
@@ -1101,20 +1106,15 @@ export default function CustomerDetailPage() {
               </div>
             </div>
 
-            {/* Right Column: Warranty List */}
-            <div className="lg:col-span-2 space-y-4">
-              <div className="flex justify-between items-center mb-2 px-1">
+            <div id="warranty-list" className="space-y-4">
+              <div className="flex items-center justify-between gap-3 px-1">
                 <h2 className="text-lg font-bold text-slate-800">รายการประกันสินค้า ({warranties.length})</h2>
-                <div className="flex gap-4 text-slate-500">
-                  <button className="cursor-pointer hover:text-slate-800"><Filter size={20} /></button>
-                  <button className="cursor-pointer hover:text-slate-800"><ListOrdered size={20} /></button>
-                </div>
               </div>
 
               {warranties.length === 0 ? (
-                <div className="bg-white p-12 rounded-2xl shadow-sm border border-slate-100 text-center">
-                  <Package size={48} className="mx-auto text-slate-200 mb-3" />
-                  <p className="text-slate-500 font-medium">ยังไม่มีรายการประกันสินค้า</p>
+                <div className="rounded-[22px] border border-slate-100 bg-white p-12 text-center shadow-sm">
+                  <Package size={48} className="mx-auto mb-3 text-slate-200" />
+                  <p className="font-bold text-slate-500">ยังไม่มีรายการประกันสินค้า</p>
                 </div>
               ) : (
                 warranties.map((warranty, index) => {
@@ -1127,53 +1127,44 @@ export default function CustomerDetailPage() {
                     <article
                       key={warranty.file_id || index}
                       onClick={() => router.push(`/customers/${customerId}/warranty/${warranty.file_id}`)}
-                      className={`group flex cursor-pointer flex-col items-start gap-6 rounded-2xl border bg-white p-5 shadow-sm transition-all hover:shadow-md md:flex-row ${statusMeta.panelClassName}`}
+                      className="group relative flex cursor-pointer flex-col gap-5 rounded-[22px] border border-slate-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md md:flex-row md:items-center"
                     >
-                      <div className="relative h-32 w-full overflow-hidden rounded-xl bg-slate-100 md:w-48 flex-shrink-0">
+                      <div className="relative h-36 w-full shrink-0 overflow-hidden rounded-2xl bg-slate-100 md:h-32 md:w-36">
                         {previewImage ? (
-                          <img
-                            src={previewImage}
-                            alt={warranty.model || warranty.registration_no}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : index % 2 === 0 ? (
-                          <>
-                            <div className="absolute bottom-0 h-1/2 w-full rounded-t-sm bg-slate-500"></div>
-                            <div className="absolute bottom-1/2 h-4 w-full bg-white"></div>
-                          </>
+                          <img src={previewImage} alt={warranty.model || warranty.registration_no} className="h-full w-full object-cover" />
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center">
-                            <div className="h-24 w-24 rotate-45 transform rounded-md bg-slate-300 shadow-sm scale-y-75"></div>
+                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
+                            <Package size={46} className="text-slate-300" />
                           </div>
                         )}
-                        <div className="absolute left-3 top-3 flex items-center gap-2">
-                          <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase ${statusMeta.badgeClassName}`}>
-                            {statusMeta.label}
-                          </span>
-                          {warranty.images?.length ? (
-                            <span className="rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-bold text-slate-600 shadow-sm">
-                              {warranty.images.length} รูป
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/5">
-                          <ChevronRight className="text-white opacity-0 transition-opacity group-hover:opacity-100" />
-                        </div>
+                        <span className={`absolute left-3 top-3 rounded-full px-3 py-1 text-[10px] font-bold ${statusMeta.badgeClassName}`}>
+                          {statusMeta.label}
+                        </span>
                       </div>
 
-                      <div className="relative w-full flex-1">
-                        <div className="mb-2 flex items-start justify-between gap-3">
-                          <div>
-                            <h3 className="text-lg font-bold text-slate-800">{warranty.brand} - {warranty.model}</h3>
-                            <p className="mt-1 text-xs font-medium text-slate-400">ทะเบียน: {warranty.registration_no || '-'}</p>
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0">
+                            <h3 className="truncate text-lg font-bold text-slate-800">{warranty.brand} - {warranty.model}</h3>
+                            <p className="mt-1 text-xs font-bold text-slate-400">ทะเบียน: {warranty.registration_no || '-'}</p>
+                            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-bold">
+                              <span className="rounded-md bg-teal-50 px-2.5 py-1 text-teal-700">{warranty.serial_no || warranty.order_number || warranty.registration_no || '-'}</span>
+                              <span className="text-slate-300">•</span>
+                              <span className="text-slate-400">File ID: #{warranty.file_id}</span>
+                              <span className="inline-flex items-center gap-1 text-slate-400">
+                                <ImagePlus size={13} />
+                                {warranty.images?.length ? 'แก้ไข/เพิ่มรูปได้' : 'เพิ่มรูปได้'}
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
+
+                          <div className="flex shrink-0 items-center gap-2">
                             <button
                               onClick={(event) => {
                                 event.stopPropagation();
                                 openEditWarrantyModal(warranty);
                               }}
-                              className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                              className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-600"
                               disabled={deletingWarrantyFileId === warranty.file_id}
                             >
                               <Pencil size={14} /> Edit
@@ -1188,37 +1179,36 @@ export default function CustomerDetailPage() {
                             >
                               <Trash2 size={14} /> {deletingWarrantyFileId === warranty.file_id ? 'Deleting...' : 'Delete'}
                             </button>
+                            <button
+                              type="button"
+                              onClick={(event) => event.stopPropagation()}
+                              className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-slate-400 transition hover:bg-slate-100"
+                              title="More"
+                            >
+                              <MoreVertical size={16} />
+                            </button>
                           </div>
-                        </div>
-
-                        <div className="mb-6 flex flex-wrap items-center gap-3">
-                          <span className="rounded bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600">{warranty.serial_no || warranty.registration_no || '-'}</span>
-                          <span className="text-[11px] text-slate-400">• File ID: #{warranty.file_id}</span>
-                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500">
-                            <ImagePlus size={13} className="text-slate-400" />
-                            {warranty.images?.length ? 'แก้ไข/เพิ่มรูปได้' : 'เพิ่มรูปได้'}
-                          </span>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
                           <div>
-                            <p className="mb-1 text-[9px] font-bold uppercase text-slate-400">Delivery Date</p>
+                            <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-400">Delivery Date</p>
                             <p className="text-sm font-bold text-slate-800">{formatWarrantyDisplayDate(warrantyDeliveryDate)}</p>
                           </div>
                           <div>
-                            <p className="mb-1 text-[9px] font-bold uppercase text-slate-400">Warranty</p>
+                            <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-400">Warranty</p>
                             <p className="text-sm font-bold text-slate-800">{warranty.warranty_period || '-'}</p>
                           </div>
                           <div>
-                            <p className="mb-1 text-[9px] font-bold uppercase text-slate-400">Channel</p>
-                            <p className="text-sm font-bold leading-tight text-slate-800">{warranty.sale_channel || '-'}</p>
+                            <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-400">Channel</p>
+                            <p className="text-sm font-bold text-slate-800">{warranty.sale_channel || '-'}</p>
                           </div>
                           <div>
-                            <p className="mb-1 text-[9px] font-bold uppercase text-slate-400">Agent ID</p>
+                            <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-400">Agent ID</p>
                             <p className="text-sm font-bold text-slate-800">{warranty.agent_id || '-'}</p>
                           </div>
                           <div>
-                            <p className="mb-1 text-[9px] font-bold uppercase text-slate-400">Expiry</p>
+                            <p className="mb-1 text-[9px] font-bold uppercase tracking-wide text-slate-400">Expiry</p>
                             <p className="text-sm font-bold text-slate-800">{expiryDate}</p>
                           </div>
                         </div>
@@ -1227,15 +1217,8 @@ export default function CustomerDetailPage() {
                   );
                 })
               )}
-
-              <div className="pt-4 text-center">
-                <button className="cursor-pointer text-xs font-bold text-slate-500 tracking-widest transition uppercase hover:text-slate-800">
-                  Load all {warranties.length} records
-                </button>
-              </div>
-
             </div>
-          </div>
+          </section>
         </div>
       </main>
 
