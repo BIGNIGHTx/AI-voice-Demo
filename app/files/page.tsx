@@ -842,6 +842,7 @@ export default function FilesPage() {
                 />
                 <button
                   onClick={handleUploadButtonClick}
+                  suppressHydrationWarning
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-800"
                 >
                   <CloudUpload size={16} />
@@ -849,6 +850,7 @@ export default function FilesPage() {
                 </button>
                 <button
                   onClick={clearFilters}
+                  suppressHydrationWarning
                   className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
                 >
                   Clear All
@@ -863,6 +865,7 @@ export default function FilesPage() {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input
                     type="text"
+                    suppressHydrationWarning
                     placeholder="Filter files by name, customer, brand, agent..."
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                     value={fileSearch}
@@ -876,6 +879,7 @@ export default function FilesPage() {
                 <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Brand</span>
                 <select
                   value={filters.brand}
+                  suppressHydrationWarning
                   onChange={(e) => { setFilters({ ...filters, brand: e.target.value }); setPage(1); }}
                   className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                 >
@@ -890,6 +894,7 @@ export default function FilesPage() {
                 <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Sentiment</span>
                 <select
                   value={filters.sentiment}
+                  suppressHydrationWarning
                   onChange={(e) => { setFilters({ ...filters, sentiment: e.target.value }); setPage(1); }}
                   className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                 >
@@ -904,6 +909,7 @@ export default function FilesPage() {
                 <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Call Type</span>
                 <select
                   value={filters.callType}
+                  suppressHydrationWarning
                   onChange={(e) => { setFilters({ ...filters, callType: e.target.value }); setPage(1); }}
                   className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                 >
@@ -920,6 +926,7 @@ export default function FilesPage() {
                   <input
                     type="date"
                     lang="en-GB"
+                    suppressHydrationWarning
                     placeholder="dd/mm/yyyy"
                     value={filters.dateFrom}
                     onChange={(e) => { setFilters({ ...filters, dateFrom: e.target.value }); setPage(1); }}
@@ -932,6 +939,7 @@ export default function FilesPage() {
                   <input
                     type="date"
                     lang="en-GB"
+                    suppressHydrationWarning
                     placeholder="dd/mm/yyyy"
                     value={filters.dateTo}
                     onChange={(e) => { setFilters({ ...filters, dateTo: e.target.value }); setPage(1); }}
@@ -944,6 +952,7 @@ export default function FilesPage() {
                   <input
                     type="date"
                     lang="en-GB"
+                    suppressHydrationWarning
                     placeholder="dd/mm/yyyy"
                     value={filters.uploadDate}
                     onChange={(e) => { setFilters({ ...filters, uploadDate: e.target.value }); setPage(1); }}
@@ -985,6 +994,7 @@ export default function FilesPage() {
                   <button
                     onClick={handleDeleteAll}
                     disabled={deletingAll}
+                    suppressHydrationWarning
                     className="flex items-center space-x-2 px-4 py-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100 transition-all cursor-pointer disabled:opacity-50 active:scale-95"
                   >
                     <Trash2 size={16} />
@@ -993,6 +1003,7 @@ export default function FilesPage() {
                 )}
                 <button
                   onClick={() => fetchFiles()}
+                  suppressHydrationWarning
                   className="p-2.5 bg-slate-50 text-slate-500 rounded-lg border border-slate-200 hover:bg-slate-100 cursor-pointer transition-colors"
                 >
                   <RotateCw size={18} className={loading ? 'animate-spin' : ''} />
@@ -1150,6 +1161,7 @@ export default function FilesPage() {
                                     e.stopPropagation();
                                     router.push(`/files/${file.file_id}`);
                                   }}
+                                  suppressHydrationWarning
                                   className="flex items-center justify-center rounded-lg p-1.5 text-blue-600 transition-all hover:bg-blue-100 cursor-pointer active:scale-95"
                                   title="View Analysis Detail"
                                 >
@@ -1158,6 +1170,7 @@ export default function FilesPage() {
                                 <button
                                   onClick={(e) => handleDelete(file.file_id, e)}
                                   disabled={deleting === file.file_id}
+                                  suppressHydrationWarning
                                   className="flex items-center justify-center rounded-lg p-1.5 text-red-500 transition-all hover:bg-red-50 cursor-pointer disabled:opacity-50 active:scale-95"
                                   title="Delete file"
                                 >
@@ -1188,14 +1201,14 @@ export default function FilesPage() {
                 {hasActiveFilters ? ` (filtered from ${displayTotal})` : ''}
               </span>
               <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}
+                <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1} suppressHydrationWarning
                   className="px-3 py-2 text-slate-400 cursor-pointer transition-colors hover:text-slate-600 disabled:opacity-30">PREVIOUS</button>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                  <button key={p} onClick={() => setPage(p)}
+                  <button key={p} onClick={() => setPage(p)} suppressHydrationWarning
                     className={`w-8 h-8 rounded-full flex items-center justify-center font-medium cursor-pointer transition-colors ${p === page ? 'bg-blue-700 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'
                       }`}>{p}</button>
                 ))}
-                <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}
+                <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages} suppressHydrationWarning
                   className="px-3 py-2 text-slate-600 font-medium transition-colors hover:text-slate-800 cursor-pointer disabled:opacity-30">NEXT</button>
               </div>
             </div>

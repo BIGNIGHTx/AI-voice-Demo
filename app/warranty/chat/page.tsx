@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { getChatbotReply } from '@/lib/chatbot';
+import { CHATBOT_SUGGESTED_PROMPTS, getChatbotReply } from '@/lib/chatbot';
 
 interface Message {
   role: 'user' | 'bot';
@@ -66,7 +66,7 @@ const formatBotMessage = (text: string): string[] => {
 
 export default function WarrantyChatPage() {
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'bot', text: 'สวัสดีครับ ผมเป็น AI ผู้ช่วยตรวจสอบข้อมูลการรับประกันและข้อมูลตามหัวข้อ Topic Distribution คุณสามารถถามได้ เช่น "หาข้อมูลประกันของลูกค้าเบอร์ 0812345678" หรือ "ลูกค้าคนไหนขอคืนเงิน"' }
+    { role: 'bot', text: 'สวัสดีครับ ผมช่วยตรวจข้อมูลประกันจาก backend ก่อน และใช้ RAG/Qdrant สำหรับคำถามปลายเปิด ลองถามด้วยเบอร์โทร เลขทะเบียนประกัน หรือ Serial ได้เลย' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -96,6 +96,11 @@ export default function WarrantyChatPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSuggestedPrompt = (prompt: string) => {
+    if (loading) return;
+    setInput(prompt);
   };
 
   return (
@@ -189,9 +194,22 @@ export default function WarrantyChatPage() {
         {/* Input Area */}
           <div className="shrink-0 border-t border-slate-200 bg-white p-4 shadow-[0_-1px_10px_rgba(0,0,0,0.02)] sm:p-6 lg:p-8">
           <div className="max-w-4xl mx-auto relative group">
+            <div className="mb-3 flex flex-wrap gap-2">
+              {CHATBOT_SUGGESTED_PROMPTS.map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => handleSuggestedPrompt(prompt)}
+                  disabled={loading}
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs font-bold leading-tight text-slate-600 transition-all hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
             <input 
               type="text" 
-              placeholder="พิมพ์คำถามของคุณที่นี่..."
+              placeholder="ถามด้วยเบอร์โทร เลขทะเบียนประกัน Serial หรือ Topic..."
               className="w-full rounded-3xl border-2 border-slate-100 bg-slate-50 px-6 py-4 pr-16 font-medium outline-none transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 sm:px-8 sm:py-5 sm:pr-20"
               value={input}
               onChange={e => setInput(e.target.value)}

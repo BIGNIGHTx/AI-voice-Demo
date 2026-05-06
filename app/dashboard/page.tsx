@@ -1386,7 +1386,7 @@ export default function DashboardPage() {
                   <span className="text-[11px] font-bold text-[#4a85f6] bg-white border border-blue-100 px-4 py-1.5 rounded-full mb-6 relative z-10 shadow-sm">Key Insight</span>
 
                   <p className="text-[15px] font-medium text-slate-600 leading-[1.8] relative z-10">
-                    คำว่า <span className="font-bold text-[#4a85f6] text-[17px]">"{keywordFrequency[0].keyword}"</span><br />
+                    คำว่า <span className="font-bold text-[#4a85f6] text-[17px]">&quot;{keywordFrequency[0].keyword}&quot;</span><br />
                     ถูกกล่าวถึงมากที่สุด<br />
                     คิดเป็น <span className="font-bold text-[#4a85f6] text-xl">{keywordFrequency[0].percentage}%</span> ของทั้งหมด
                   </p>

@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, X, Send, Bot, Loader2 } from 'lucide-react';
-import { getChatbotReply } from '@/lib/chatbot';
+import { CHATBOT_SUGGESTED_PROMPTS, getChatbotReply } from '@/lib/chatbot';
 
 interface Message {
   id: string;
@@ -64,7 +64,7 @@ export default function Chatbot() {
     {
       id: '1',
       role: 'ai',
-      text: 'สวัสดีครับ ถามข้อมูลประกัน ข้อมูลลูกค้า หรือถามตามหัวข้อจาก Topic Distribution ได้เลย เช่น "ลูกค้าคนไหนขอคืนเงิน"'
+      text: 'สวัสดีครับ ค้นประกันด้วยเบอร์โทร เลขทะเบียนประกัน หรือ Serial ได้เลย ถ้าข้อมูลยังไม่เข้า Qdrant ผมจะตรวจจาก backend ก่อน'
     }
   ]);
   const [input, setInput] = useState('');
@@ -114,12 +114,18 @@ export default function Chatbot() {
     }
   };
 
+  const handleSuggestedPrompt = (prompt: string) => {
+    if (isLoading) return;
+    setInput(prompt);
+  };
+
   return (
     <>
       {/* Floating Button */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
+          suppressHydrationWarning
           className="fixed bottom-5 right-4 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-200 transition-transform duration-300 hover:scale-105 hover:bg-blue-700 sm:bottom-6 sm:right-6 sm:h-16 sm:w-16 lg:bottom-8 lg:right-8"
           style={{ animation: 'float 3s ease-in-out infinite' }}
         >
@@ -140,12 +146,13 @@ export default function Chatbot() {
                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></div>
               </div>
               <div>
-                <h3 className="font-bold text-slate-800 text-sm">AI Support</h3>
-                <p className="text-emerald-500 text-[11px] font-medium leading-none mt-1">Online</p>
+                <h3 className="font-bold text-slate-800 text-sm">Warranty Assistant</h3>
+                <p className="text-emerald-500 text-[11px] font-medium leading-none mt-1">Backend + RAG Ready</p>
               </div>
             </div>
             <button
               onClick={() => setIsOpen(false)}
+              suppressHydrationWarning
               className="cursor-pointer rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600"
             >
               <X className="h-5 w-5" />
@@ -187,19 +194,35 @@ export default function Chatbot() {
 
           {/* Input Area */}
           <div className="border-t border-slate-100 bg-white p-3.5 sm:p-4">
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {CHATBOT_SUGGESTED_PROMPTS.slice(0, 3).map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => handleSuggestedPrompt(prompt)}
+                  disabled={isLoading}
+                  suppressHydrationWarning
+                  className="max-w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-left text-[11px] font-semibold leading-tight text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
             <div className="flex items-center gap-2 relative">
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Type your message.."
+                suppressHydrationWarning
+                placeholder="ถามด้วยเบอร์ / ทะเบียน / Serial..."
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-4 pr-11 text-[13px] text-slate-700 transition-all focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:py-3 sm:pr-12 sm:text-sm"
                 disabled={isLoading}
               />
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || isLoading}
+                suppressHydrationWarning
                 className="absolute right-2 cursor-pointer rounded-lg bg-blue-600 p-2 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send className="ml-0.5 h-4 w-4" />
