@@ -162,8 +162,12 @@ export default function FilesPage() {
 
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const filesRef = useRef<FileRecord[]>([]);
+  const deletingAllRef = useRef(false);
+  const uploadingFilesRef = useRef(false);
   const latestFetchIdRef = useRef(0);
   const filesSignatureRef = useRef('');
 
@@ -172,6 +176,14 @@ export default function FilesPage() {
   useEffect(() => {
     filesRef.current = files;
   }, [files]);
+
+  useEffect(() => {
+    deletingAllRef.current = deletingAll;
+  }, [deletingAll]);
+
+  useEffect(() => {
+    uploadingFilesRef.current = uploadingFiles;
+  }, [uploadingFiles]);
 
   const commitServerFiles = useCallback((nextFiles: FileRecord[], nextTotal: number) => {
     const nextSignature = buildFilesSignature(nextFiles, nextTotal);
@@ -213,7 +225,7 @@ export default function FilesPage() {
 
     const isSilent = typeof silent === 'boolean' ? silent : false;
     const hasVisibleFiles = filesRef.current.length > 0;
-    const shouldBlockTable = !isSilent && !hasVisibleFiles;
+    const shouldBlockTable = !isSilent && !hasVisibleFiles && !deletingAllRef.current && !uploadingFilesRef.current;
 
     if (shouldBlockTable) {
       setLoading(true);
@@ -291,6 +303,12 @@ export default function FilesPage() {
     });
   }, [files]);
 
+  useEffect(() => {
+    if (files.length === 0 && showDeleteAllConfirm) {
+      setShowDeleteAllConfirm(false);
+    }
+  }, [files.length, showDeleteAllConfirm]);
+
   const handleUploadButtonClick = () => {
     uploadInputRef.current?.click();
   };
@@ -317,6 +335,7 @@ export default function FilesPage() {
 
     setPage(1);
     setError(null);
+    setUploadingFiles(true);
 
     const batchBase = Date.now();
     const uploads = selectedFiles.map((file, index) => ({
@@ -386,7 +405,6 @@ export default function FilesPage() {
               },
             });
 
-            void fetchFiles(true);
           })
           .catch((analysisError: unknown) => {
             const baseMessage = analysisError instanceof Error ? analysisError.message : 'à¹€à¸£à¸´à¹ˆà¸¡à¸§à¸´à¹€à¸„à¸£à¸²à¸°à¸«à¹Œà¸­à¸±à¸•à¹‚à¸™à¸¡à¸±à¸•à¸´à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ';
@@ -403,7 +421,6 @@ export default function FilesPage() {
             )));
           });
 
-        void fetchFiles(true);
       } catch (uploadError: unknown) {
         const baseMessage = uploadError instanceof Error ? uploadError.message : 'อัปโหลดไฟล์ไม่สำเร็จ';
         const message = serverFileId
@@ -427,6 +444,7 @@ export default function FilesPage() {
       }
     }
 
+    setUploadingFiles(false);
     void fetchFiles(true);
   };
 
@@ -521,10 +539,11 @@ export default function FilesPage() {
           resetServerFiles([], 0);
           setTotalPages(1);
           setPage(1);
+          setLoading(false);
         }
       }
 
-      await fetchFiles();
+      await fetchFiles(true);
 
       if (deletedCount > 0) {
         await logClientActivity({
@@ -550,12 +569,16 @@ export default function FilesPage() {
       setError(message || 'ลบไฟล์ทั้งหมดไม่สำเร็จ');
     } finally {
       setDeletingAll(false);
+      setShowDeleteAllConfirm(false);
     }
   }, [fetchFiles, resetServerFiles]);
 
   const handleDeleteAll = () => {
-    if (!confirm(`ต้องการลบไฟล์ทั้งหมด ${total} ไฟล์จริงหรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้!`)) return;
+    if (deletingAll || files.length === 0) return;
+    setShowDeleteAllConfirm(true);
+  };
 
+  const confirmDeleteAll = () => {
     // Defer heavy async workflow so the click handler can return immediately.
     setTimeout(() => {
       void performDeleteAll();
@@ -567,6 +590,8 @@ export default function FilesPage() {
 
     // Auto-refresh file list every 5 seconds
     const interval = setInterval(() => {
+      if (deletingAllRef.current) return;
+      if (uploadingFilesRef.current) return;
       fetchFiles(true);
     }, 5000);
 
@@ -842,11 +867,12 @@ export default function FilesPage() {
                 />
                 <button
                   onClick={handleUploadButtonClick}
+                  disabled={uploadingFiles}
                   suppressHydrationWarning
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-800"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
                 >
-                  <CloudUpload size={16} />
-                  <span>Upload File</span>
+                  {uploadingFiles ? <Loader2 size={16} className="animate-spin" /> : <CloudUpload size={16} />}
+                  <span>{uploadingFiles ? 'Uploading...' : 'Upload File'}</span>
                 </button>
                 <button
                   onClick={clearFilters}
@@ -993,7 +1019,7 @@ export default function FilesPage() {
                 {files.length > 0 && (
                   <button
                     onClick={handleDeleteAll}
-                    disabled={deletingAll}
+                    disabled={deletingAll || showDeleteAllConfirm}
                     suppressHydrationWarning
                     className="flex items-center space-x-2 px-4 py-2.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100 transition-all cursor-pointer disabled:opacity-50 active:scale-95"
                   >
@@ -1003,13 +1029,59 @@ export default function FilesPage() {
                 )}
                 <button
                   onClick={() => fetchFiles()}
+                  disabled={deletingAll || uploadingFiles}
                   suppressHydrationWarning
-                  className="p-2.5 bg-slate-50 text-slate-500 rounded-lg border border-slate-200 hover:bg-slate-100 cursor-pointer transition-colors"
+                  className="p-2.5 bg-slate-50 text-slate-500 rounded-lg border border-slate-200 hover:bg-slate-100 cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <RotateCw size={18} className={loading ? 'animate-spin' : ''} />
                 </button>
               </div>
             </div>
+
+            {showDeleteAllConfirm && (
+              <div className="border-b border-red-100 bg-red-50/60 px-4 py-3">
+                <div className="flex flex-col gap-3 rounded-xl border border-red-100 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">
+                      {deletingAll ? 'กำลังลบไฟล์ทั้งหมด...' : 'ยืนยันการลบไฟล์ทั้งหมด?'}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {deletingAll
+                        ? 'กรุณารอสักครู่ ระบบจะอัปเดตรายการแบบเงียบหลังลบเสร็จ'
+                        : `จะลบไฟล์ทั้งหมด ${total.toLocaleString()} ไฟล์ การกระทำนี้ไม่สามารถย้อนกลับได้`}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {deletingAll ? (
+                      <span className="inline-flex items-center gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold text-red-600">
+                        <Loader2 size={14} className="animate-spin" />
+                        Deleting
+                      </span>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setShowDeleteAllConfirm(false)}
+                          suppressHydrationWarning
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={confirmDeleteAll}
+                          suppressHydrationWarning
+                          className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-red-700"
+                        >
+                          <Trash2 size={14} />
+                          Confirm Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="w-full overflow-x-auto">
               <table className="w-full min-w-[640px] table-fixed text-left border-collapse">

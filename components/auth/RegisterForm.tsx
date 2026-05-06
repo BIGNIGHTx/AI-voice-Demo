@@ -87,6 +87,7 @@ export default function RegisterForm({ initialNextPath }: RegisterFormProps) {
             className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
             placeholder="เช่น Nattapon"
             required
+            suppressHydrationWarning
           />
         </div>
       </div>
@@ -104,6 +105,7 @@ export default function RegisterForm({ initialNextPath }: RegisterFormProps) {
             className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
             placeholder="you@example.com"
             required
+            suppressHydrationWarning
           />
         </div>
       </div>
@@ -121,6 +123,7 @@ export default function RegisterForm({ initialNextPath }: RegisterFormProps) {
             className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
             placeholder="อย่างน้อย 8 ตัวอักษร"
             required
+            suppressHydrationWarning
           />
         </div>
       </div>
@@ -138,6 +141,7 @@ export default function RegisterForm({ initialNextPath }: RegisterFormProps) {
             className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
             placeholder="พิมพ์ซ้ำอีกครั้ง"
             required
+            suppressHydrationWarning
           />
         </div>
       </div>
@@ -152,6 +156,7 @@ export default function RegisterForm({ initialNextPath }: RegisterFormProps) {
         type="submit"
         disabled={submitting}
         className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+        suppressHydrationWarning
       >
         {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
         {submitting ? 'กำลังสร้างบัญชี...' : 'สร้างบัญชีและเข้าใช้งาน'}

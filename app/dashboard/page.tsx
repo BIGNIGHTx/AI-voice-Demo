@@ -660,7 +660,7 @@ export default function DashboardPage() {
 
   const [audioFiles, setAudioFiles] = useState<AudioFileRow[]>([]);
   const [, setAgentPerformance] = useState<AgentRow[]>([]);
-  const [brandIntelligence, setBrandIntelligence] = useState<BrandRow[]>([]);
+  const [, setBrandIntelligence] = useState<BrandRow[]>([]);
   const [topicDistribution, setTopicDistribution] = useState<TopicRow[]>([]);
 
   const [keywordFrequency, setKeywordFrequency] = useState<KeywordFrequencyRow[]>([]);
@@ -921,8 +921,13 @@ export default function DashboardPage() {
     [endpointStatus]
   );
 
+  const visibleTopicDistribution = useMemo(
+    () => (filteredAudioFiles.length > 0 ? topicDistribution : []),
+    [filteredAudioFiles.length, topicDistribution]
+  );
+
   const visibleBrandIntelligence = useMemo(() => {
-    if (audioFiles.length === 0) return brandIntelligence;
+    if (filteredAudioFiles.length === 0) return [];
 
     const counter = new Map<string, BrandRow>();
 
@@ -945,7 +950,7 @@ export default function DashboardPage() {
     return Array.from(counter.values()).sort(
       (a, b) => b.total_mentions - a.total_mentions || a.brand_name.localeCompare(b.brand_name)
     );
-  }, [audioFiles, brandIntelligence, filteredAudioFiles]);
+  }, [filteredAudioFiles]);
 
   const dateLabel = formatDateLabel(selectedDate, filterType);
 
@@ -1031,6 +1036,9 @@ export default function DashboardPage() {
   const moveDate = (delta: number) => {
     setSelectedDate((current) => shiftSelectedDate(current, filterType, delta));
   };
+
+  const topicTotalCount = visibleTopicDistribution.reduce((sum, topic) => sum + topic.value, 0);
+  const topicGroupCount = visibleTopicDistribution.length;
 
   if (loading) {
     return (
@@ -1293,18 +1301,18 @@ export default function DashboardPage() {
                 Topic Distribution
               </h3>
               <div className="relative h-[160px] flex justify-center items-center">
-                {topicDistribution.length > 0 ? (
+                {visibleTopicDistribution.length > 0 ? (
                   <>
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
-                          data={topicDistribution}
+                          data={visibleTopicDistribution}
                           innerRadius={45}
                           outerRadius={70}
                           dataKey="value"
                           stroke="none"
                         >
-                          {topicDistribution.map((entry, index) => {
+                          {visibleTopicDistribution.map((entry, index) => {
                             const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
                             return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
                           })}
@@ -1312,8 +1320,9 @@ export default function DashboardPage() {
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="bg-white rounded-full px-3 py-1 text-sm font-bold shadow-sm">
-                        {topicDistribution.reduce((sum, d) => sum + d.value, 0)} Mentions
+                      <div className="bg-white rounded-full px-3 py-2 text-center shadow-sm">
+                        <div className="text-sm font-bold leading-none text-slate-800">{topicGroupCount}</div>
+                        <div className="mt-1 text-[10px] font-semibold leading-none text-slate-500">Topics</div>
                       </div>
                     </div>
                   </>
@@ -1322,16 +1331,18 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              <div className="mt-4 space-y-2 text-xs h-24 overflow-y-auto pr-2">
-                {topicDistribution.map((topic, idx) => {
+              <div className="mt-4 flex items-center justify-between text-[11px] font-semibold text-slate-400">
+                <span>{topicGroupCount} Topic Groups</span>
+              </div>
+              <div className="mt-2 space-y-2 text-xs h-24 overflow-y-auto pr-2">
+                {visibleTopicDistribution.map((topic, idx) => {
                   const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
-                  const total = topicDistribution.reduce((sum, d) => sum + d.value, 0);
-                  const percentage = total > 0 ? Math.round((topic.value / total) * 100) : 0;
+                  const percentage = topicTotalCount > 0 ? Math.round((topic.value / topicTotalCount) * 100) : 0;
                   return (
                     <div key={idx} className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full" style={{ backgroundColor: colors[idx % colors.length] }}></div>
                       <span className="text-slate-600 truncate flex-1">{topic.name}</span>
-                      <span className="text-slate-400 font-medium">({percentage}%)</span>
+                      <span className="w-11 text-right text-slate-400 font-medium tabular-nums">({percentage}%)</span>
                     </div>
                   );
                 })}

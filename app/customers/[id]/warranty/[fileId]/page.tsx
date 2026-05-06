@@ -72,6 +72,20 @@ interface CustomerInfo {
   phone: string;
 }
 
+const normalizeWarrantyText = (value?: string | null): string => String(value ?? '').trim();
+
+const isGeneratedWarrantyDetail = (item: WarrantyDetail): boolean => {
+  const status = normalizeWarrantyText(item.status).toUpperCase();
+  const registrationNo = normalizeWarrantyText(item.registration_no).toUpperCase();
+  const serialNo = normalizeWarrantyText(item.serial_no).toUpperCase();
+  const orderNumber = normalizeWarrantyText(item.order_number).toUpperCase();
+
+  return status === 'INFERRED' ||
+    registrationNo.startsWith('AUTO-') ||
+    serialNo.startsWith('MOCK') ||
+    orderNumber.startsWith('CALL-');
+};
+
 export default function WarrantyDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -95,6 +109,9 @@ export default function WarrantyDetailPage() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         
         const data = await res.json();
+        if (data?.warranty && isGeneratedWarrantyDetail(data.warranty)) {
+          throw new Error('Warranty not found');
+        }
         setWarranty(data.warranty);
         setCustomer(data.customer);
         setError(null);

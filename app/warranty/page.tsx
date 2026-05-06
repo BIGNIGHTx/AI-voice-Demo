@@ -31,6 +31,7 @@ const MANUAL_WARRANTY_SYNC_FILTER = {
   source: 'manual',
   exclude_registration_prefixes: ['AUTO-'],
   exclude_order_prefixes: ['CALL-'],
+  exclude_serial_prefixes: ['MOCK'],
   exclude_sources: ['audio', 'voice', 'analysis'],
 };
 
@@ -135,10 +136,14 @@ const isActiveCustomerWarrantyRecord = (item: CustomerWarrantyRecord): boolean =
 const isVoiceAnalysisWarrantyRecord = (item: WarrantyRecord | CustomerWarrantyRecord): boolean => {
   const normalizedRegistration = normalizeText(item.registration_no).toUpperCase();
   const normalizedOrder = 'order_number' in item ? normalizeText(item.order_number).toUpperCase() : '';
+  const normalizedSerial = 'serial_no' in item ? normalizeText(item.serial_no).toUpperCase() : '';
+  const normalizedStatus = normalizeText(item.status).toUpperCase();
   const normalizedSource = normalizeText(item.warranty_source).toLowerCase();
 
-  return normalizedRegistration.startsWith('AUTO-') ||
+  return normalizedStatus === 'INFERRED' ||
+    normalizedRegistration.startsWith('AUTO-') ||
     normalizedOrder.startsWith('CALL-') ||
+    normalizedSerial.startsWith('MOCK') ||
     normalizedSource.includes('audio') ||
     normalizedSource.includes('voice') ||
     normalizedSource.includes('analysis');

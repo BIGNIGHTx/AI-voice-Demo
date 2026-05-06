@@ -79,6 +79,7 @@ export default function LoginForm({ initialNextPath }: LoginFormProps) {
             className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
             placeholder="you@example.com"
             required
+            suppressHydrationWarning
           />
         </div>
       </div>
@@ -96,6 +97,7 @@ export default function LoginForm({ initialNextPath }: LoginFormProps) {
             className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
             placeholder="กรอกรหัสผ่าน"
             required
+            suppressHydrationWarning
           />
         </div>
       </div>
@@ -110,6 +112,7 @@ export default function LoginForm({ initialNextPath }: LoginFormProps) {
         type="submit"
         disabled={submitting}
         className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+        suppressHydrationWarning
       >
         {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
         {submitting ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}

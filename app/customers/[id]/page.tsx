@@ -123,9 +123,15 @@ const isActiveWarrantyRecord = (item: WarrantyItem): boolean => {
 
 const isVoiceAnalysisWarrantyRecord = (item: WarrantyItem): boolean => {
   const normalizedRegistration = String(item.registration_no || '').trim().toUpperCase();
+  const normalizedOrder = String(item.order_number || '').trim().toUpperCase();
+  const normalizedSerial = String(item.serial_no || '').trim().toUpperCase();
+  const normalizedStatus = String(item.status || '').trim().toUpperCase();
   const normalizedSource = String(item.warranty_source || '').trim().toLowerCase();
 
-  return normalizedRegistration.startsWith('AUTO-') ||
+  return normalizedStatus === 'INFERRED' ||
+    normalizedRegistration.startsWith('AUTO-') ||
+    normalizedOrder.startsWith('CALL-') ||
+    normalizedSerial.startsWith('MOCK') ||
     normalizedSource.includes('audio') ||
     normalizedSource.includes('voice') ||
     normalizedSource.includes('analysis');
@@ -311,7 +317,8 @@ export default function CustomerDetailPage() {
       ]);
       const customerPhone = normalizePhone(data?.customer?.phone) || normalizePhone(customerId);
       const visibleWarranties = (data.warranties || []).filter((item: WarrantyItem) =>
-        isVisibleWarrantyRecord(item)
+        isVisibleWarrantyRecord(item) &&
+        visibleWarrantyKeys.has(buildWarrantyKey(item.registration_no, item.customer_phone || customerPhone))
       );
 
       setCustomer(data.customer);
@@ -478,6 +485,7 @@ export default function CustomerDetailPage() {
             source: 'manual',
             exclude_registration_prefixes: ['AUTO-'],
             exclude_order_prefixes: ['CALL-'],
+            exclude_serial_prefixes: ['MOCK'],
             exclude_sources: ['audio', 'voice', 'analysis'],
             registration_numbers: [warrantyForm.registration_no],
             customer_phones: [currentPhone],

@@ -533,19 +533,43 @@ const normalizeWarrantyText = (value?: string | null): string => {
 
 const normalizePhoneDigits = (value: unknown): string => String(value ?? '').replace(/\D/g, '');
 
+const buildWarrantyKey = (registrationNo: unknown, phone: unknown): string =>
+  `${normalizeWarrantyText(String(registrationNo ?? '')).toUpperCase()}::${normalizePhoneDigits(phone)}`;
+
 const isVisibleCustomerWarrantyRecord = (item: CustomerWarrantyPreviewItem): boolean => {
   const registrationNo = normalizeWarrantyText(item.registration_no).toUpperCase();
   const orderNumber = normalizeWarrantyText(item.order_number).toUpperCase();
+  const serialNo = normalizeWarrantyText(item.serial_no).toUpperCase();
   const source = normalizeWarrantyText(item.warranty_source).toLowerCase();
   const status = normalizeWarrantyText(item.status).toUpperCase();
 
   return status !== 'DELETED' &&
+    status !== 'INFERRED' &&
     !registrationNo.startsWith('DELETED-') &&
     !registrationNo.startsWith('AUTO-') &&
     !orderNumber.startsWith('CALL-') &&
+    !serialNo.startsWith('MOCK') &&
     !source.includes('audio') &&
     !source.includes('voice') &&
     !source.includes('analysis');
+};
+
+const fetchVisibleWarrantyKeys = async (): Promise<Set<string>> => {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/warranty/list`, { cache: 'no-store' });
+    if (!res.ok) return new Set();
+
+    const data = await res.json();
+    const warranties = Array.isArray(data?.warranties) ? data.warranties : [];
+    return new Set(
+      warranties
+        .filter((item: CustomerWarrantyPreviewItem) => isVisibleCustomerWarrantyRecord(item))
+        .map((item: CustomerWarrantyPreviewItem) => buildWarrantyKey(item.registration_no, item.customer_phone))
+        .filter((key: string) => !key.startsWith('::') && !key.endsWith('::'))
+    );
+  } catch {
+    return new Set();
+  }
 };
 
 const isActiveWarrantyStatus = (status?: string | null): boolean => {
@@ -1366,9 +1390,15 @@ export default function FileAnalysisDetail() {
           throw new Error(`HTTP ${res.status}`);
         }
 
-        const data = await res.json();
+        const [data, visibleWarrantyKeys] = await Promise.all([
+          res.json(),
+          fetchVisibleWarrantyKeys(),
+        ]);
         const warranties = Array.isArray(data?.warranties) ? data.warranties : [];
-        setCustomerWarrantyPreview(warranties.filter(isVisibleCustomerWarrantyRecord));
+        setCustomerWarrantyPreview(warranties.filter((item: CustomerWarrantyPreviewItem) =>
+          isVisibleCustomerWarrantyRecord(item) &&
+          visibleWarrantyKeys.has(buildWarrantyKey(item.registration_no, item.customer_phone || normalizedPhone))
+        ));
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return;
         setCustomerWarrantyPreview([]);

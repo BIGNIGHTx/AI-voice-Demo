@@ -57,13 +57,17 @@ const isActiveWarrantyRecord = (item: unknown): boolean => {
 
 const isVoiceAnalysisWarrantyRecord = (item: unknown): boolean => {
   if (typeof item !== 'object' || item === null) return false;
-  const record = item as { registration_no?: string; order_number?: string; warranty_source?: string };
+  const record = item as { registration_no?: string; order_number?: string; serial_no?: string; status?: string; warranty_source?: string };
   const normalizedRegistration = normalizeText(record.registration_no).toUpperCase();
   const normalizedOrder = normalizeText(record.order_number).toUpperCase();
+  const normalizedSerial = normalizeText(record.serial_no).toUpperCase();
+  const normalizedStatus = normalizeText(record.status).toUpperCase();
   const normalizedSource = normalizeText(record.warranty_source).toLowerCase();
 
-  return normalizedRegistration.startsWith('AUTO-') ||
+  return normalizedStatus === 'INFERRED' ||
+    normalizedRegistration.startsWith('AUTO-') ||
     normalizedOrder.startsWith('CALL-') ||
+    normalizedSerial.startsWith('MOCK') ||
     normalizedSource.includes('audio') ||
     normalizedSource.includes('voice') ||
     normalizedSource.includes('analysis');

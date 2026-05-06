@@ -38,6 +38,13 @@ interface TopicSearchResponse {
   results: TopicSearchResult[];
 }
 
+interface TopicGroupMatch {
+  label: string;
+  topics: TopicDistributionItem[];
+  count: number;
+  percentage: number;
+}
+
 interface WarrantyMeta {
   registrationNo: string;
   serialNo: string;
@@ -107,6 +114,17 @@ const TOPIC_ALIAS_RULES: Array<{ includes: string[]; aliases: string[] }> = [
   { includes: ['ชมเชย'], aliases: ['ชมเชย', 'ชื่นชม', 'ชมพนักงาน'] },
 ];
 
+const TOPIC_GROUP_RULES: Array<{ label: string; includes: string[] }> = [
+  { label: 'คืนเงิน/ขอเงินคืน', includes: ['คืนเงิน', 'ขอเงินคืน', 'refund'] },
+  { label: 'รับคืน/คืนสินค้า', includes: ['รับ', 'รับกลับ', 'รับคืน', 'คืนสินค้า', 'รับที่นอนกลับ'] },
+  { label: 'เปลี่ยนสินค้า/เปลี่ยนที่นอน', includes: ['เปลี่ยน', 'เปลี่ยนที่นอน', 'เปลี่ยนสินค้า'] },
+  { label: 'จัดส่งสินค้า', includes: ['จัดส่ง', 'ส่งสินค้า', 'การส่งสินค้า', 'delivery', 'ขนส่ง'] },
+  { label: 'ประกัน/เงื่อนไข', includes: ['ประกัน', 'รับประกัน', 'เงื่อนไข', 'warranty', 'claim', 'เคลม'] },
+  { label: 'ร้องเรียน/ไม่พอใจ', includes: ['ร้องเรียน', 'คอมเพลน', 'ไม่พอใจ', 'complain', 'complaint'] },
+  { label: 'แก้ไขปัญหา/ขอความช่วยเหลือ', includes: ['แก้ไข', 'ปัญหา', 'ขอความช่วยเหลือ', 'วิธีแก้ไข'] },
+  { label: 'สอบถามข้อมูล', includes: ['สอบถาม', 'อยากทราบ', 'ขอข้อมูล', 'ข้อมูล'] },
+];
+
 const WARRANTY_HISTORY_KEYWORDS = [
   'ประวัติ',
   'history',
@@ -134,6 +152,7 @@ export const CHATBOT_SUGGESTED_PROMPTS = [
   'ตรวจทะเบียนประกัน LOT-2026-0102',
   'Serial LT-HY-Q5-774455 หมดประกันวันไหน',
   'ลูกค้าคนไหนขอคืนเงิน',
+  'หัวข้อแก้ไขปัญหา/ขอความช่วยเหลือเป็นของลูกค้าคนไหน',
   'RAG ควรใส่ข้อมูลอะไรเข้า Qdrant',
 ];
 
@@ -424,6 +443,7 @@ const formatChatbotHelpReply = (): string => [
   '- ตรวจทะเบียนประกัน LOT-2026-0102',
   '- Serial LT-HY-Q5-774455 หมดประกันวันไหน',
   '- ลูกค้าคนไหนขอคืนเงิน',
+  '- หัวข้อแก้ไขปัญหา/ขอความช่วยเหลือเป็นของลูกค้าคนไหน',
   '- หัวข้อที่ลูกค้าถามเยอะที่สุดคืออะไร',
   '',
   'สิ่งที่ระบบตอบกลับ:',
@@ -484,18 +504,72 @@ const buildTopicAliases = (topicName: string): string[] => {
   return Array.from(aliases);
 };
 
-const getMatchedTopic = (
+const mapTopicToGroupLabel = (name: string): string => {
+  const text = compactText(name);
+  if (!text) return 'ไม่ระบุหัวข้อ';
+
+  for (const rule of TOPIC_GROUP_RULES) {
+    if (rule.includes.some((token) => text.includes(compactText(token)))) return rule.label;
+  }
+
+  return name;
+};
+
+const groupTopicDistributionItems = (topics: TopicDistributionItem[]): TopicGroupMatch[] => {
+  const grouped = new Map<string, TopicDistributionItem[]>();
+
+  for (const topic of topics) {
+    const label = mapTopicToGroupLabel(topic.name);
+    const bucket = grouped.get(label) || [];
+    bucket.push(topic);
+    grouped.set(label, bucket);
+  }
+
+  const totalCount = topics.reduce((sum, topic) => sum + topic.count, 0);
+
+  return Array.from(grouped.entries())
+    .map(([label, groupTopics]) => {
+      const count = groupTopics.reduce((sum, topic) => sum + topic.count, 0);
+      return {
+        label,
+        topics: groupTopics,
+        count,
+        percentage: totalCount > 0 ? (count / totalCount) * 100 : 0,
+      };
+    })
+    .filter((group) => group.count > 0)
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
+};
+
+const buildTopicGroupAliases = (group: TopicGroupMatch): string[] => {
+  const aliases = new Set<string>([group.label]);
+
+  group.label
+    .split('/')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .forEach((part) => aliases.add(part));
+
+  for (const topic of group.topics) {
+    buildTopicAliases(topic.name).forEach((alias) => aliases.add(alias));
+  }
+
+  return Array.from(aliases);
+};
+
+const getMatchedTopicGroup = (
   question: string,
   topics: TopicDistributionItem[]
-): TopicDistributionItem | null => {
+): TopicGroupMatch | null => {
   const normalizedQuestion = compactText(question);
   if (!normalizedQuestion) return null;
 
-  let bestMatch: TopicDistributionItem | null = null;
+  const groups = groupTopicDistributionItems(topics);
+  let bestMatch: TopicGroupMatch | null = null;
   let bestScore = 0;
 
-  for (const topic of topics) {
-    for (const alias of buildTopicAliases(topic.name)) {
+  for (const group of groups) {
+    for (const alias of buildTopicGroupAliases(group)) {
       const normalizedAlias = compactText(alias);
       if (!normalizedAlias) continue;
 
@@ -508,7 +582,7 @@ const getMatchedTopic = (
 
       if (score > bestScore) {
         bestScore = score;
-        bestMatch = topic;
+        bestMatch = group;
       }
     }
   }
@@ -1173,24 +1247,75 @@ const filterEnrichedTopicResults = (
   return results;
 };
 
+const getTopicResultKey = (item: TopicSearchResult): string =>
+  item.fileId || `${item.customerPhone}-${item.topic}-${item.createdAt}-${item.summary}`;
+
+const dedupeTopicSearchResults = (results: TopicSearchResult[]): TopicSearchResult[] => {
+  const seen = new Set<string>();
+  const uniqueResults: TopicSearchResult[] = [];
+
+  for (const item of results) {
+    const key = getTopicResultKey(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniqueResults.push(item);
+  }
+
+  return uniqueResults;
+};
+
+const isSearchResultInTopicGroup = (item: TopicSearchResult, group: TopicGroupMatch): boolean => {
+  const itemTopic = compactText(item.topic);
+  if (!itemTopic) return false;
+
+  if (mapTopicToGroupLabel(item.topic) === group.label) return true;
+
+  return group.topics.some((topic) => compactText(topic.name) === itemTopic);
+};
+
+const searchTopicGroupResults = async (
+  group: TopicGroupMatch,
+  phone: string | null
+): Promise<TopicSearchResponse | null> => {
+  const filteredResponses = await Promise.all(
+    group.topics.map((topic) => fetchTopicSearch({ phone, topic: topic.name, perPage: 50 }))
+  );
+
+  const filteredResults = filteredResponses.flatMap((response) => response?.results || []);
+  const broadResponse = await fetchTopicSearch({ phone, perPage: phone ? 50 : 100 });
+  const broadResults = (broadResponse?.results || []).filter((item) => isSearchResultInTopicGroup(item, group));
+  const results = dedupeTopicSearchResults([...filteredResults, ...broadResults]);
+
+  if (!results.length) {
+    const total = filteredResponses.reduce((sum, response) => sum + (response?.total || 0), 0);
+    return total > 0 ? { total, results } : null;
+  }
+
+  return {
+    total: Math.max(results.length, filteredResponses.reduce((sum, response) => sum + (response?.total || 0), 0)),
+    results,
+  };
+};
+
 const formatTopicOverview = (topics: TopicDistributionItem[]): string => {
   if (!topics.length) {
     return 'ยังไม่พบข้อมูล Topic Distribution ในระบบตอนนี้';
   }
 
+  const groups = groupTopicDistributionItems(topics);
   const lines = ['หัวข้อจาก Topic Distribution ที่พบในระบบ:'];
 
-  topics.slice(0, 10).forEach((topic) => {
-    const percentage = topic.percentage > 0 ? ` (${topic.percentage.toFixed(2)}%)` : '';
-    lines.push(`- ${topic.name}: ${topic.count} เคส${percentage}`);
+  groups.slice(0, 10).forEach((group) => {
+    const percentage = group.percentage > 0 ? ` (${group.percentage.toFixed(2)}%)` : '';
+    lines.push(`- ${group.label}: ${group.count} เคส${percentage}`);
   });
 
-  lines.push('ลองถามต่อได้ เช่น "ลูกค้าคนไหนขอคืนเงิน" หรือ "เบอร์ 0812345678 อยู่หัวข้ออะไร"');
+  lines.push('ลองถามต่อได้ เช่น "หัวข้อแก้ไขปัญหา/ขอความช่วยเหลือเป็นของลูกค้าคนไหน" หรือ "เบอร์ 0812345678 อยู่หัวข้ออะไร"');
   return lines.join('\n');
 };
 
 const formatTopicMatches = (
-  topic: TopicDistributionItem,
+  topicGroup: TopicGroupMatch,
   searchResponse: TopicSearchResponse,
   enrichedResults: EnrichedTopicSearchResult[],
   phone: string | null
@@ -1201,15 +1326,16 @@ const formatTopicMatches = (
 
   if (!enrichedResults.length) {
     return phone
-      ? `ไม่พบข้อมูลของลูกค้า ${phone} ในหัวข้อ "${topic.name}"`
-      : `ไม่พบข้อมูลลูกค้าที่อยู่ในหัวข้อ "${topic.name}"`;
+      ? `ไม่พบข้อมูลของลูกค้า ${phone} ในหัวข้อ "${topicGroup.label}"`
+      : `ไม่พบข้อมูลลูกค้าที่อยู่ในหัวข้อ "${topicGroup.label}"`;
   }
 
   if (phone) {
-    const lines = [`พบ ${displayTotal} รายการของลูกค้า ${phone} ในหัวข้อ "${topic.name}"`];
+    const lines = [`พบ ${displayTotal} รายการของลูกค้า ${phone} ในหัวข้อ "${topicGroup.label}"`];
 
     enrichedResults.slice(0, 5).forEach((item, index) => {
       lines.push(`- เคส ${index + 1}`);
+      if (item.topic && item.topic !== '-') lines.push(`• Topic จริง: ${item.topic}`);
       lines.push(`• แบรนด์: ${item.brand}`);
       lines.push(`• Sentiment: ${item.sentiment}`);
       lines.push(`• Agent: ${item.agentId}`);
@@ -1232,11 +1358,12 @@ const formatTopicMatches = (
     grouped.set(key, bucket);
   }
 
-  const lines = [`พบ ${displayTotal} รายการในหัวข้อ "${topic.name}" จาก ${grouped.size} ลูกค้า`];
+  const lines = [`พบ ${displayTotal} รายการในหัวข้อ "${topicGroup.label}" จาก ${grouped.size} ลูกค้า`];
 
   Array.from(grouped.entries()).slice(0, 5).forEach(([customerPhone, items]) => {
     const latest = items[0];
     lines.push(`- ลูกค้า ${customerPhone}: ${items.length} เคส`);
+    if (latest.topic && latest.topic !== '-') lines.push(`• Topic จริงล่าสุด: ${latest.topic}`);
     lines.push(`• แบรนด์: ${latest.brand}`);
     lines.push(`• Agent: ${latest.agentId}`);
     if (latest.registrationNo !== '-') lines.push(`• เลขทะเบียนประกัน: ${latest.registrationNo}`);
@@ -1265,7 +1392,9 @@ const formatCustomerTopicOverview = (
 
   const grouped = new Map<string, EnrichedTopicSearchResult[]>();
   for (const item of enrichedResults) {
-    const key = item.topic || 'ไม่ระบุหัวข้อ';
+    const key = item.topic && item.topic !== '-'
+      ? mapTopicToGroupLabel(item.topic)
+      : 'ไม่ระบุหัวข้อ';
     const bucket = grouped.get(key) || [];
     bucket.push(item);
     grouped.set(key, bucket);
@@ -1279,6 +1408,9 @@ const formatCustomerTopicOverview = (
     .forEach(([topicName, items]) => {
       const latest = items[0];
       lines.push(`- ${topicName}: ${items.length} เคส`);
+      if (latest.topic && latest.topic !== '-' && latest.topic !== topicName) {
+        lines.push(`• Topic จริงล่าสุด: ${latest.topic}`);
+      }
       if (latest.registrationNo !== '-') lines.push(`• เลขทะเบียนประกัน: ${latest.registrationNo}`);
       if (latest.serialNo !== '-') lines.push(`• Serial No.: ${latest.serialNo}`);
       if (latest.orderNumber !== '-') lines.push(`• เลขคำสั่งซื้อ: ${latest.orderNumber}`);
@@ -1307,13 +1439,13 @@ const fetchTopicDistribution = async (): Promise<TopicDistributionItem[]> => {
   return parseTopicDistribution(payload);
 };
 
-const fetchTopicSearch = async (params: { phone?: string | null; topic?: string }): Promise<TopicSearchResponse | null> => {
+const fetchTopicSearch = async (params: { phone?: string | null; topic?: string; perPage?: number }): Promise<TopicSearchResponse | null> => {
   const query = new URLSearchParams();
 
   if (params.phone) query.set('q', params.phone);
   if (params.topic) query.set('topic', params.topic);
   query.set('page', '1');
-  query.set('per_page', params.phone ? '10' : '20');
+  query.set('per_page', String(params.perPage ?? (params.phone ? 10 : 20)));
 
   const payload = await fetchJson(`${API_BASE}/api/v1/search/advanced?${query.toString()}`);
   if (!payload) return null;
@@ -1329,10 +1461,10 @@ const tryTopicReply = async (question: string): Promise<string | null> => {
   const topics = await fetchTopicDistribution();
   if (!topics.length) return null;
 
-  const matchedTopic = getMatchedTopic(question, topics);
+  const matchedTopicGroup = getMatchedTopicGroup(question, topics);
   const topicOverviewQuestion = isTopicOverviewQuestion(question);
 
-  if (phone && !matchedTopic && topicOverviewQuestion) {
+  if (phone && !matchedTopicGroup && topicOverviewQuestion) {
     const searchResponse = await fetchTopicSearch({ phone });
     if (searchResponse) {
       const enrichedResults = await enrichTopicSearchResults(searchResponse.results);
@@ -1340,8 +1472,8 @@ const tryTopicReply = async (question: string): Promise<string | null> => {
     }
   }
 
-  if (matchedTopic) {
-    const searchResponse = await fetchTopicSearch({ phone, topic: matchedTopic.name });
+  if (matchedTopicGroup) {
+    const searchResponse = await searchTopicGroupResults(matchedTopicGroup, phone);
     if (searchResponse) {
       const enrichedResults = filterEnrichedTopicResults(
         await enrichTopicSearchResults(searchResponse.results),
@@ -1354,7 +1486,7 @@ const tryTopicReply = async (question: string): Promise<string | null> => {
         return null;
       }
 
-      return formatTopicMatches(matchedTopic, searchResponse, enrichedResults, phone);
+      return formatTopicMatches(matchedTopicGroup, searchResponse, enrichedResults, phone);
     }
 
     if (registrationNo || serialNo || orderNumber) {
@@ -1362,8 +1494,8 @@ const tryTopicReply = async (question: string): Promise<string | null> => {
     }
 
     return phone
-      ? `ไม่พบข้อมูลของลูกค้า ${phone} ในหัวข้อ "${matchedTopic.name}"`
-      : `ไม่พบข้อมูลลูกค้าที่อยู่ในหัวข้อ "${matchedTopic.name}"`;
+      ? `ไม่พบข้อมูลของลูกค้า ${phone} ในหัวข้อ "${matchedTopicGroup.label}"`
+      : `ไม่พบข้อมูลลูกค้าที่อยู่ในหัวข้อ "${matchedTopicGroup.label}"`;
   }
 
   if (topicOverviewQuestion) {
