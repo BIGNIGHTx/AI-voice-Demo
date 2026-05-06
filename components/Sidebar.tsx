@@ -69,33 +69,33 @@ export default function Sidebar() {
         </div>
 
         <nav className="mt-4 space-y-1.5 px-2 sm:px-3 lg:px-4">
-          <Link href="/dashboard" title="Dashboard" className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors cursor-pointer sm:justify-start sm:px-4 ${pathname === '/dashboard' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
+          <Link href="/dashboard" prefetch={true} title="Dashboard" className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors cursor-pointer sm:justify-start sm:px-4 ${pathname === '/dashboard' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
             <LayoutDashboard className="h-5 w-5 shrink-0" />
             <span className="hidden sm:inline">Dashboard</span>
           </Link>
-          <Link href="/customers" title="Customers" className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors cursor-pointer sm:justify-start sm:px-4 ${pathname.includes('/customers') ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
+          <Link href="/customers" prefetch={true} title="Customers" className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors cursor-pointer sm:justify-start sm:px-4 ${pathname.includes('/customers') ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
             <Users className="h-5 w-5 shrink-0" />
             <span className="hidden sm:inline">Customers</span>
           </Link>
-          <Link href="/files" title="Files" className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors cursor-pointer sm:justify-start sm:px-4 ${pathname.includes('/files') ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
+          <Link href="/files" prefetch={true} title="Files" className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors cursor-pointer sm:justify-start sm:px-4 ${pathname.includes('/files') ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
             <FileText className="h-5 w-5 shrink-0" />
             <span className="hidden sm:inline">Files</span>
           </Link>
 
-          <Link href="/warranty" title="Warranty DB" className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors cursor-pointer sm:justify-start sm:px-4 ${pathname === '/warranty' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
+          <Link href="/warranty" prefetch={true} title="Warranty DB" className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors cursor-pointer sm:justify-start sm:px-4 ${pathname === '/warranty' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-100'}`}>
             <ShieldCheck className={`h-5 w-5 shrink-0 ${pathname === '/warranty' ? 'text-blue-700' : 'text-slate-500'}`} />
             <span className="hidden sm:inline">Warranty DB</span>
           </Link>
 
           {canViewAuditLogs ? (
-            <Link href="/admin/users" title="User Access" className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors cursor-pointer sm:justify-start sm:px-4 ${pathname.startsWith('/admin') ? 'bg-emerald-50 text-emerald-700' : 'text-slate-500 hover:bg-slate-100'}`}>
+            <Link href="/admin/users" prefetch={true} title="User Access" className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors cursor-pointer sm:justify-start sm:px-4 ${pathname.startsWith('/admin') ? 'bg-emerald-50 text-emerald-700' : 'text-slate-500 hover:bg-slate-100'}`}>
               <UserCog className={`h-5 w-5 shrink-0 ${pathname.startsWith('/admin') ? 'text-emerald-700' : 'text-slate-500'}`} />
               <span className="hidden sm:inline">User Access</span>
             </Link>
           ) : null}
 
           {canViewAuditLogs ? (
-            <Link href="/audit-logs" title="Audit Logs" className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors cursor-pointer sm:justify-start sm:px-4 ${pathname === '/audit-logs' ? 'bg-cyan-50 text-cyan-700' : 'text-slate-500 hover:bg-slate-100'}`}>
+            <Link href="/audit-logs" prefetch={true} title="Audit Logs" className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors cursor-pointer sm:justify-start sm:px-4 ${pathname === '/audit-logs' ? 'bg-cyan-50 text-cyan-700' : 'text-slate-500 hover:bg-slate-100'}`}>
               <History className={`h-5 w-5 shrink-0 ${pathname === '/audit-logs' ? 'text-cyan-700' : 'text-slate-500'}`} />
               <span className="hidden sm:inline">Audit Logs</span>
             </Link>

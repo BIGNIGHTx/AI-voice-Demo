@@ -608,6 +608,7 @@ export default function WarrantyDatabasePage() {
                 type="button"
                 onClick={() => syncWarrantyToQdrant()}
                 disabled={syncing}
+                suppressHydrationWarning
                 className={`inline-flex shrink-0 items-center gap-2 rounded-xl border px-5 py-3 text-[13px] font-bold shadow-sm transition-all ${
                   syncing
                     ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400'
@@ -624,6 +625,7 @@ export default function WarrantyDatabasePage() {
                   setFormData(createDefaultFormData());
                   setShowAddModal(true);
                 }}
+                suppressHydrationWarning
                 className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-violet-600 px-6 py-3 text-[13px] font-bold text-white shadow-[0_2px_10px_-3px_rgba(124,58,237,0.3)] transition-all hover:bg-violet-700 hover:shadow-lg active:scale-[0.98]"
               >
                 <Plus size={18} strokeWidth={3} />
@@ -682,6 +684,7 @@ export default function WarrantyDatabasePage() {
                 <SearchIcon className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={17} strokeWidth={2.5} />
                 <input
                   type="text"
+                  suppressHydrationWarning
                   placeholder="ค้นหาด้วยเบอร์, ชื่อ, ทะเบียน, Serial..."
                   className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-sm font-medium shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
                   value={searchTerm}
@@ -782,6 +785,7 @@ export default function WarrantyDatabasePage() {
                             event.stopPropagation();
                             setSearchTerm(item.customer_phone || '');
                           }}
+                          suppressHydrationWarning
                           className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
                           title="กรองรายการด้วยเบอร์นี้"
                         >
@@ -805,6 +809,7 @@ export default function WarrantyDatabasePage() {
                     type="button"
                     onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
                     disabled={currentPage === 1}
+                    suppressHydrationWarning
                     className={`rounded-xl border px-4 py-2 text-sm font-bold transition-all ${
                       currentPage === 1
                         ? 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300'
@@ -820,6 +825,7 @@ export default function WarrantyDatabasePage() {
                     type="button"
                     onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
                     disabled={currentPage === totalPages}
+                    suppressHydrationWarning
                     className={`rounded-xl border px-4 py-2 text-sm font-bold transition-all ${
                       currentPage === totalPages
                         ? 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300'

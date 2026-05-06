@@ -1313,7 +1313,7 @@ export default function DashboardPage() {
                     </ResponsiveContainer>
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <div className="bg-white rounded-full px-3 py-1 text-sm font-bold shadow-sm">
-                        {topicDistribution.reduce((sum, d) => sum + d.value, 0)} Total
+                        {topicDistribution.reduce((sum, d) => sum + d.value, 0)} Mentions
                       </div>
                     </div>
                   </>

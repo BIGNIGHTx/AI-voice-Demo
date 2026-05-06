@@ -683,8 +683,9 @@ main > div > .max-w-full {
 }
 
 /* 1) Structure where .max-w-full is a direct child of main (e.g. Dashboard, Files) */
+/* Use backwards (not both) so finished elements stay visible on re-render */
 main > .max-w-full > * {
-  animation: contentFadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: contentFadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 main > .max-w-full > *:nth-child(1) { animation-delay: 0.05s; }
 main > .max-w-full > *:nth-child(2) { animation-delay: 0.10s; }
@@ -697,12 +698,12 @@ main > .max-w-full > *:nth-child(n+8) { animation-delay: 0.40s; }
 
 /* 2) Structure where main has header and a content div (e.g. Warranty) */
 main > header {
-  animation: contentFadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: contentFadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards;
   animation-delay: 0.05s;
 }
 
 main > div > .max-w-full > * {
-  animation: contentFadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: contentFadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 main > div > .max-w-full > *:nth-child(1) { animation-delay: 0.10s; }
 main > div > .max-w-full > *:nth-child(2) { animation-delay: 0.15s; }
@@ -710,3 +711,4 @@ main > div > .max-w-full > *:nth-child(3) { animation-delay: 0.20s; }
 main > div > .max-w-full > *:nth-child(4) { animation-delay: 0.25s; }
 main > div > .max-w-full > *:nth-child(5) { animation-delay: 0.30s; }
 main > div > .max-w-full > *:nth-child(n+6) { animation-delay: 0.35s; }
+
