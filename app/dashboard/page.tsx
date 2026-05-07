@@ -21,6 +21,7 @@ import {
   Flame,
   BarChart2
 } from 'lucide-react';
+import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -46,6 +47,8 @@ const BRAND_TONES = [
     bar: 'from-violet-400 to-indigo-500'
   }
 ];
+
+const TOPIC_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
 
 type FilterType = 'Day' | 'Month' | 'Year';
 
@@ -1363,9 +1366,9 @@ export default function DashboardPage() {
           )}
 
           {/* Second Row: Distributions */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             {/* Sentiment Analysis Distribution */}
-            <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] lg:col-span-2">
+            <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] lg:col-span-3">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="font-semibold text-lg flex items-center gap-2">
                   <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-blue-500 to-indigo-600 shadow-sm"></div>
@@ -1417,7 +1420,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Topic Distribution */}
-            <div className="bg-white rounded-xl p-5 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]">
+            <div className="bg-white rounded-xl p-5 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] lg:col-span-2">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-semibold text-lg flex items-center gap-2">
@@ -1433,44 +1436,72 @@ export default function DashboardPage() {
 
               {visibleTopicDistribution.length > 0 ? (
                 <>
-                  <div className="mt-4 max-h-[205px] space-y-1.5 overflow-y-auto pr-1">
-                    {topicFileGroups.map((topic, idx) => {
-                      const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
-                      const color = colors[idx % colors.length];
-                      const percentage = topicTotalCount > 0 ? Math.round((topic.value / topicTotalCount) * 100) : 0;
-                      const isSelected = selectedTopicName === topic.name;
+                  <div className="mt-4 grid gap-4 sm:grid-cols-[155px_minmax(0,1fr)]">
+                    <div className="relative flex h-[170px] items-center justify-center">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={visibleTopicDistribution}
+                            innerRadius={48}
+                            outerRadius={72}
+                            dataKey="value"
+                            stroke="none"
+                          >
+                            {visibleTopicDistribution.map((topic, index) => (
+                              <Cell
+                                key={topic.name}
+                                fill={TOPIC_COLORS[index % TOPIC_COLORS.length]}
+                              />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="text-base font-black leading-none text-slate-800">{topicTotalCount}</div>
+                          <div className="mt-1 text-[10px] font-semibold leading-none text-slate-400">Files</div>
+                        </div>
+                      </div>
+                    </div>
 
-                      return (
-                        <button
-                          key={topic.name}
-                          type="button"
-                          suppressHydrationWarning
-                          onClick={() => setSelectedTopicName(isSelected ? null : topic.name)}
-                          className={`group w-full rounded-lg px-2.5 py-2 text-left transition-colors ${
-                            isSelected ? 'bg-purple-50 text-purple-800' : 'hover:bg-slate-50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }}></span>
-                            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700 group-hover:text-slate-900">
-                              {topic.name}
-                            </span>
-                            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
-                              {topic.value} files
-                            </span>
-                            <span className="w-10 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-400">
-                              {percentage}%
-                            </span>
-                          </div>
-                          <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-100">
-                            <div
-                              className="h-full rounded-full"
-                              style={{ width: `${Math.max(percentage, 4)}%`, backgroundColor: color }}
-                            ></div>
-                          </div>
-                        </button>
-                      );
-                    })}
+                    <div className="max-h-[205px] space-y-1.5 overflow-y-auto pr-1">
+                      {topicFileGroups.map((topic, idx) => {
+                        const color = TOPIC_COLORS[idx % TOPIC_COLORS.length];
+                        const percentage = topicTotalCount > 0 ? Math.round((topic.value / topicTotalCount) * 100) : 0;
+                        const isSelected = selectedTopicName === topic.name;
+
+                        return (
+                          <button
+                            key={topic.name}
+                            type="button"
+                            suppressHydrationWarning
+                            onClick={() => setSelectedTopicName(isSelected ? null : topic.name)}
+                            className={`group w-full rounded-lg px-2.5 py-2 text-left transition-colors ${
+                              isSelected ? 'bg-purple-50 text-purple-800' : 'hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }}></span>
+                              <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700 group-hover:text-slate-900">
+                                {topic.name}
+                              </span>
+                              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+                                {topic.value} files
+                              </span>
+                              <span className="w-10 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-400">
+                                {percentage}%
+                              </span>
+                            </div>
+                            <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-100">
+                              <div
+                                className="h-full rounded-full"
+                                style={{ width: `${Math.max(percentage, 4)}%`, backgroundColor: color }}
+                              ></div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div className="mt-4 border-t border-slate-100 pt-3">
