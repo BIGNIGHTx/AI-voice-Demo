@@ -21,7 +21,6 @@ import {
   Flame,
   BarChart2
 } from 'lucide-react';
-import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, LabelList } from 'recharts';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -65,6 +64,10 @@ interface AudioFileRow {
 interface TopicRow {
   name: string;
   value: number;
+}
+
+interface TopicFileGroup extends TopicRow {
+  files: AudioFileRow[];
 }
 
 interface KeywordFrequencyRow {
@@ -218,27 +221,49 @@ const mapTopicToGroupLabel = (name: string): string => {
   return name;
 };
 
-const groupTopicDistribution = (topics: TopicRow[], opts?: { maxGroups?: number }): TopicRow[] => {
+const buildTopicFileGroups = (
+  files: AudioFileRow[],
+  topicsByFileId: Record<string, string>,
+  opts?: { maxGroups?: number }
+): TopicFileGroup[] => {
   const maxGroups = opts?.maxGroups ?? 8;
-  const counter = new Map<string, number>();
+  const groups = new Map<string, TopicFileGroup>();
 
-  topics.forEach((topic) => {
-    const label = mapTopicToGroupLabel(topic.name);
-    counter.set(label, (counter.get(label) || 0) + (topic.value || 0));
+  files.forEach((file) => {
+    const rawTopic = file.topic || topicsByFileId[file.file_id] || '';
+    if (!rawTopic) return;
+
+    const name = mapTopicToGroupLabel(rawTopic);
+    const existing = groups.get(name) ?? { name, value: 0, files: [] };
+    existing.value += 1;
+    existing.files.push(file);
+    groups.set(name, existing);
   });
 
-  const grouped = Array.from(counter.entries())
-    .map(([name, value]) => ({ name, value }))
-    .filter((row) => row.value > 0)
+  const sorted = Array.from(groups.values())
+    .filter((group) => group.value > 0)
     .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
 
-  if (grouped.length <= maxGroups) return grouped;
+  if (sorted.length <= maxGroups) return sorted;
 
-  const head = grouped.slice(0, maxGroups);
-  const rest = grouped.slice(maxGroups);
-  const restValue = rest.reduce((sum, item) => sum + item.value, 0);
-  if (restValue <= 0) return head;
-  return [...head, { name: 'อื่นๆ', value: restValue }];
+  const head = sorted.slice(0, maxGroups);
+  const rest = sorted.slice(maxGroups);
+  const restFiles = rest.flatMap((group) => group.files);
+  if (restFiles.length === 0) return head;
+
+  return [
+    ...head,
+    {
+      name: 'อื่นๆ',
+      value: restFiles.length,
+      files: restFiles
+    }
+  ];
+};
+
+const formatCompactDate = (value: string): string => {
+  if (!value) return '-';
+  return value.slice(0, 10);
 };
 
 const normalizeKeywordToken = (value: unknown): string =>
@@ -680,6 +705,7 @@ export default function DashboardPage() {
   const [, setAgentPerformance] = useState<AgentRow[]>([]);
   const [, setBrandIntelligence] = useState<BrandRow[]>([]);
   const [topicByFileId, setTopicByFileId] = useState<Record<string, string>>({});
+  const [selectedTopicName, setSelectedTopicName] = useState<string | null>(null);
 
   const [keywordFrequency, setKeywordFrequency] = useState<KeywordFrequencyRow[]>([]);
   const [keywordLoading, setKeywordLoading] = useState(false);
@@ -1001,16 +1027,26 @@ export default function DashboardPage() {
     [endpointStatus]
   );
 
-  const visibleTopicDistribution = useMemo(() => {
-    const rows = filteredAudioFiles
-      .map((file) => ({
-        name: file.topic || topicByFileId[file.file_id] || '',
-        value: 1
-      }))
-      .filter((row) => row.name);
+  const topicFileGroups = useMemo(
+    () => buildTopicFileGroups(filteredAudioFiles, topicByFileId, { maxGroups: 8 }),
+    [filteredAudioFiles, topicByFileId]
+  );
 
-    return groupTopicDistribution(rows, { maxGroups: 8 });
-  }, [filteredAudioFiles, topicByFileId]);
+  const visibleTopicDistribution = useMemo(() => {
+    return topicFileGroups.map(({ name, value }) => ({ name, value }));
+  }, [topicFileGroups]);
+
+  const selectedTopicGroup = useMemo(() => {
+    if (!selectedTopicName) return null;
+    return topicFileGroups.find((topic) => topic.name === selectedTopicName) ?? null;
+  }, [selectedTopicName, topicFileGroups]);
+
+  useEffect(() => {
+    if (!selectedTopicName) return;
+    if (!topicFileGroups.some((topic) => topic.name === selectedTopicName)) {
+      setSelectedTopicName(null);
+    }
+  }, [selectedTopicName, topicFileGroups]);
 
   const visibleBrandIntelligence = useMemo(() => {
     if (filteredAudioFiles.length === 0) return [];
@@ -1381,58 +1417,105 @@ export default function DashboardPage() {
             </div>
 
             {/* Topic Distribution */}
-            <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]">
-              <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
-                <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-purple-500 to-pink-600 shadow-sm"></div>
-                Topic Distribution
-              </h3>
-              <div className="relative h-[160px] flex justify-center items-center">
-                {visibleTopicDistribution.length > 0 ? (
-                  <>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={visibleTopicDistribution}
-                          innerRadius={45}
-                          outerRadius={70}
-                          dataKey="value"
-                          stroke="none"
-                        >
-                          {visibleTopicDistribution.map((entry, index) => {
-                            const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
-                            return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
-                          })}
-                        </Pie>
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="bg-white rounded-full px-3 py-2 text-center shadow-sm">
-                        <div className="text-sm font-bold leading-none text-slate-800">{topicGroupCount}</div>
-                        <div className="mt-1 text-[10px] font-semibold leading-none text-slate-500">Topics</div>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-slate-400 text-sm">No Data</div>
-                )}
+            <div className="bg-white rounded-xl p-5 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold text-lg flex items-center gap-2">
+                    <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-purple-500 to-pink-600 shadow-sm"></div>
+                    Topic Distribution
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-400">กดหัวข้อเพื่อดูไฟล์ที่อยู่ในกลุ่มนั้น</p>
+                </div>
+                <div className="shrink-0 rounded-full border border-purple-100 bg-purple-50 px-3 py-1.5 text-xs font-bold text-purple-700">
+                  {topicGroupCount} Topics
+                </div>
               </div>
 
-              <div className="mt-4 flex items-center justify-between text-[11px] font-semibold text-slate-400">
-                <span>{topicGroupCount} Topic Groups</span>
-              </div>
-              <div className="mt-2 space-y-2 text-xs h-24 overflow-y-auto pr-2">
-                {visibleTopicDistribution.map((topic, idx) => {
-                  const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
-                  const percentage = topicTotalCount > 0 ? Math.round((topic.value / topicTotalCount) * 100) : 0;
-                  return (
-                    <div key={idx} className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: colors[idx % colors.length] }}></div>
-                      <span className="text-slate-600 truncate flex-1">{topic.name}</span>
-                      <span className="w-11 text-right text-slate-400 font-medium tabular-nums">({percentage}%)</span>
-                    </div>
-                  );
-                })}
-              </div>
+              {visibleTopicDistribution.length > 0 ? (
+                <>
+                  <div className="mt-4 max-h-[205px] space-y-1.5 overflow-y-auto pr-1">
+                    {topicFileGroups.map((topic, idx) => {
+                      const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
+                      const color = colors[idx % colors.length];
+                      const percentage = topicTotalCount > 0 ? Math.round((topic.value / topicTotalCount) * 100) : 0;
+                      const isSelected = selectedTopicName === topic.name;
+
+                      return (
+                        <button
+                          key={topic.name}
+                          type="button"
+                          suppressHydrationWarning
+                          onClick={() => setSelectedTopicName(isSelected ? null : topic.name)}
+                          className={`group w-full rounded-lg px-2.5 py-2 text-left transition-colors ${
+                            isSelected ? 'bg-purple-50 text-purple-800' : 'hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }}></span>
+                            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700 group-hover:text-slate-900">
+                              {topic.name}
+                            </span>
+                            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+                              {topic.value} files
+                            </span>
+                            <span className="w-10 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-400">
+                              {percentage}%
+                            </span>
+                          </div>
+                          <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-100">
+                            <div
+                              className="h-full rounded-full"
+                              style={{ width: `${Math.max(percentage, 4)}%`, backgroundColor: color }}
+                            ></div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 border-t border-slate-100 pt-3">
+                    {selectedTopicGroup ? (
+                      <div>
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-bold text-slate-700">{selectedTopicGroup.name}</p>
+                            <p className="text-[11px] text-slate-400">{selectedTopicGroup.files.length} related files</p>
+                          </div>
+                          <span className="shrink-0 text-[11px] font-semibold text-purple-600">Click file to open</span>
+                        </div>
+
+                        <div className="max-h-[155px] overflow-y-auto">
+                          {selectedTopicGroup.files.slice(0, 30).map((file) => (
+                            <Link
+                              key={file.file_id}
+                              href={`/files/${file.file_id}`}
+                              className="flex items-center gap-2 border-b border-slate-100 py-2 text-xs last:border-b-0 hover:text-blue-700"
+                            >
+                              <FileAudio size={14} className="shrink-0 text-blue-500" />
+                              <span className="shrink-0 font-bold text-slate-700">#{file.file_id.slice(0, 8)}</span>
+                              <span className="min-w-0 flex-1 truncate text-slate-500">
+                                {file.brand || 'Unknown Brand'} / {file.agent_name || 'Unknown Agent'}
+                              </span>
+                              <span className="shrink-0 text-[11px] text-slate-400">{formatCompactDate(file.date)}</span>
+                            </Link>
+                          ))}
+                          {selectedTopicGroup.files.length > 30 && (
+                            <p className="py-2 text-center text-[11px] text-slate-400">
+                              Showing 30 of {selectedTopicGroup.files.length} files
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center py-5 text-center text-xs font-medium text-slate-400">
+                        เลือกหัวข้อด้านบนเพื่อดูว่าไฟล์ไหนอยู่ในหัวข้อนั้น
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="flex h-[260px] items-center justify-center text-sm text-slate-400">No Data</div>
+              )}
             </div>
           </div>
 
