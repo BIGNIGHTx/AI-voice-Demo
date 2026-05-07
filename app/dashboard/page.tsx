@@ -57,6 +57,7 @@ interface AudioFileRow {
   status: string;
   date: string;
   agent_name: string;
+  topic?: string;
   qa_score?: number;
   csat_score?: number;
 }
@@ -197,8 +198,8 @@ const compactText = (value: unknown): string =>
 
 const TOPIC_GROUP_RULES: Array<{ label: string; includes: string[] }> = [
   { label: 'คืนเงิน/ขอเงินคืน', includes: ['คืนเงิน', 'ขอเงินคืน', 'refund'] },
-  { label: 'รับคืน/คืนสินค้า', includes: ['รับ', 'รับกลับ', 'รับคืน', 'คืนสินค้า', 'รับที่นอนกลับ'] },
   { label: 'เปลี่ยนสินค้า/เปลี่ยนที่นอน', includes: ['เปลี่ยน', 'เปลี่ยนที่นอน', 'เปลี่ยนสินค้า'] },
+  { label: 'รับคืน/คืนสินค้า', includes: ['รับกลับ', 'รับคืน', 'คืนสินค้า', 'รับที่นอนกลับ'] },
   { label: 'จัดส่งสินค้า', includes: ['จัดส่ง', 'ส่งสินค้า', 'การส่งสินค้า', 'delivery', 'ขนส่ง'] },
   { label: 'ประกัน/เงื่อนไข', includes: ['ประกัน', 'รับประกัน', 'เงื่อนไข', 'warranty', 'claim', 'เคลม'] },
   { label: 'ร้องเรียน/ไม่พอใจ', includes: ['ร้องเรียน', 'คอมเพลน', 'ไม่พอใจ', 'complain', 'complaint'] },
@@ -318,6 +319,32 @@ const isUsefulKeyword = (value: string): boolean => {
   if (normalized.length <= 1) return false;
   if (/^\d+$/.test(normalized)) return false;
   return true;
+};
+
+const PLACEHOLDER_TOPIC_VALUES = new Set(['', '-', 'n/a', 'na', 'unknown', 'none', 'null', 'undefined', 'general']);
+const TOPIC_TEXT_KEYS = ['intent', 'topic', 'primary_category', 'category', 'analysis_intent', 'analysis_topic'] as const;
+const TOPIC_CONTAINER_KEYS = ['analysis', 'file', 'data', 'result', 'payload'] as const;
+
+const pickTopicText = (...values: unknown[]): string => {
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const text = value.trim();
+    if (!PLACEHOLDER_TOPIC_VALUES.has(text.toLowerCase())) return text;
+  }
+  return '';
+};
+
+const extractTopicText = (payload: unknown): string => {
+  if (!isObject(payload)) return '';
+
+  const containers: unknown[] = [payload, ...TOPIC_CONTAINER_KEYS.map((key) => payload[key])];
+  for (const container of containers) {
+    if (!isObject(container)) continue;
+    const topic = pickTopicText(...TOPIC_TEXT_KEYS.map((key) => container[key]));
+    if (topic) return topic;
+  }
+
+  return '';
 };
 
 const parseKeywordResponse = (payload: unknown): string[] => {
@@ -522,6 +549,7 @@ const normalizeAudioFiles = (payload: unknown): AudioFileRow[] =>
         status: 'UNKNOWN',
         date: '',
         agent_name: 'Unknown Agent',
+        topic: undefined,
         qa_score: undefined,
         csat_score: undefined
       };
@@ -533,19 +561,9 @@ const normalizeAudioFiles = (payload: unknown): AudioFileRow[] =>
       status: toText(item.status, 'UNKNOWN').toUpperCase(),
       date: toText(item.analyzed_date ?? item.upload_date ?? item.date ?? item.call_datetime ?? item.call_date),
       agent_name: toText(item.agent_name ?? item.agent ?? item.agent_id, 'Unknown Agent'),
+      topic: extractTopicText(item) || undefined,
       qa_score: extractQaScore(item),
       csat_score: extractCsatScore(item)
-    };
-  });
-
-const normalizeTopics = (payload: unknown): TopicRow[] =>
-  toArray(payload, ['topic_distribution', 'topics', 'data', 'items']).map((item, index) => {
-    if (!isObject(item)) {
-      return { name: `Topic ${index + 1}`, value: 0 };
-    }
-    return {
-      name: toText(item.name ?? item.topic ?? item.category, `Topic ${index + 1}`),
-      value: toNum(item.value ?? item.count ?? item.total)
     };
   });
 
@@ -661,7 +679,7 @@ export default function DashboardPage() {
   const [audioFiles, setAudioFiles] = useState<AudioFileRow[]>([]);
   const [, setAgentPerformance] = useState<AgentRow[]>([]);
   const [, setBrandIntelligence] = useState<BrandRow[]>([]);
-  const [topicDistribution, setTopicDistribution] = useState<TopicRow[]>([]);
+  const [topicByFileId, setTopicByFileId] = useState<Record<string, string>>({});
 
   const [keywordFrequency, setKeywordFrequency] = useState<KeywordFrequencyRow[]>([]);
   const [keywordLoading, setKeywordLoading] = useState(false);
@@ -670,6 +688,7 @@ export default function DashboardPage() {
   const [caseScores, setCaseScores] = useState<Record<string, CaseScoreRow>>(() => readAgentCaseScoreCache());
   const caseScoresRef = useRef<Record<string, CaseScoreRow>>({});
   const requestedCaseScoreIdsRef = useRef<Set<string>>(new Set());
+  const requestedTopicIdsRef = useRef<Set<string>>(new Set());
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -711,8 +730,6 @@ export default function DashboardPage() {
 
         setAgentPerformance(normalizeAgents(agentResult.status === 'fulfilled' ? agentResult.value : []));
         setBrandIntelligence(normalizeBrands(brandResult.status === 'fulfilled' ? brandResult.value : []));
-        const rawTopics = normalizeTopics(topicResult.status === 'fulfilled' ? topicResult.value : []);
-        setTopicDistribution(groupTopicDistribution(rawTopics, { maxGroups: 8 }));
 
         const failedCount = [filesResult, agentResult, brandResult, topicResult].filter(r => r.status === 'rejected').length;
         if (failedCount === 4) {
@@ -741,6 +758,69 @@ export default function DashboardPage() {
       return sameYear(d, selectedDate);
     });
   }, [audioFiles, filterType, selectedDate]);
+
+  useEffect(() => {
+    const validIds = new Set(audioFiles.map((file) => file.file_id));
+    requestedTopicIdsRef.current.forEach((fileId) => {
+      if (!validIds.has(fileId)) requestedTopicIdsRef.current.delete(fileId);
+    });
+
+    setTopicByFileId((prev) => {
+      let changed = false;
+      const next: Record<string, string> = {};
+
+      Object.entries(prev).forEach(([fileId, topic]) => {
+        if (!validIds.has(fileId)) {
+          changed = true;
+          return;
+        }
+        next[fileId] = topic;
+      });
+
+      return changed ? next : prev;
+    });
+  }, [audioFiles]);
+
+  useEffect(() => {
+    const requestedIds = requestedTopicIdsRef.current;
+    const targets = filteredAudioFiles.filter((file) => {
+      if (file.topic || topicByFileId[file.file_id]) return false;
+      if (requestedIds.has(file.file_id)) return false;
+      return file.status === 'COMPLETE';
+    });
+
+    if (targets.length === 0) return;
+
+    let active = true;
+    targets.forEach((file) => requestedIds.add(file.file_id));
+
+    void runWithConcurrencyLimit(targets, 8, async (file) => {
+      try {
+        const detail = await fetchJson(`${API_BASE}/api/v1/audio/detail/${encodeURIComponent(file.file_id)}`);
+        return { fileId: file.file_id, topic: extractTopicText(detail) || 'ไม่ระบุหัวข้อ' };
+      } catch {
+        return { fileId: file.file_id, topic: 'ไม่ระบุหัวข้อ' };
+      }
+    }).then((results) => {
+      results.forEach((result) => requestedIds.delete(result.fileId));
+      if (!active) return;
+
+      setTopicByFileId((prev) => {
+        const next = { ...prev };
+        results.forEach((result) => {
+          next[result.fileId] = result.topic;
+        });
+        return next;
+      });
+    }).catch(() => {
+      targets.forEach((file) => requestedIds.delete(file.file_id));
+    });
+
+    return () => {
+      active = false;
+      targets.forEach((file) => requestedIds.delete(file.file_id));
+    };
+  }, [filteredAudioFiles, topicByFileId]);
 
   const totalFiles = filteredAudioFiles.length;
   const positiveCount = filteredAudioFiles.filter(f => f.sentiment === 'positive').length;
@@ -921,10 +1001,16 @@ export default function DashboardPage() {
     [endpointStatus]
   );
 
-  const visibleTopicDistribution = useMemo(
-    () => (filteredAudioFiles.length > 0 ? topicDistribution : []),
-    [filteredAudioFiles.length, topicDistribution]
-  );
+  const visibleTopicDistribution = useMemo(() => {
+    const rows = filteredAudioFiles
+      .map((file) => ({
+        name: file.topic || topicByFileId[file.file_id] || '',
+        value: 1
+      }))
+      .filter((row) => row.name);
+
+    return groupTopicDistribution(rows, { maxGroups: 8 });
+  }, [filteredAudioFiles, topicByFileId]);
 
   const visibleBrandIntelligence = useMemo(() => {
     if (filteredAudioFiles.length === 0) return [];

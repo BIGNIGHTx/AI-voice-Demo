@@ -17,20 +17,16 @@ interface AdminUserRow {
   };
 }
 
+const dateTimeFormatter = new Intl.DateTimeFormat('th-TH', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+
 const formatDateTime = (value: string | null) => {
   if (!value) return '-';
 
-  return new Intl.DateTimeFormat('th-TH', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+  return dateTimeFormatter.format(new Date(value));
 };
-
-const roleBadgeClassName = (role: 'admin' | 'user') => (
-  role === 'admin'
-    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-    : 'border-slate-200 bg-slate-100 text-slate-700'
-);
 
 const getErrorMessage = async (response: Response) => {
   try {
@@ -166,6 +162,7 @@ export default function AdminUsersPage() {
                 type="button"
                 onClick={() => void loadUsers(true)}
                 disabled={refreshing}
+                suppressHydrationWarning
                 className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-[13px] font-bold text-emerald-600 shadow-sm transition-all hover:bg-emerald-50 hover:border-emerald-300 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 lg:mt-2"
               >
                 {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" strokeWidth={2.5} />}
@@ -224,6 +221,7 @@ export default function AdminUsersPage() {
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
+                suppressHydrationWarning
                 className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
                 placeholder="ค้นหาจากชื่อ, อีเมล หรือ role"
               />
@@ -323,6 +321,7 @@ export default function AdminUsersPage() {
                           type="button"
                           onClick={() => void handleRoleToggle(user)}
                           disabled={isCurrentUser || isUpdating || isProtectedFirstAdmin}
+                          suppressHydrationWarning
                           className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold shadow-sm transition-all duration-200
                             ${(isCurrentUser || isUpdating || isProtectedFirstAdmin)
                               ? 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'

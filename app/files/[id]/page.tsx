@@ -1090,6 +1090,7 @@ export default function FileAnalysisDetail() {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playbackRequestRef = useRef(0);
   const progressRef = useRef<HTMLDivElement | null>(null);
   const transcriptItemRefs = useRef<Array<HTMLDivElement | null>>([]);
   const lastFocusedTranscriptIndexRef = useRef(-1);
@@ -1147,6 +1148,7 @@ export default function FileAnalysisDetail() {
   useEffect(() => {
     fetchDetail();
     return () => {
+      playbackRequestRef.current += 1;
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
@@ -1279,6 +1281,11 @@ export default function FileAnalysisDetail() {
   };
 
   // ── Audio Player ──
+  const isInterruptedPlayError = (error: unknown) => (
+    error instanceof DOMException &&
+    (error.name === 'AbortError' || error.name === 'NotAllowedError')
+  );
+
   const initAudio = useCallback(() => {
     if (audioRef.current) return audioRef.current;
     const audio = new Audio(`${API_BASE}/api/v1/audio/play/${fileId}`);
@@ -1287,16 +1294,38 @@ export default function FileAnalysisDetail() {
       setDuration(audio.duration);
     });
     audio.addEventListener('timeupdate', () => setCurrentTime(audio.currentTime));
+    audio.addEventListener('playing', () => setIsPlaying(true));
+    audio.addEventListener('pause', () => setIsPlaying(false));
     audio.addEventListener('ended', () => setIsPlaying(false));
-    audio.addEventListener('error', () => setError('ไม่สามารถโหลดไฟล์เสียงได้'));
+    audio.addEventListener('error', () => {
+      setIsPlaying(false);
+      setError('ไม่สามารถโหลดไฟล์เสียงได้');
+    });
     audioRef.current = audio;
     return audio;
   }, [fileId]);
 
   const togglePlay = () => {
     const audio = initAudio();
-    if (isPlaying) { audio.pause(); } else { audio.play(); }
-    setIsPlaying(!isPlaying);
+    playbackRequestRef.current += 1;
+    const requestId = playbackRequestRef.current;
+
+    if (!audio.paused && !audio.ended) {
+      audio.pause();
+      setIsPlaying(false);
+      return;
+    }
+
+    setIsPlaying(true);
+    const playPromise = audio.play();
+    if (playPromise) {
+      playPromise.catch((error) => {
+        if (playbackRequestRef.current !== requestId) return;
+        if (isInterruptedPlayError(error)) return;
+        setIsPlaying(false);
+        setError('ไม่สามารถเล่นไฟล์เสียงได้');
+      });
+    }
   };
 
   const seekToTime = (seconds: number) => {

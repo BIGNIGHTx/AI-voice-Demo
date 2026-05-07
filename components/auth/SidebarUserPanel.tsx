@@ -70,6 +70,7 @@ export default function SidebarUserPanel({ user, loading }: SidebarUserPanelProp
           type="button"
           onClick={handleLogout}
           disabled={loggingOut}
+          suppressHydrationWarning
           className="mt-3 hidden w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 hover:text-rose-600 hover:border-rose-100 disabled:cursor-not-allowed disabled:opacity-50 sm:flex"
         >
           {loggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
@@ -80,6 +81,7 @@ export default function SidebarUserPanel({ user, loading }: SidebarUserPanelProp
           type="button"
           onClick={handleLogout}
           disabled={loggingOut}
+          suppressHydrationWarning
           className="mt-3 flex h-10 w-full items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition-all hover:bg-slate-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50 sm:hidden"
           aria-label="ออกจากระบบ"
         >
