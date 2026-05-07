@@ -9,6 +9,8 @@ import {
   FileAudio,
   AlertCircle,
   Filter,
+  CalendarDays,
+  ChevronDown,
   CloudUpload,
   Loader2,
   Trash2,
@@ -151,6 +153,7 @@ export default function FilesPage() {
 
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({ brands: [] });
   const [loadingFilters, setLoadingFilters] = useState(false);
+  const [showDateFilters, setShowDateFilters] = useState(false);
   const [filters, setFilters] = useState({
     brand: '',
     sentiment: '',
@@ -652,6 +655,7 @@ export default function FilesPage() {
       uploadDate: ''
     });
     setPage(1);
+    setShowDateFilters(false);
   };
 
   const getCallType = (file: FileRecord) => {
@@ -730,6 +734,7 @@ export default function FilesPage() {
   const hasActiveFilters = Boolean(
     fileSearch || filters.brand || filters.sentiment || filters.callType || filters.dateFrom || filters.dateTo || filters.uploadDate
   );
+  const activeDateFilterCount = [filters.dateFrom, filters.dateTo, filters.uploadDate].filter(Boolean).length;
 
   useEffect(() => {
     const nextTotalPages = Math.max(1, Math.ceil(filteredFiles.length / perPage));
@@ -845,15 +850,15 @@ export default function FilesPage() {
             </div>
           </div>
 
-          <div className="mb-8 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                  <Filter size={18} />
+          <div className="mb-6 rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                  <Filter size={15} />
                 </div>
                 <div>
-                  <h2 className="text-base font-semibold text-slate-800">Filters</h2>
-                  <p className="text-xs text-slate-500">Filter the file list by text, brand, sentiment, call type, call date, and upload date</p>
+                  <h2 className="text-sm font-semibold text-slate-800">Filters</h2>
+                  <p className="text-[11px] text-slate-500">Filter files by text, brand, sentiment, call type, call date, and upload date</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -869,31 +874,31 @@ export default function FilesPage() {
                   onClick={handleUploadButtonClick}
                   disabled={uploadingFiles}
                   suppressHydrationWarning
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-700 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-300"
                 >
-                  {uploadingFiles ? <Loader2 size={16} className="animate-spin" /> : <CloudUpload size={16} />}
+                  {uploadingFiles ? <Loader2 size={14} className="animate-spin" /> : <CloudUpload size={14} />}
                   <span>{uploadingFiles ? 'Uploading...' : 'Upload File'}</span>
                 </button>
                 <button
                   onClick={clearFilters}
                   suppressHydrationWarning
-                  className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
                 >
                   Clear All
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12">
+            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-12">
               <label className="xl:col-span-4 flex flex-col gap-1">
-                <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Search</span>
+                <span className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Search</span>
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
                   <input
                     type="text"
                     suppressHydrationWarning
                     placeholder="Filter files by name, customer, brand, agent..."
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-xs outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                     value={fileSearch}
                     onChange={(e) => { setFileSearch(e.target.value); setPage(1); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') fetchFiles(); }}
@@ -902,12 +907,12 @@ export default function FilesPage() {
               </label>
 
               <label className="xl:col-span-2 flex flex-col gap-1">
-                <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Brand</span>
+                <span className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Brand</span>
                 <select
                   value={filters.brand}
                   suppressHydrationWarning
                   onChange={(e) => { setFilters({ ...filters, brand: e.target.value }); setPage(1); }}
-                  className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                 >
                   <option value="">All Brands</option>
                   {filterOptions.brands.map((brand) => (
@@ -917,12 +922,12 @@ export default function FilesPage() {
               </label>
 
               <label className="xl:col-span-2 flex flex-col gap-1">
-                <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Sentiment</span>
+                <span className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Sentiment</span>
                 <select
                   value={filters.sentiment}
                   suppressHydrationWarning
                   onChange={(e) => { setFilters({ ...filters, sentiment: e.target.value }); setPage(1); }}
-                  className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                 >
                   <option value="">All Sentiments</option>
                   <option value="positive">Positive</option>
@@ -932,12 +937,12 @@ export default function FilesPage() {
               </label>
 
               <label className="xl:col-span-2 flex flex-col gap-1">
-                <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Call Type</span>
+                <span className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Call Type</span>
                 <select
                   value={filters.callType}
                   suppressHydrationWarning
                   onChange={(e) => { setFilters({ ...filters, callType: e.target.value }); setPage(1); }}
-                  className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                 >
                   <option value="">All Call Types</option>
                   <option value="inbound">Inbound</option>
@@ -946,51 +951,81 @@ export default function FilesPage() {
                 </select>
               </label>
 
-              <div className="grid grid-cols-1 gap-3 md:col-span-2 xl:col-span-8 xl:grid-cols-3">
-                <label className="flex flex-col gap-1">
-                  <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">From Date</span>
-                  <input
-                    type="date"
-                    lang="en-GB"
-                    suppressHydrationWarning
-                    placeholder="dd/mm/yyyy"
-                    value={filters.dateFrom}
-                    onChange={(e) => { setFilters({ ...filters, dateFrom: e.target.value }); setPage(1); }}
-                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              <div className="xl:col-span-2 flex flex-col gap-1">
+                <span className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Dates</span>
+                <button
+                  type="button"
+                  suppressHydrationWarning
+                  onClick={() => setShowDateFilters((current) => !current)}
+                  className={`flex items-center justify-between rounded-lg border px-3 py-2.5 text-xs font-semibold outline-none transition-all ${
+                    activeDateFilterCount
+                      ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                      : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-white hover:text-slate-800'
+                  }`}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <CalendarDays size={15} />
+                    <span>Dates</span>
+                    {activeDateFilterCount > 0 && (
+                      <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] leading-none text-white">
+                        {activeDateFilterCount}
+                      </span>
+                    )}
+                  </span>
+                  <ChevronDown
+                    size={14}
+                    className={`shrink-0 transition-transform ${showDateFilters ? 'rotate-180' : ''}`}
                   />
-                </label>
-
-                <label className="flex flex-col gap-1">
-                  <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">To Date</span>
-                  <input
-                    type="date"
-                    lang="en-GB"
-                    suppressHydrationWarning
-                    placeholder="dd/mm/yyyy"
-                    value={filters.dateTo}
-                    onChange={(e) => { setFilters({ ...filters, dateTo: e.target.value }); setPage(1); }}
-                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                  />
-                </label>
-
-                <label className="flex flex-col gap-1">
-                  <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Upload Date</span>
-                  <input
-                    type="date"
-                    lang="en-GB"
-                    suppressHydrationWarning
-                    placeholder="dd/mm/yyyy"
-                    value={filters.uploadDate}
-                    onChange={(e) => { setFilters({ ...filters, uploadDate: e.target.value }); setPage(1); }}
-                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                  />
-                </label>
+                </button>
               </div>
-            </div>
 
-            <p className="mt-3 text-[11px] text-slate-400">
-              From/To uses the call date shown in the table. Upload Date filters by the day the audio file was uploaded.
-            </p>
+              {showDateFilters && (
+                <div className="grid grid-cols-1 gap-2.5 rounded-lg border border-blue-100 bg-blue-50/40 p-3 md:col-span-2 md:grid-cols-3 xl:col-span-12">
+                  <label className="flex flex-col gap-1">
+                    <span className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">From Date</span>
+                    <input
+                      type="date"
+                      lang="en-GB"
+                      suppressHydrationWarning
+                      placeholder="dd/mm/yyyy"
+                      value={filters.dateFrom}
+                      onChange={(e) => { setFilters({ ...filters, dateFrom: e.target.value }); setPage(1); }}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1">
+                    <span className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">To Date</span>
+                    <input
+                      type="date"
+                      lang="en-GB"
+                      suppressHydrationWarning
+                      placeholder="dd/mm/yyyy"
+                      value={filters.dateTo}
+                      onChange={(e) => { setFilters({ ...filters, dateTo: e.target.value }); setPage(1); }}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1">
+                    <span className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Upload Date</span>
+                    <input
+                      type="date"
+                      lang="en-GB"
+                      suppressHydrationWarning
+                      placeholder="dd/mm/yyyy"
+                      value={filters.uploadDate}
+                      onChange={(e) => { setFilters({ ...filters, uploadDate: e.target.value }); setPage(1); }}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+
+                  <p className="text-[10px] text-slate-400 md:col-span-3">
+                    From/To uses the call date shown in the table. Upload Date filters by the upload day.
+                  </p>
+                </div>
+              )}
+            </div>
 
             {loadingFilters && (
               <p className="mt-3 text-[11px] text-slate-400">Loading filter options from API...</p>

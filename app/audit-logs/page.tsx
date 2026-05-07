@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { History, Loader2, LogIn, Search, ShieldAlert, ShieldCheck, RefreshCw, Trash2, Activity, AlertCircle, MousePointerClick } from 'lucide-react';
+import { History, Loader2, LogIn, Search, ShieldAlert, ShieldCheck, RefreshCw, Trash2, Activity, UserRound } from 'lucide-react';
 
 import Sidebar from '@/components/Sidebar';
 
@@ -228,8 +228,8 @@ export default function AuditLogsPage() {
                   <History size={28} strokeWidth={2.4} />
                 </div>
                 <div>
-                  <h1 className="text-[28px] font-black leading-none tracking-tight text-slate-950 sm:text-[32px]">
-                    Audit <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">Logs</span>
+                  <h1 className="text-[28px] font-bold leading-none tracking-tight text-slate-950 sm:text-[32px]">
+                    Audit <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text font-black text-transparent">Logs</span>
                   </h1>
                   <p className="mt-2 text-[13px] font-semibold leading-5 text-slate-500">
                     ตรวจสอบประวัติการใช้งานและกิจกรรมทั้งหมดในระบบ
@@ -240,6 +240,7 @@ export default function AuditLogsPage() {
               <div className="flex flex-wrap items-center gap-2.5">
                 <button
                   type="button"
+                  suppressHydrationWarning
                   onClick={handleClearLogs}
                   disabled={clearing || refreshing}
                   className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-rose-100 bg-white px-5 py-2.5 text-[13px] font-bold text-rose-600 shadow-sm transition-all hover:bg-rose-50 disabled:opacity-50"
@@ -250,6 +251,7 @@ export default function AuditLogsPage() {
 
                 <button
                   type="button"
+                  suppressHydrationWarning
                   onClick={() => void loadLogs(true)}
                   disabled={refreshing || clearing}
                   className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-sky-100 bg-white px-5 py-2.5 text-[13px] font-bold text-sky-600 shadow-sm transition-all hover:bg-sky-50 disabled:opacity-50"
@@ -260,7 +262,7 @@ export default function AuditLogsPage() {
               </div>
             </div>
 
-            <div className="mt-8 grid gap-4 grid-cols-2 lg:grid-cols-4">
+            <div className="mt-8 grid gap-4 grid-cols-1 sm:grid-cols-2">
               {/* Card 1: Total Events */}
               <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 transition-all hover:bg-white hover:shadow-md">
                 <div className="flex items-center gap-3 text-slate-500 mb-3">
@@ -273,28 +275,10 @@ export default function AuditLogsPage() {
               {/* Card 2: Logins Today */}
               <div className="rounded-2xl border border-blue-100 bg-blue-50/30 p-4 transition-all hover:bg-white hover:shadow-md">
                 <div className="flex items-center gap-3 text-blue-600 mb-3">
-                  <LogIn size={18} />
+                  <UserRound size={18} strokeWidth={2} />
                   <span className="text-xs font-bold uppercase tracking-wider">Logins Today</span>
                 </div>
                 <div className="text-3xl font-black text-blue-700">{stats.loginsToday}</div>
-              </div>
-
-              {/* Card 3: Failed Login */}
-              <div className="rounded-2xl border border-rose-100 bg-rose-50/30 p-4 transition-all hover:bg-white hover:shadow-md">
-                <div className="flex items-center gap-3 text-rose-600 mb-3">
-                  <AlertCircle size={18} />
-                  <span className="text-xs font-bold uppercase tracking-wider">Failed Login</span>
-                </div>
-                <div className="text-3xl font-black text-rose-700">{stats.failedLogins}</div>
-              </div>
-
-              {/* Card 4: Page Views */}
-              <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 transition-all hover:bg-white hover:shadow-md">
-                <div className="flex items-center gap-3 text-slate-500 mb-3">
-                  <MousePointerClick size={18} />
-                  <span className="text-xs font-bold uppercase tracking-wider">Page Views</span>
-                </div>
-                <div className="text-3xl font-black text-slate-900">{stats.pageViews}</div>
               </div>
             </div>
           </section>
@@ -304,6 +288,7 @@ export default function AuditLogsPage() {
               <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus-within:border-sky-300 focus-within:bg-white">
                 <Search className="h-4 w-4 text-slate-400" />
                 <input
+                  suppressHydrationWarning
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
@@ -312,6 +297,7 @@ export default function AuditLogsPage() {
               </div>
 
               <select
+                suppressHydrationWarning
                 value={actionFilter}
                 onChange={(event) => setActionFilter(event.target.value)}
                 className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none focus:border-sky-300 focus:bg-white"
