@@ -75,7 +75,26 @@ interface ExactHistoryItem {
   fileId: string;
   callTimestamp: string;
   agentId: string;
+  callType: string;
+  customerPhone: string;
+  brand: string;
+  sentiment: string;
   topic: string;
+  contactReason: string;
+  keywords: string[];
+  anomaly: {
+    label: string;
+    reasons: string[];
+  };
+  deepInsight: {
+    customerNeed: string;
+    painPoint: string;
+    rootCause: string;
+    expectation: string;
+    recommendedAction: string;
+    riskLevel: string;
+    confidence?: number;
+  } | null;
   summaryLines: string[];
   keyInsightsLines: string[];
 }
@@ -409,6 +428,230 @@ const dedupeStructuredLines = (lines: string[]): string[] => {
 
 const stripKeyInsightsPrefix = (value: string): string =>
   String(value || '').replace(/^💡\s*key insights:\s*/iu, '').trim();
+
+type ChatbotTopicRule = {
+  label: string;
+  terms: string[];
+  contactReason: string;
+};
+
+const CHATBOT_TOPIC_RULES: ChatbotTopicRule[] = [
+  {
+    label: 'ตรวจสอบยอดและรายการในบิล',
+    terms: ['ยอด', 'บิล', 'สลิป', 'จ่ายแยก', 'ชำระ', 'รูดการ์ด', 'โอน', 'ตัดออกจากยอด', 'รวมในบิล'],
+    contactReason: 'ลูกค้าต้องการตรวจสอบยอดชำระ รายการในบิล หรือหลักฐานการชำระเงิน',
+  },
+  {
+    label: 'ยืนยันรายการที่ใช้แล้วและยังไม่ใช้',
+    terms: ['ใช้ไปแล้ว', 'แกะใช้', 'ยังไม่ได้แกะ', 'ไม่ได้ใช้', 'เปิดใช้', 'จะคืน', 'ไม่ได้จะคืน'],
+    contactReason: 'ลูกค้าต้องการยืนยันสถานะสินค้าที่ใช้แล้วและสินค้าที่ยังไม่ได้ใช้งาน',
+  },
+  {
+    label: 'ตรวจสอบสินค้าและจำนวนที่ได้รับ',
+    terms: ['ได้รับ', 'ได้มา', 'แถม', 'จำนวน', 'กี่ใบ', 'กี่ชุด', 'มีอยู่', 'ส่งรูป', 'ถ่ายรูป'],
+    contactReason: 'ลูกค้าต้องการเช็กสินค้า จำนวนที่ได้รับ หรือของแถมที่เกี่ยวข้อง',
+  },
+  {
+    label: 'เคลมหรือประกันสินค้า',
+    terms: ['เคลม', 'ประกัน', 'warranty', 'claim', 'หมดประกัน', 'รับประกัน'],
+    contactReason: 'ลูกค้าติดต่อเรื่องเคลม เงื่อนไขประกัน หรือสถานะการรับประกันสินค้า',
+  },
+  {
+    label: 'ตรวจสอบออเดอร์และรายการสั่งซื้อ',
+    terms: ['ออเดอร์', 'สั่งซื้อ', 'รายการซื้อ', 'ใบสั่งซื้อ', 'order'],
+    contactReason: 'ลูกค้าต้องการตรวจสอบออเดอร์หรือรายการสั่งซื้อ',
+  },
+  {
+    label: 'สอบถามข้อมูลสินค้า',
+    terms: ['สอบถาม', 'อยากทราบ', 'ขอข้อมูล', 'ข้อมูลสินค้า', 'ราคา', 'โปรโมชัน'],
+    contactReason: 'ลูกค้าติดต่อเพื่อสอบถามข้อมูลสินค้า ราคา หรือโปรโมชัน',
+  },
+  {
+    label: 'เคสปัญหา/ร้องเรียนสินค้า',
+    terms: ['แพ้', 'คัน', 'ผื่น', 'ไม่สบาย', 'เจ็บ', 'ร้องเรียน', 'ไม่พอใจ', 'ปัญหา', 'เสียหาย', 'ชำรุด'],
+    contactReason: 'ลูกค้าติดต่อเพื่อแจ้งปัญหา ร้องเรียน หรือขอความช่วยเหลือเกี่ยวกับสินค้า',
+  },
+];
+
+const ANOMALY_SIGNAL_TERMS = [
+  'ไม่พอใจ', 'ร้องเรียน', 'โวย', 'ด่า', 'หยาบ', 'แย่มาก', 'ห่วย', 'โมโห', 'เสียเวลา',
+  'ฟ้อง', 'ผู้จัดการ', 'หัวหน้า', 'ไม่รับผิดชอบ', 'เถียง', 'ทะเลาะ', 'ต่อว่า',
+  'complain', 'angry', 'rude', 'bad service', 'supervisor', 'manager',
+];
+
+const cleanInsightValue = (value: unknown): string =>
+  String(value || '').replace(/\s+/g, ' ').trim();
+
+const isUsefulInsightValue = (value: unknown): boolean => {
+  const text = cleanInsightValue(value).toLowerCase();
+  return !!text && !PLACEHOLDER_TEXT_VALUES.has(text) && text !== 'undefined';
+};
+
+const pickInsightText = (...values: unknown[]): string => {
+  for (const value of values) {
+    const text = cleanInsightValue(value);
+    if (isUsefulInsightValue(text)) return text;
+  }
+  return '';
+};
+
+const normalizeSummaryPointForInsight = (value: unknown): string =>
+  cleanInsightValue(value)
+    .replace(/^[^a-zA-Z0-9\u0E00-\u0E7F]+/, '')
+    .replace(/^(?:ประเด็นหลัก|หัวข้อที่สนทนา|หัวข้อหลัก|key\s*insights?|topic|intent)\s*:\s*/iu, '')
+    .replace(/[\u{1F300}-\u{1FAFF}]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const normalizeInsightList = (values: unknown[]): string[] => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    const text = normalizeSummaryPointForInsight(value);
+    if (!isUsefulInsightValue(text)) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(text);
+  }
+
+  return result;
+};
+
+const collectKeywordValues = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.flatMap(collectKeywordValues);
+  if (!isObject(value)) return isUsefulInsightValue(value) ? [cleanInsightValue(value)] : [];
+
+  const values: string[] = [];
+  if (Array.isArray(value.keywords)) values.push(...collectKeywordValues(value.keywords));
+  if (Array.isArray(value.matched)) values.push(...collectKeywordValues(value.matched));
+  if (Array.isArray(value.sentiment_indicators)) values.push(...collectKeywordValues(value.sentiment_indicators));
+
+  if (isObject(value.categories)) {
+    Object.values(value.categories).forEach((category) => {
+      values.push(...collectKeywordValues(category));
+    });
+  }
+
+  return values;
+};
+
+const parseJsonObject = (value: unknown): Record<string, unknown> | null => {
+  if (isObject(value)) return value;
+  if (typeof value !== 'string' || !value.trim()) return null;
+
+  try {
+    const parsed = JSON.parse(value);
+    return isObject(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const normalizeDeepInsightForChatbot = (raw: unknown): ExactHistoryItem['deepInsight'] => {
+  const data = parseJsonObject(raw);
+  if (!data) return null;
+
+  const confidenceValue = toNumber(data.confidence);
+  const insight = {
+    customerNeed: pickInsightText(data.customer_need, data.customerNeed),
+    painPoint: pickInsightText(data.pain_point, data.painPoint),
+    rootCause: pickInsightText(data.root_cause, data.rootCause),
+    expectation: pickInsightText(data.expectation),
+    recommendedAction: pickInsightText(data.recommended_action, data.recommendedAction),
+    riskLevel: pickInsightText(data.risk_level, data.riskLevel),
+    confidence: confidenceValue > 0 ? Math.max(0, Math.min(100, Math.round(confidenceValue))) : undefined,
+  };
+
+  return Object.values(insight).some((value) => value !== undefined && value !== '') ? insight : null;
+};
+
+const findChatbotTopicRule = (value: string): ChatbotTopicRule | null => {
+  const text = cleanInsightValue(value).toLowerCase();
+  if (!text) return null;
+
+  return CHATBOT_TOPIC_RULES
+    .map((rule) => ({
+      rule,
+      score: rule.terms.reduce((total, term) => total + (text.includes(term.toLowerCase()) ? 1 : 0), 0),
+    }))
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score)[0]?.rule || null;
+};
+
+const buildCallAnomaly = (params: {
+  sentiment: string;
+  csatScore: number;
+  qaScore: number;
+  isEscalated: boolean;
+  evidenceText: string;
+}): ExactHistoryItem['anomaly'] => {
+  const sentimentLower = params.sentiment.toLowerCase();
+  const isNegative = sentimentLower.includes('negative') || sentimentLower.includes('ลบ');
+  const lowCsat = params.csatScore > 0 && params.csatScore <= 2;
+  const lowQa = params.qaScore > 0 && params.qaScore <= 5;
+  const matchedTerms = ANOMALY_SIGNAL_TERMS
+    .filter((term) => params.evidenceText.toLowerCase().includes(term.toLowerCase()))
+    .slice(0, 4);
+
+  const reasons = [
+    params.isEscalated ? 'รายการนี้ถูกระบุว่าเป็นเคส escalated' : '',
+    isNegative ? 'Sentiment เป็น negative' : '',
+    lowCsat ? `CSAT ต่ำ (${params.csatScore}/5)` : '',
+    lowQa ? `QA ต่ำ (${params.qaScore}/10)` : '',
+    matchedTerms.length ? `พบคำ/บริบทเสี่ยง: ${matchedTerms.join(', ')}` : '',
+  ].filter(Boolean);
+
+  const level = params.isEscalated || lowCsat || matchedTerms.length >= 2
+    ? 'พบความเสี่ยง'
+    : (isNegative || lowQa || matchedTerms.length > 0 ? 'ควรเฝ้าระวัง' : 'ไม่พบสัญญาณผิดปกติชัดเจน');
+
+  return {
+    label: level,
+    reasons: reasons.length ? reasons : ['ไม่พบคำหยาบ การโต้เถียง หรือสัญญาณ escalation จากข้อมูลที่มี'],
+  };
+};
+
+const parseEnhancedKeywordsPayload = (payload: unknown): string[] => {
+  if (!payload) return [];
+  const source = isObject(payload) && isObject(payload.keywords) ? payload.keywords : payload;
+  return normalizeInsightList(collectKeywordValues(source)).slice(0, 12);
+};
+
+const parseEnhancedTopicPayload = (payload: unknown): { topic: string; reason: string } => {
+  const source = isObject(payload) && isObject(payload.topic) ? payload.topic : payload;
+  if (!isObject(source)) return { topic: '', reason: '' };
+
+  return {
+    topic: pickInsightText(source.primary_category, source.topic, source.intent, source.category),
+    reason: pickInsightText(source.reason, source.description, source.summary),
+  };
+};
+
+const fetchEnhancedCallInsightParts = async (fileId: string): Promise<{ keywords: string[]; topic: string; topicReason: string }> => {
+  if (!fileId) return { keywords: [], topic: '', topicReason: '' };
+
+  const [keywordsPayload, topicPayload] = await Promise.all([
+    fetchJson(`${API_BASE}/api/v1/ai/keywords/${encodeURIComponent(fileId)}`),
+    fetchJson(`${API_BASE}/api/v1/ai/topic/${encodeURIComponent(fileId)}`),
+  ]);
+  const topic = parseEnhancedTopicPayload(topicPayload);
+
+  return {
+    keywords: parseEnhancedKeywordsPayload(keywordsPayload),
+    topic: topic.topic,
+    topicReason: topic.reason,
+  };
+};
+
+const extractCallIndex = (question: string): number | null => {
+  const match = normalizeText(question).match(/(?:สาย|รายการ|เคส)\s*(?:ที่)?\s*(\d{1,2})/iu);
+  if (!match?.[1]) return null;
+
+  const index = Number.parseInt(match[1], 10);
+  return Number.isFinite(index) && index > 0 ? index : null;
+};
 
 const isWarrantyHistoryQuestion = (question: string): boolean => {
   const normalized = normalizeText(question);
@@ -969,13 +1212,16 @@ const enrichExactWarrantyRecord = async (record: ExactWarrantyRecord): Promise<E
 };
 
 const fetchExactHistoryItem = async (item: EnrichedTopicSearchResult): Promise<ExactHistoryItem> => {
-  const payload = await fetchJson(`${API_BASE}/api/v1/audio/detail/${encodeURIComponent(item.fileId)}`);
+  const [payload, enhancedParts] = await Promise.all([
+    fetchJson(`${API_BASE}/api/v1/audio/detail/${encodeURIComponent(item.fileId)}`),
+    fetchEnhancedCallInsightParts(item.fileId),
+  ]);
   const analysis = isObject(payload) && isObject(payload.analysis) ? payload.analysis : null;
   const file = isObject(payload) && isObject(payload.file) ? payload.file : null;
 
   const summaryPointLines = Array.isArray(analysis?.summary_points)
     ? analysis.summary_points
-        .flatMap((point) => splitStructuredLines(toText(point)))
+        .flatMap((point) => splitStructuredLines(toText(point)).map(normalizeSummaryPointForInsight))
         .filter(Boolean)
     : [];
 
@@ -992,6 +1238,53 @@ const fetchExactHistoryItem = async (item: EnrichedTopicSearchResult): Promise<E
       .map(stripKeyInsightsPrefix),
     ...splitStructuredLines(toText(analysis?.key_insights)).map(stripKeyInsightsPrefix),
   ]);
+  const transcriptText = cleanInsightValue(
+    toText(analysis?.full_transcript)
+    || (Array.isArray(analysis?.transcription)
+      ? analysis.transcription
+          .map((line) => isObject(line) ? toText(line.text ?? line.subtitle) : '')
+          .filter(Boolean)
+          .join(' ')
+      : '')
+  );
+  const evidenceText = cleanInsightValue([
+    transcriptText,
+    item.summary,
+    toText(analysis?.summary ?? analysis?.summary_text),
+    toText(analysis?.intent ?? analysis?.topic),
+    enhancedParts.topic,
+    enhancedParts.topicReason,
+    toText(analysis?.key_insights),
+    ...summaryPointLines,
+    ...collectKeywordValues(analysis?.keywords),
+    ...enhancedParts.keywords,
+  ].join(' '));
+  const topicRule = findChatbotTopicRule(evidenceText);
+  const normalizedSummaryPoints = normalizeInsightList(summaryPointLines);
+  const deepInsight = normalizeDeepInsightForChatbot(
+    analysis?.deep_insight ?? analysis?.deep_insight_json ?? (isObject(analysis?.analysis_detail) ? analysis.analysis_detail.deep_insight : null)
+  );
+  const topic = pickInsightText(
+    topicRule?.label,
+    enhancedParts.topic,
+    analysis?.intent,
+    analysis?.topic,
+    item.topic
+  ) || '-';
+  const contactReason = pickInsightText(
+    topicRule?.contactReason,
+    enhancedParts.topicReason,
+    deepInsight?.customerNeed,
+    normalizedSummaryPoints[0],
+    item.summary
+  ) || '-';
+  const keywords = normalizeInsightList([
+    ...collectKeywordValues(analysis?.keywords),
+    ...enhancedParts.keywords,
+    item.brand,
+    item.product,
+  ]).slice(0, 8);
+  const sentiment = toText(analysis?.sentiment ?? analysis?.sentiment_label, item.sentiment || '-');
 
   return {
     fileId: item.fileId,
@@ -1000,10 +1293,72 @@ const fetchExactHistoryItem = async (item: EnrichedTopicSearchResult): Promise<E
       item.createdAt || '-'
     ),
     agentId: toText(analysis?.agent_id, item.agentId || '-'),
-    topic: toText(analysis?.intent ?? analysis?.topic ?? item.topic, item.topic || '-'),
+    callType: toText(file?.call_type ?? file?.type ?? analysis?.call_type, item.saleChannel || '-'),
+    customerPhone: toText(analysis?.customer_phone ?? file?.customer_phone, item.customerPhone || '-'),
+    brand: toText(analysis?.brand_name ?? file?.brand_name, item.brand || '-'),
+    sentiment,
+    topic,
+    contactReason,
+    keywords,
+    anomaly: buildCallAnomaly({
+      sentiment,
+      csatScore: toNumber(analysis?.csat_score),
+      qaScore: toNumber(analysis?.qa_score),
+      isEscalated: Boolean(analysis?.is_escalated),
+      evidenceText,
+    }),
+    deepInsight,
     summaryLines,
     keyInsightsLines,
   };
+};
+
+const formatKeywordList = (keywords: string[]): string =>
+  keywords.length ? keywords.join(', ') : '-';
+
+const appendDeepInsightLines = (lines: string[], item: ExactHistoryItem): void => {
+  if (!item.deepInsight) {
+    const fallbackInsight = item.keyInsightsLines[0] || item.summaryLines[0];
+    if (fallbackInsight) lines.push(`- Key Insight: ${truncateText(fallbackInsight, 180)}`);
+    return;
+  }
+
+  lines.push('อินไซต์ลูกค้า:');
+  if (item.deepInsight.customerNeed) lines.push(`- ลูกค้าต้องการอะไร: ${item.deepInsight.customerNeed}`);
+  if (item.deepInsight.painPoint) lines.push(`- ปัญหาหลัก: ${item.deepInsight.painPoint}`);
+  if (item.deepInsight.rootCause) lines.push(`- สาเหตุที่น่าจะเกิด: ${item.deepInsight.rootCause}`);
+  if (item.deepInsight.expectation) lines.push(`- สิ่งที่ลูกค้าคาดหวัง: ${item.deepInsight.expectation}`);
+  if (item.deepInsight.recommendedAction) lines.push(`- สิ่งที่ควรทำต่อ: ${item.deepInsight.recommendedAction}`);
+
+  const riskParts = [
+    item.deepInsight.riskLevel ? `ระดับความเสี่ยง ${item.deepInsight.riskLevel}` : '',
+    typeof item.deepInsight.confidence === 'number' ? `ความมั่นใจ ${item.deepInsight.confidence}%` : '',
+  ].filter(Boolean);
+  if (riskParts.length) lines.push(`- ${riskParts.join(' | ')}`);
+};
+
+const appendCallSummaryInsightLines = (
+  lines: string[],
+  item: ExactHistoryItem,
+  displayIndex: number
+): void => {
+  lines.push('', `สายที่ ${displayIndex}:`);
+  lines.push(`- วันที่: ${formatDisplayDateTime(item.callTimestamp)}`);
+  lines.push(`- Agent: ${item.agentId || '-'}`);
+  lines.push(`- File ID: ${item.fileId || '-'}`);
+  if (item.callType && item.callType !== '-') lines.push(`- ประเภทสาย: ${item.callType}`);
+  if (item.brand && item.brand !== '-') lines.push(`- แบรนด์: ${item.brand}`);
+  if (item.sentiment && item.sentiment !== '-') lines.push(`- Sentiment: ${item.sentiment}`);
+
+  lines.push('Summary Insight:');
+  if (item.topic && item.topic !== '-') lines.push(`- Topic/Intent: ${item.topic}`);
+  if (item.contactReason && item.contactReason !== '-') lines.push(`- สาเหตุการติดต่อ: ${item.contactReason}`);
+  lines.push(`- Keywords: ${formatKeywordList(item.keywords)}`);
+  lines.push(`- Anomaly Detection: ${item.anomaly.label}`);
+  if (item.anomaly.reasons.length) {
+    lines.push(`- เหตุผลความเสี่ยง: ${item.anomaly.reasons.join(' | ')}`);
+  }
+  appendDeepInsightLines(lines, item);
 };
 
 const formatExactWarrantyReply = (
@@ -1059,34 +1414,15 @@ const formatExactWarrantyReply = (
     return lines.join('\n');
   }
 
-  lines.push(`- พบ ${historyCount} รายการที่ผูกกับ ${identifier}`);
+  lines.push(`- พบ ${historyCount} สายที่ผูกกับ ${identifier}`);
+  lines.push('- แยกแต่ละสายด้วยวันที่, Agent, ประเภทสาย และ File ID');
 
   historyItems.forEach((item, index) => {
-    lines.push('', `รายการที่ ${index + 1}:`);
-    lines.push(`- วันที่: ${formatDisplayDateTime(item.callTimestamp)}`);
-    lines.push(`- Agent: ${item.agentId || '-'}`);
-
-    if (item.topic && item.topic !== '-') {
-      lines.push(`- หัวข้อ: ${item.topic}`);
-    }
-
-    if (item.summaryLines.length) {
-      lines.push('สรุปการโทร:');
-      item.summaryLines.forEach((line) => {
-        lines.push(`• ${line}`);
-      });
-    }
-
-    if (item.keyInsightsLines.length) {
-      lines.push('Key Insights:');
-      item.keyInsightsLines.forEach((line) => {
-        lines.push(`• ${line}`);
-      });
-    }
+    appendCallSummaryInsightLines(lines, item, index + 1);
   });
 
   if (historyCount > historyItems.length) {
-    lines.push('', `- แสดงล่าสุด ${historyItems.length} จากทั้งหมด ${historyCount} รายการ`);
+    lines.push('', `- แสดงล่าสุด ${historyItems.length} จากทั้งหมด ${historyCount} สาย`);
   }
 
   return lines.join('\n');
@@ -1453,6 +1789,97 @@ const fetchTopicSearch = async (params: { phone?: string | null; topic?: string;
   return parseSearchResults(payload);
 };
 
+const fetchCustomerCallHistoryResults = async (
+  phone: string,
+  options?: {
+    registrationNo?: string | null;
+    serialNo?: string | null;
+    orderNumber?: string | null;
+    perPage?: number;
+  }
+): Promise<{ total: number; results: EnrichedTopicSearchResult[] }> => {
+  const searchResponse = await fetchTopicSearch({ phone, perPage: options?.perPage ?? 50 });
+  if (!searchResponse) return { total: 0, results: [] };
+
+  const enrichedResults = filterEnrichedTopicResults(
+    await enrichTopicSearchResults(searchResponse.results),
+    options?.registrationNo ?? null,
+    options?.serialNo ?? null,
+    options?.orderNumber ?? null
+  );
+
+  return {
+    total: enrichedResults.length !== searchResponse.results.length
+      ? enrichedResults.length
+      : (searchResponse.total || enrichedResults.length),
+    results: enrichedResults,
+  };
+};
+
+const formatPhoneCallHistoryReply = (params: {
+  phone: string;
+  total: number;
+  historyItems: ExactHistoryItem[];
+  requestedIndex: number | null;
+  displayStartIndex: number;
+}): string => {
+  if (!params.total) {
+    return `ไม่พบประวัติการโทรของเบอร์ ${params.phone} ในระบบ`;
+  }
+
+  if (params.requestedIndex && !params.historyItems.length) {
+    return `เบอร์ ${params.phone} มีประวัติ ${params.total} สาย แต่ไม่พบสายที่ ${params.requestedIndex}`;
+  }
+
+  const lines = [`ประวัติการโทรของเบอร์ ${params.phone}:`];
+  lines.push(`- พบทั้งหมด ${params.total} สาย`);
+  lines.push('- แยกแต่ละสายด้วยวันที่, Agent, ประเภทสาย และ File ID');
+
+  params.historyItems.forEach((item, index) => {
+    appendCallSummaryInsightLines(lines, item, params.displayStartIndex + index);
+  });
+
+  if (!params.requestedIndex && params.total > params.historyItems.length) {
+    lines.push('', `- แสดงล่าสุด ${params.historyItems.length} จากทั้งหมด ${params.total} สาย`);
+    lines.push(`- ถ้าต้องการเจาะสายเดียว ให้ถามเช่น "ขอสายที่ 2 ของเบอร์ ${params.phone}"`);
+  }
+
+  return lines.join('\n');
+};
+
+const tryCallHistoryReply = async (question: string): Promise<string | null> => {
+  const phone = extractPhoneNumber(question);
+  if (!phone || !isWarrantyHistoryQuestion(question)) return null;
+
+  const requestedIndex = extractCallIndex(question);
+  const registrationNo = extractRegistrationNumber(question);
+  const serialNo = extractSerialNumber(question);
+  const orderNumber = extractOrderNumber(question);
+  const { total, results } = await fetchCustomerCallHistoryResults(phone, {
+    registrationNo,
+    serialNo,
+    orderNumber,
+    perPage: 50,
+  });
+
+  if (!total || !results.length) {
+    return `ไม่พบประวัติการโทรของเบอร์ ${phone} ในระบบ`;
+  }
+
+  const selectedResults = requestedIndex
+    ? results.slice(requestedIndex - 1, requestedIndex)
+    : results.slice(0, 5);
+  const historyItems = await Promise.all(selectedResults.map((item) => fetchExactHistoryItem(item)));
+
+  return formatPhoneCallHistoryReply({
+    phone,
+    total,
+    historyItems,
+    requestedIndex,
+    displayStartIndex: requestedIndex || 1,
+  });
+};
+
 const tryTopicReply = async (question: string): Promise<string | null> => {
   const phone = extractPhoneNumber(question);
   const registrationNo = extractRegistrationNumber(question);
@@ -1505,6 +1932,60 @@ const tryTopicReply = async (question: string): Promise<string | null> => {
   return null;
 };
 
+const formatCallInsightForRagContext = (item: ExactHistoryItem, index: number): string => {
+  const parts = [
+    `สายที่ ${index}`,
+    `file_id: ${item.fileId || '-'}`,
+    `customer_phone: ${item.customerPhone || '-'}`,
+    `call_timestamp: ${formatDisplayDateTime(item.callTimestamp)}`,
+    `agent_id: ${item.agentId || '-'}`,
+    `call_type: ${item.callType || '-'}`,
+    `brand: ${item.brand || '-'}`,
+    `sentiment: ${item.sentiment || '-'}`,
+    `topic_intent: ${item.topic || '-'}`,
+    `contact_reason: ${item.contactReason || '-'}`,
+    `keywords: ${formatKeywordList(item.keywords)}`,
+    `anomaly: ${item.anomaly.label}`,
+  ];
+
+  if (item.deepInsight?.customerNeed) parts.push(`customer_need: ${item.deepInsight.customerNeed}`);
+  if (item.deepInsight?.painPoint) parts.push(`pain_point: ${item.deepInsight.painPoint}`);
+  if (item.deepInsight?.rootCause) parts.push(`root_cause: ${item.deepInsight.rootCause}`);
+  if (item.deepInsight?.expectation) parts.push(`expectation: ${item.deepInsight.expectation}`);
+  if (item.deepInsight?.recommendedAction) parts.push(`recommended_action: ${item.deepInsight.recommendedAction}`);
+  if (!item.deepInsight && item.summaryLines[0]) parts.push(`summary_context: ${truncateText(item.summaryLines[0], 180)}`);
+  if (item.keyInsightsLines[0]) parts.push(`key_insight: ${truncateText(item.keyInsightsLines[0], 180)}`);
+
+  return parts.join('\n');
+};
+
+const buildRagQuestionWithCallInsights = async (question: string): Promise<string> => {
+  const phone = extractPhoneNumber(question);
+  if (!phone) return question;
+
+  const { total, results } = await fetchCustomerCallHistoryResults(phone, { perPage: 12 });
+  if (!total || !results.length) return question;
+
+  const historyItems = await Promise.all(
+    results.slice(0, 5).map((item) => fetchExactHistoryItem(item))
+  );
+  if (!historyItems.length) return question;
+
+  const context = historyItems
+    .map((item, index) => formatCallInsightForRagContext(item, index + 1))
+    .join('\n\n');
+
+  return [
+    question,
+    '',
+    'บริบทประวัติการโทรจริงจากระบบสำหรับตอบคำถามนี้:',
+    `พบประวัติของเบอร์ ${phone} ทั้งหมด ${total} สาย และแนบล่าสุด ${historyItems.length} สาย`,
+    context,
+    '',
+    'ให้ตอบโดยอ้างอิง Summary Insight, อินไซต์ลูกค้า, keyword, anomaly และ metadata ด้านบนก่อน ถ้าคำถามไม่เกี่ยวกับประวัติการโทรให้ตอบจากข้อมูลประกันตามปกติ',
+  ].join('\n');
+};
+
 const requestWarrantyReply = async (question: string): Promise<string> => {
   const phone = extractPhoneNumber(question);
   const includeHistory = isWarrantyHistoryQuestion(question);
@@ -1515,10 +1996,11 @@ const requestWarrantyReply = async (question: string): Promise<string> => {
     }
   }
 
+  const ragQuestion = await buildRagQuestionWithCallInsights(question);
   const payload = await fetchJson(`${API_BASE}/api/v1/warranty/query`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question: ragQuestion }),
   });
 
   const answerText = extractAnswerText(payload);
@@ -1612,6 +2094,11 @@ export const getChatbotReply = async (question: string): Promise<string> => {
   const guideReply = tryStaticChatbotGuideReply(normalizedQuestion);
   if (guideReply) {
     return guideReply;
+  }
+
+  const callHistoryReply = await tryCallHistoryReply(normalizedQuestion);
+  if (callHistoryReply) {
+    return callHistoryReply;
   }
 
   const exactWarrantyReply = await tryExactWarrantyReply(normalizedQuestion);

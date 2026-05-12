@@ -1381,15 +1381,19 @@ export default function DashboardPage() {
                 {sentimentData.map((data, i) => {
                   let barColor = '';
                   let textColor = '';
+                  let bgColor = '';
                   if (data.label === 'Positive') {
                     barColor = 'bg-emerald-500';
                     textColor = 'text-emerald-500';
+                    bgColor = 'bg-emerald-50';
                   } else if (data.label === 'Negative') {
                     barColor = 'bg-red-500';
                     textColor = 'text-red-500';
+                    bgColor = 'bg-red-50';
                   } else {
                     barColor = 'bg-[#54657E]';
                     textColor = 'text-[#54657E]';
+                    bgColor = 'bg-slate-100/60';
                   }
 
                   const Icon = data.icon;
@@ -1404,7 +1408,7 @@ export default function DashboardPage() {
                       </div>
 
                       <div className="flex-1 flex items-center pb-3">
-                        <div className="w-full bg-slate-100/50 rounded-lg h-8 relative flex items-center">
+                        <div className={`w-full ${bgColor} rounded-lg h-8 relative flex items-center`}>
                           <div
                             className={`${barColor} h-full rounded-lg transition-all duration-700 flex items-center px-4 min-w-[2rem] shadow-sm`}
                             style={{ width: `${Math.max(data.percentage, 5)}%` }}
