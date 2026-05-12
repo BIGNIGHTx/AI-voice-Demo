@@ -37,8 +37,13 @@ const formatBotMessage = (text: string): string[] => {
 
   const formatted: string[] = [];
   const seen = new Set<string>();
+  let itemSection = '';
 
   for (const line of lines) {
+    if (/^(?:รายการที่|สายที่)\s*\d+/u.test(line)) {
+      itemSection = line;
+    }
+
     if (line.startsWith('📝') && line.includes('|')) {
       const chunks = line
         .split('|')
@@ -46,7 +51,8 @@ const formatBotMessage = (text: string): string[] => {
         .filter(Boolean);
 
       for (const chunk of chunks) {
-        const key = normalizeForDedup(chunk);
+        const normalizedChunk = normalizeForDedup(chunk);
+        const key = itemSection ? `${itemSection}:${normalizedChunk}` : normalizedChunk;
         if (!key || seen.has(key)) continue;
         seen.add(key);
         formatted.push(chunk);
@@ -54,7 +60,8 @@ const formatBotMessage = (text: string): string[] => {
       continue;
     }
 
-    const key = normalizeForDedup(line);
+    const normalizedLine = normalizeForDedup(line);
+    const key = itemSection ? `${itemSection}:${normalizedLine}` : normalizedLine;
     if (!key || seen.has(key)) continue;
 
     seen.add(key);
@@ -62,6 +69,27 @@ const formatBotMessage = (text: string): string[] => {
   }
 
   return formatted;
+};
+
+const parseSentimentLine = (line: string): { label: string; value: string } | null => {
+  const match = line.match(/^💬\s*(Sentiment|อารมณ์โดยรวม):\s*(.+)$/iu);
+  if (!match?.[2]) return null;
+
+  return {
+    label: `💬 ${match[1]}:`,
+    value: match[2].trim(),
+  };
+};
+
+const getSentimentBadgeClass = (value: string): string => {
+  const normalized = value.toLowerCase();
+  if (normalized.includes('negative') || normalized.includes('เชิงลบ') || normalized.includes('ลบ')) {
+    return 'bg-red-100 text-red-700 ring-red-200 shadow-red-100';
+  }
+  if (normalized.includes('positive') || normalized.includes('เชิงบวก') || normalized.includes('บวก')) {
+    return 'bg-emerald-100 text-emerald-700 ring-emerald-200 shadow-emerald-100';
+  }
+  return 'bg-slate-100 text-slate-700 ring-slate-200 shadow-slate-100';
 };
 
 export default function WarrantyChatPage() {
@@ -87,7 +115,10 @@ export default function WarrantyChatPage() {
     setLoading(true);
 
     try {
-      const botResponse = await getChatbotReply(userMsg);
+      const botResponse = await getChatbotReply(
+        userMsg,
+        messages.map((message) => message.text).join('\n')
+      );
       
       setMessages(prev => [...prev, { role: 'bot', text: botResponse }]);
     } catch (error) {
@@ -153,12 +184,22 @@ export default function WarrantyChatPage() {
                       <div className="space-y-2">
                         {formatBotMessage(m.text).map((line, lineIndex) => {
                           const isSectionTitle = line.endsWith(':');
+                          const sentiment = parseSentimentLine(line);
                           return (
                             <p
                               key={`${i}-${lineIndex}`}
-                              className={isSectionTitle ? 'pt-1 font-semibold text-slate-800' : 'text-slate-700'}
+                              className={sentiment
+                                ? 'flex flex-wrap items-center gap-1.5 text-slate-700'
+                                : (isSectionTitle ? 'pt-1 font-semibold text-slate-800' : 'text-slate-700')}
                             >
-                              {line}
+                              {sentiment ? (
+                                <>
+                                  <span>{sentiment.label}</span>
+                                  <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide shadow-sm ring-1 ${getSentimentBadgeClass(sentiment.value)}`}>
+                                    {sentiment.value}
+                                  </span>
+                                </>
+                              ) : line}
                             </p>
                           );
                         })}

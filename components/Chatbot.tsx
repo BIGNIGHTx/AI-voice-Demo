@@ -31,8 +31,13 @@ const formatAiMessage = (text: string): string[] => {
 
   const formatted: string[] = [];
   const seen = new Set<string>();
+  let itemSection = '';
 
   for (const line of lines) {
+    if (/^(?:รายการที่|สายที่)\s*\d+/u.test(line)) {
+      itemSection = line;
+    }
+
     if (line.startsWith('📝') && line.includes('|')) {
       const chunks = line
         .split('|')
@@ -40,7 +45,8 @@ const formatAiMessage = (text: string): string[] => {
         .filter(Boolean);
 
       for (const chunk of chunks) {
-        const key = normalizeForDedup(chunk);
+        const normalizedChunk = normalizeForDedup(chunk);
+        const key = itemSection ? `${itemSection}:${normalizedChunk}` : normalizedChunk;
         if (!key || seen.has(key)) continue;
         seen.add(key);
         formatted.push(chunk);
@@ -48,7 +54,8 @@ const formatAiMessage = (text: string): string[] => {
       continue;
     }
 
-    const key = normalizeForDedup(line);
+    const normalizedLine = normalizeForDedup(line);
+    const key = itemSection ? `${itemSection}:${normalizedLine}` : normalizedLine;
     if (!key || seen.has(key)) continue;
 
     seen.add(key);
@@ -56,6 +63,27 @@ const formatAiMessage = (text: string): string[] => {
   }
 
   return formatted;
+};
+
+const parseSentimentLine = (line: string): { label: string; value: string } | null => {
+  const match = line.match(/^💬\s*(Sentiment|อารมณ์โดยรวม):\s*(.+)$/iu);
+  if (!match?.[2]) return null;
+
+  return {
+    label: `💬 ${match[1]}:`,
+    value: match[2].trim(),
+  };
+};
+
+const getSentimentBadgeClass = (value: string): string => {
+  const normalized = value.toLowerCase();
+  if (normalized.includes('negative') || normalized.includes('เชิงลบ') || normalized.includes('ลบ')) {
+    return 'bg-red-100 text-red-700 ring-red-200 shadow-red-100';
+  }
+  if (normalized.includes('positive') || normalized.includes('เชิงบวก') || normalized.includes('บวก')) {
+    return 'bg-emerald-100 text-emerald-700 ring-emerald-200 shadow-emerald-100';
+  }
+  return 'bg-slate-100 text-slate-700 ring-slate-200 shadow-slate-100';
 };
 
 export default function Chatbot() {
@@ -93,7 +121,10 @@ export default function Chatbot() {
     setIsLoading(true);
 
     try {
-      const aiResponseText = await getChatbotReply(userText);
+      const aiResponseText = await getChatbotReply(
+        userText,
+        messages.map((message) => message.text).join('\n')
+      );
 
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: aiResponseText }]);
     } catch (error) {
@@ -172,9 +203,19 @@ export default function Chatbot() {
                   }`}>
                   {msg.role === 'ai' ? (
                     <div className="space-y-1.5">
-                      {formatAiMessage(msg.text).map((line, index) => (
-                        <p key={`${msg.id}-${index}`} className="leading-relaxed text-slate-700">{line}</p>
-                      ))}
+                      {formatAiMessage(msg.text).map((line, index) => {
+                        const sentiment = parseSentimentLine(line);
+                        return sentiment ? (
+                          <p key={`${msg.id}-${index}`} className="flex flex-wrap items-center gap-1.5 leading-relaxed text-slate-700">
+                            <span>{sentiment.label}</span>
+                            <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide shadow-sm ring-1 ${getSentimentBadgeClass(sentiment.value)}`}>
+                              {sentiment.value}
+                            </span>
+                          </p>
+                        ) : (
+                          <p key={`${msg.id}-${index}`} className="leading-relaxed text-slate-700">{line}</p>
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>

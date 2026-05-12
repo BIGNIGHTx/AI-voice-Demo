@@ -257,6 +257,31 @@ const extractPhoneNumber = (value: string): string | null => {
   return match ? match[0] : null;
 };
 
+const extractLastPhoneNumber = (value: string): string | null => {
+  const matches = Array.from(String(value || '').matchAll(/0\d{8,9}/g));
+  const lastMatch = matches.at(-1);
+  return lastMatch?.[0] || null;
+};
+
+const hasCurrentPhoneReference = (question: string): boolean => {
+  const normalized = normalizeText(question);
+  return [
+    'เบอร์นี้',
+    'หมายเลขนี้',
+    'ลูกค้านี้',
+    'คนนี้',
+    'ของเบอร์',
+  ].some((keyword) => normalized.includes(normalizeText(keyword)));
+};
+
+const resolveQuestionPhoneReference = (question: string, contextText?: string): string => {
+  if (extractPhoneNumber(question)) return question;
+  if (!contextText || !hasCurrentPhoneReference(question)) return question;
+
+  const contextPhone = extractLastPhoneNumber(contextText);
+  return contextPhone ? `${question} ${contextPhone}` : question;
+};
+
 const normalizeIdentifierCode = (value: string): string =>
   String(value || '')
     .replace(/^[\s:=#-]+|[\s:=#-]+$/g, '')
@@ -368,6 +393,17 @@ const calculateExpiryDateFromWarranty = (purchaseDate: string, warrantyPeriod: s
   const expiryDate = new Date(purchase);
   expiryDate.setMonth(expiryDate.getMonth() + months);
   return formatDisplayDate(expiryDate.toISOString());
+};
+
+const resolveWarrantyExpiryDisplayDate = (record: ExactWarrantyRecord): string => {
+  const deliveryBasedExpiry = record.deliveryDate !== '-'
+    ? calculateExpiryDateFromWarranty(record.deliveryDate, record.warrantyPeriod)
+    : '-';
+  if (deliveryBasedExpiry !== '-') return deliveryBasedExpiry;
+
+  if (record.expiryDate !== '-') return formatDisplayDate(record.expiryDate);
+  if (record.warrantyEndDate !== '-') return formatDisplayDate(record.warrantyEndDate);
+  return calculateExpiryDateFromWarranty(record.purchaseDate, record.warrantyPeriod);
 };
 
 const resolveWarrantyCoverage = (record: ExactWarrantyRecord): string => {
@@ -1305,7 +1341,7 @@ const fetchExactHistoryItem = async (item: EnrichedTopicSearchResult): Promise<E
       csatScore: toNumber(analysis?.csat_score),
       qaScore: toNumber(analysis?.qa_score),
       isEscalated: Boolean(analysis?.is_escalated),
-      evidenceText,
+      evidenceText: transcriptText,
     }),
     deepInsight,
     summaryLines,
@@ -1319,22 +1355,22 @@ const formatKeywordList = (keywords: string[]): string =>
 const appendDeepInsightLines = (lines: string[], item: ExactHistoryItem): void => {
   if (!item.deepInsight) {
     const fallbackInsight = item.keyInsightsLines[0] || item.summaryLines[0];
-    if (fallbackInsight) lines.push(`- Key Insight: ${truncateText(fallbackInsight, 180)}`);
+    if (fallbackInsight) lines.push(`💡 Key Insight: ${truncateText(fallbackInsight, 180)}`);
     return;
   }
 
-  lines.push('อินไซต์ลูกค้า:');
-  if (item.deepInsight.customerNeed) lines.push(`- ลูกค้าต้องการอะไร: ${item.deepInsight.customerNeed}`);
-  if (item.deepInsight.painPoint) lines.push(`- ปัญหาหลัก: ${item.deepInsight.painPoint}`);
-  if (item.deepInsight.rootCause) lines.push(`- สาเหตุที่น่าจะเกิด: ${item.deepInsight.rootCause}`);
-  if (item.deepInsight.expectation) lines.push(`- สิ่งที่ลูกค้าคาดหวัง: ${item.deepInsight.expectation}`);
-  if (item.deepInsight.recommendedAction) lines.push(`- สิ่งที่ควรทำต่อ: ${item.deepInsight.recommendedAction}`);
+  lines.push('💡 อินไซต์ลูกค้า:');
+  if (item.deepInsight.customerNeed) lines.push(`🙋 ลูกค้าต้องการอะไร: ${item.deepInsight.customerNeed}`);
+  if (item.deepInsight.painPoint) lines.push(`🧩 ปัญหาหลัก: ${item.deepInsight.painPoint}`);
+  if (item.deepInsight.rootCause) lines.push(`🔎 สาเหตุที่น่าจะเกิด: ${item.deepInsight.rootCause}`);
+  if (item.deepInsight.expectation) lines.push(`✅ สิ่งที่ลูกค้าคาดหวัง: ${item.deepInsight.expectation}`);
+  if (item.deepInsight.recommendedAction) lines.push(`🛠️ สิ่งที่ควรทำต่อ: ${item.deepInsight.recommendedAction}`);
 
   const riskParts = [
     item.deepInsight.riskLevel ? `ระดับความเสี่ยง ${item.deepInsight.riskLevel}` : '',
     typeof item.deepInsight.confidence === 'number' ? `ความมั่นใจ ${item.deepInsight.confidence}%` : '',
   ].filter(Boolean);
-  if (riskParts.length) lines.push(`- ${riskParts.join(' | ')}`);
+  if (riskParts.length) lines.push(`🚦 ${riskParts.join(' | ')}`);
 };
 
 const appendCallSummaryInsightLines = (
@@ -1346,17 +1382,17 @@ const appendCallSummaryInsightLines = (
   lines.push(`- วันที่: ${formatDisplayDateTime(item.callTimestamp)}`);
   lines.push(`- Agent: ${item.agentId || '-'}`);
   lines.push(`- File ID: ${item.fileId || '-'}`);
-  if (item.callType && item.callType !== '-') lines.push(`- ประเภทสาย: ${item.callType}`);
-  if (item.brand && item.brand !== '-') lines.push(`- แบรนด์: ${item.brand}`);
-  if (item.sentiment && item.sentiment !== '-') lines.push(`- Sentiment: ${item.sentiment}`);
+  if (item.callType && item.callType !== '-') lines.push(`📞 ประเภทสาย: ${item.callType}`);
+  if (item.brand && item.brand !== '-') lines.push(`🏷️ แบรนด์: ${item.brand}`);
+  if (item.sentiment && item.sentiment !== '-') lines.push(`💬 Sentiment: ${item.sentiment}`);
 
-  lines.push('Summary Insight:');
-  if (item.topic && item.topic !== '-') lines.push(`- Topic/Intent: ${item.topic}`);
-  if (item.contactReason && item.contactReason !== '-') lines.push(`- สาเหตุการติดต่อ: ${item.contactReason}`);
-  lines.push(`- Keywords: ${formatKeywordList(item.keywords)}`);
-  lines.push(`- Anomaly Detection: ${item.anomaly.label}`);
+  lines.push('✨ Summary Insight:');
+  if (item.topic && item.topic !== '-') lines.push(`🎯 Topic/Intent: ${item.topic}`);
+  if (item.contactReason && item.contactReason !== '-') lines.push(`📌 สาเหตุการติดต่อ: ${item.contactReason}`);
+  lines.push(`🔑 Keywords: ${formatKeywordList(item.keywords)}`);
+  lines.push(`⚠️ Anomaly Detection: ${item.anomaly.label}`);
   if (item.anomaly.reasons.length) {
-    lines.push(`- เหตุผลความเสี่ยง: ${item.anomaly.reasons.join(' | ')}`);
+    lines.push(`🧾 เหตุผลความเสี่ยง: ${item.anomaly.reasons.join(' | ')}`);
   }
   appendDeepInsightLines(lines, item);
 };
@@ -1373,32 +1409,30 @@ const formatExactWarrantyReply = (
   const resolvedDeliveryDate = record.deliveryDate !== '-'
     ? formatDisplayDate(record.deliveryDate)
     : (record.purchaseDate !== '-' ? formatDisplayDate(record.purchaseDate) : '-');
-  const resolvedExpiryDate = record.expiryDate !== '-'
-    ? formatDisplayDate(record.expiryDate)
-    : (record.warrantyEndDate !== '-' ? formatDisplayDate(record.warrantyEndDate) : calculateExpiryDateFromWarranty(record.purchaseDate, record.warrantyPeriod));
-  const lines = ['ข้อมูลประกัน:', `- ผลการตรวจสอบ: ${resolveWarrantyCoverage(record)}`];
+  const resolvedExpiryDate = resolveWarrantyExpiryDisplayDate(record);
+  const lines = ['🛡️ ข้อมูลประกัน:', `✅ ผลการตรวจสอบ: ${resolveWarrantyCoverage(record)}`];
 
   if (record.registrationNo !== '-') {
-    lines.push(`- เลขทะเบียนประกัน: ${record.registrationNo}`);
+    lines.push(`🧾 เลขทะเบียนประกัน: ${record.registrationNo}`);
   } else {
-    lines.push(`- รายการอ้างอิง: ${identifier}`);
+    lines.push(`🧾 รายการอ้างอิง: ${identifier}`);
   }
 
-  if (record.customerPhone !== '-') lines.push(`- 📞 เบอร์โทร: ${record.customerPhone}`);
-  if (record.customerName !== '-') lines.push(`- 👤 ลูกค้า: ${record.customerName}`);
+  if (record.customerPhone !== '-') lines.push(`📞 เบอร์โทร: ${record.customerPhone}`);
+  if (record.customerName !== '-') lines.push(`👤 ลูกค้า: ${record.customerName}`);
 
   const productLabel = [record.brand, record.model].filter((value) => value && value !== '-').join(' - ');
-  if (productLabel) lines.push(`- 📦 สินค้า: ${productLabel}`);
+  if (productLabel) lines.push(`📦 สินค้า: ${productLabel}`);
 
-  if (record.serialNo !== '-') lines.push(`- 🔢 Serial No.: ${record.serialNo}`);
-  if (record.orderNumber !== '-') lines.push(`- เลขคำสั่งซื้อ: ${record.orderNumber}`);
-  if (record.status !== '-') lines.push(`- 🛡️ สถานะ: ${record.status}`);
-  if (record.purchaseDate !== '-') lines.push(`- 📅 วันที่ซื้อ: ${formatDisplayDate(record.purchaseDate)}`);
-  if (resolvedDeliveryDate !== '-') lines.push(`- 🚚 วันที่ส่ง: ${resolvedDeliveryDate}`);
-  if (record.warrantyPeriod !== '-') lines.push(`- ⏳ ระยะประกัน: ${record.warrantyPeriod}`);
-  if (resolvedExpiryDate !== '-') lines.push(`- 📆 วันที่หมดประกัน: ${resolvedExpiryDate}`);
-  if (record.saleChannel !== '-') lines.push(`- 🛒 ช่องทางขาย: ${record.saleChannel}`);
-  if (record.agentId !== '-') lines.push(`- 🧑‍💼 Agent: ${record.agentId}`);
+  if (record.serialNo !== '-') lines.push(`🔢 Serial No.: ${record.serialNo}`);
+  if (record.orderNumber !== '-') lines.push(`🧮 เลขคำสั่งซื้อ: ${record.orderNumber}`);
+  if (record.status !== '-') lines.push(`🟢 สถานะ: ${record.status}`);
+  if (record.purchaseDate !== '-') lines.push(`📅 วันที่ซื้อ: ${formatDisplayDate(record.purchaseDate)}`);
+  if (resolvedDeliveryDate !== '-') lines.push(`🚚 วันที่ส่ง: ${resolvedDeliveryDate}`);
+  if (record.warrantyPeriod !== '-') lines.push(`⏳ ระยะประกัน: ${record.warrantyPeriod}`);
+  if (resolvedExpiryDate !== '-') lines.push(`📆 วันที่หมดประกัน: ${resolvedExpiryDate}`);
+  if (record.saleChannel !== '-') lines.push(`🛒 ช่องทางขาย: ${record.saleChannel}`);
+  if (record.agentId !== '-') lines.push(`👤 Agent: ${record.agentId}`);
 
   if (!includeHistory) return lines.join('\n');
 
@@ -1433,30 +1467,28 @@ const formatWarrantyListReply = (phone: string, records: ExactWarrantyRecord[]):
     return `ไม่พบข้อมูลประกันของลูกค้า ${phone} ในระบบ`;
   }
 
-  const lines = [`พบข้อมูลประกันของลูกค้า ${phone} จำนวน ${records.length} รายการ`];
+  const lines = [`🛡️ พบข้อมูลประกันของลูกค้า ${phone} จำนวน ${records.length} รายการ`];
 
   records.slice(0, 5).forEach((record, index) => {
     const productLabel = [record.brand, record.model].filter((value) => value && value !== '-').join(' - ') || '-';
     const resolvedDeliveryDate = record.deliveryDate !== '-'
       ? formatDisplayDate(record.deliveryDate)
       : (record.purchaseDate !== '-' ? formatDisplayDate(record.purchaseDate) : '-');
-    const resolvedExpiryDate = record.expiryDate !== '-'
-      ? formatDisplayDate(record.expiryDate)
-      : (record.warrantyEndDate !== '-' ? formatDisplayDate(record.warrantyEndDate) : calculateExpiryDateFromWarranty(record.purchaseDate, record.warrantyPeriod));
+    const resolvedExpiryDate = resolveWarrantyExpiryDisplayDate(record);
 
     lines.push('', `รายการที่ ${index + 1}:`);
-    lines.push(`- ผลการตรวจสอบ: ${resolveWarrantyCoverage(record)}`);
-    if (record.registrationNo !== '-') lines.push(`- เลขทะเบียนประกัน: ${record.registrationNo}`);
-    if (record.customerName !== '-') lines.push(`- ลูกค้า: ${record.customerName}`);
-    lines.push(`- สินค้า: ${productLabel}`);
-    if (record.serialNo !== '-') lines.push(`- Serial No.: ${record.serialNo}`);
-    if (record.orderNumber !== '-') lines.push(`- เลขคำสั่งซื้อ: ${record.orderNumber}`);
-    if (record.status !== '-') lines.push(`- สถานะ: ${record.status}`);
-    if (record.purchaseDate !== '-') lines.push(`- วันที่ซื้อ: ${formatDisplayDate(record.purchaseDate)}`);
-    if (resolvedDeliveryDate !== '-') lines.push(`- วันที่ส่ง: ${resolvedDeliveryDate}`);
-    if (record.warrantyPeriod !== '-') lines.push(`- ระยะประกัน: ${record.warrantyPeriod}`);
-    if (resolvedExpiryDate !== '-') lines.push(`- วันที่หมดประกัน: ${resolvedExpiryDate}`);
-    if (record.saleChannel !== '-') lines.push(`- ช่องทางขาย: ${record.saleChannel}`);
+    lines.push(`✅ ผลการตรวจสอบ: ${resolveWarrantyCoverage(record)}`);
+    if (record.registrationNo !== '-') lines.push(`🧾 เลขทะเบียนประกัน: ${record.registrationNo}`);
+    if (record.customerName !== '-') lines.push(`👤 ลูกค้า: ${record.customerName}`);
+    lines.push(`📦 สินค้า: ${productLabel}`);
+    if (record.serialNo !== '-') lines.push(`🔢 Serial No.: ${record.serialNo}`);
+    if (record.orderNumber !== '-') lines.push(`🧮 เลขคำสั่งซื้อ: ${record.orderNumber}`);
+    if (record.status !== '-') lines.push(`🟢 สถานะ: ${record.status}`);
+    if (record.purchaseDate !== '-') lines.push(`📅 วันที่ซื้อ: ${formatDisplayDate(record.purchaseDate)}`);
+    if (resolvedDeliveryDate !== '-') lines.push(`🚚 วันที่ส่ง: ${resolvedDeliveryDate}`);
+    if (record.warrantyPeriod !== '-') lines.push(`⏳ ระยะประกัน: ${record.warrantyPeriod}`);
+    if (resolvedExpiryDate !== '-') lines.push(`📆 วันที่หมดประกัน: ${resolvedExpiryDate}`);
+    if (record.saleChannel !== '-') lines.push(`🛒 ช่องทางขาย: ${record.saleChannel}`);
   });
 
   if (records.length > 5) {
@@ -1868,7 +1900,7 @@ const tryCallHistoryReply = async (question: string): Promise<string | null> => 
 
   const selectedResults = requestedIndex
     ? results.slice(requestedIndex - 1, requestedIndex)
-    : results.slice(0, 5);
+    : results;
   const historyItems = await Promise.all(selectedResults.map((item) => fetchExactHistoryItem(item)));
 
   return formatPhoneCallHistoryReply({
@@ -2087,8 +2119,8 @@ const tryExactWarrantyReply = async (question: string): Promise<string | null> =
   return formatExactWarrantyReply(record, historyResults.length, historyItems, true);
 };
 
-export const getChatbotReply = async (question: string): Promise<string> => {
-  const normalizedQuestion = String(question || '').trim();
+export const getChatbotReply = async (question: string, contextText = ''): Promise<string> => {
+  const normalizedQuestion = resolveQuestionPhoneReference(String(question || '').trim(), contextText);
   if (!normalizedQuestion) return CHATBOT_FALLBACK_MESSAGE;
 
   const guideReply = tryStaticChatbotGuideReply(normalizedQuestion);
@@ -2099,6 +2131,10 @@ export const getChatbotReply = async (question: string): Promise<string> => {
   const callHistoryReply = await tryCallHistoryReply(normalizedQuestion);
   if (callHistoryReply) {
     return callHistoryReply;
+  }
+
+  if (isWarrantyHistoryQuestion(normalizedQuestion) && !extractPhoneNumber(normalizedQuestion)) {
+    return 'ต้องการดูประวัติการโทร รบกวนระบุเบอร์โทรก่อนครับ เช่น "ขอประวัติการโทรของเบอร์ 0819979336"';
   }
 
   const exactWarrantyReply = await tryExactWarrantyReply(normalizedQuestion);

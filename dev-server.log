@@ -1,0 +1,12 @@
+
+> aivoice-new@0.1.0 dev
+> next dev --webpack
+
+▲ Next.js 16.1.6 (webpack)
+- Local:         http://localhost:3000
+- Network:       http://26.42.240.188:3000
+- Environments: .env.local, .env
+
+✓ Starting...
+✓ Ready in 1308ms
+ GET /files/bf4e6785-8767-4f21-b268-7c0ed648d171 200 in 2.0s (compile: 1645ms, proxy.ts: 122ms, render: 277ms)

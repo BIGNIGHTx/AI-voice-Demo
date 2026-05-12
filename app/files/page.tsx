@@ -104,6 +104,28 @@ const yieldToMain = async () => {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 };
 
+const normalizeFileIdSearchValue = (value: string): string =>
+  String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const isFileIdSearchQuery = (value: string): boolean => {
+  const text = String(value || '').trim();
+  const compact = normalizeFileIdSearchValue(text);
+  return /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(text)
+    || /^[a-f0-9]{32}$/i.test(compact);
+};
+
+const matchesFileIdSearch = (file: FileRecord, query: string): boolean => {
+  const normalizedQuery = normalizeFileIdSearchValue(query);
+  if (!normalizedQuery) return true;
+
+  return [file.file_id, file.server_file_id]
+    .filter(Boolean)
+    .some((value) => {
+      const text = String(value).toLowerCase();
+      return text.includes(query.trim().toLowerCase()) || normalizeFileIdSearchValue(text).includes(normalizedQuery);
+    });
+};
+
 const UPLOAD_ACCEPT = '.mp3,.wav,.m4a,.aac,.ogg,.flac,.wma,.opus';
 
 const buildFilesSignature = (items: FileRecord[], totalCount: number): string => (
@@ -239,7 +261,7 @@ export default function FilesPage() {
       const perRequest = 200;
       const buildParams = (targetPage: number) => {
         const params = new URLSearchParams({ page: targetPage.toString(), per_page: perRequest.toString() });
-        if (fileSearch) params.set('search', fileSearch);
+        if (fileSearch && !isFileIdSearchQuery(fileSearch)) params.set('search', fileSearch);
         if (filters.brand) params.set('brand', filters.brand);
         return params;
       };
@@ -695,8 +717,13 @@ export default function FilesPage() {
     .map(toOptimisticFileRecord);
 
   const displayTotal = total + optimisticFiles.length;
+  const shouldFilterByFileId = isFileIdSearchQuery(fileSearch);
 
   const filteredFiles = [...optimisticFiles, ...files].filter((file) => {
+    if (shouldFilterByFileId && !matchesFileIdSearch(file, fileSearch)) {
+      return false;
+    }
+
     if (file.is_local_upload) {
       return true;
     }
@@ -897,7 +924,7 @@ export default function FilesPage() {
                   <input
                     type="text"
                     suppressHydrationWarning
-                    placeholder="Filter files by name, customer, brand, agent..."
+                    placeholder="Filter files by name, File ID, customer, brand, agent..."
                     className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-xs outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                     value={fileSearch}
                     onChange={(e) => { setFileSearch(e.target.value); setPage(1); }}
