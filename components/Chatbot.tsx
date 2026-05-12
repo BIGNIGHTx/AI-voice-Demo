@@ -1,7 +1,34 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Bot, Loader2 } from 'lucide-react';
+import {
+  Barcode,
+  Bot,
+  Calendar,
+  CalendarCheck,
+  CircleCheck,
+  FileText,
+  KeyRound,
+  Lightbulb,
+  Loader2,
+  MessageCircle,
+  PhoneCall,
+  Pin,
+  Puzzle,
+  Search,
+  Send,
+  Shield,
+  ShoppingBag,
+  Sparkles,
+  SquareCheck,
+  Tag,
+  Target,
+  TriangleAlert,
+  Truck,
+  UserCheck,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 import { CHATBOT_SUGGESTED_PROMPTS, getChatbotReply } from '@/lib/chatbot';
 
 interface Message {
@@ -70,7 +97,7 @@ const parseSentimentLine = (line: string): { label: string; value: string } | nu
   if (!match?.[2]) return null;
 
   return {
-    label: `💬 ${match[1]}:`,
+    label: `${match[1]}:`,
     value: match[2].trim(),
   };
 };
@@ -84,6 +111,62 @@ const getSentimentBadgeClass = (value: string): string => {
     return 'bg-emerald-100 text-emerald-700 ring-emerald-200 shadow-emerald-100';
   }
   return 'bg-slate-100 text-slate-700 ring-slate-200 shadow-slate-100';
+};
+
+const warrantyFieldIcons: Array<{ pattern: RegExp; strip: RegExp; Icon: LucideIcon }> = [
+  { pattern: /^📞\s*ประเภทสาย:/u, strip: /^📞\s*/u, Icon: PhoneCall },
+  { pattern: /^🏷️?\s*แบรนด์:/u, strip: /^🏷️?\s*/u, Icon: Tag },
+  { pattern: /^✨\s*Summary Insight:/iu, strip: /^✨\s*/u, Icon: Sparkles },
+  { pattern: /^🎯\s*Topic\/Intent:/iu, strip: /^🎯\s*/u, Icon: Target },
+  { pattern: /^📌\s*สาเหตุการติดต่อ:/u, strip: /^📌\s*/u, Icon: Pin },
+  { pattern: /^🔑\s*Keywords:/iu, strip: /^🔑\s*/u, Icon: KeyRound },
+  { pattern: /^⚠️?\s*Anomaly Detection:/iu, strip: /^⚠️?\s*/u, Icon: TriangleAlert },
+  { pattern: /^🧾\s*เหตุผลความเสี่ยง:/u, strip: /^🧾\s*/u, Icon: FileText },
+  { pattern: /^💡\s*อินไซต์ลูกค้า:/u, strip: /^💡\s*/u, Icon: Lightbulb },
+  { pattern: /^🙋\s*ลูกค้าต้องการอะไร:/u, strip: /^🙋\s*/u, Icon: UserCheck },
+  { pattern: /^🧩\s*ปัญหาหลัก:/u, strip: /^🧩\s*/u, Icon: Puzzle },
+  { pattern: /^🔎\s*สาเหตุที่น่าจะเกิด:/u, strip: /^🔎\s*/u, Icon: Search },
+  { pattern: /^✅\s*สิ่งที่ลูกค้าคาดหวัง:/u, strip: /^✅\s*/u, Icon: SquareCheck },
+  { pattern: /^🛠️?\s*สิ่งที่ควรทำต่อ:/u, strip: /^🛠️?\s*/u, Icon: SquareCheck },
+  { pattern: /^🚦\s*ระดับความเสี่ยง/u, strip: /^🚦\s*/u, Icon: TriangleAlert },
+  { pattern: /^🧾\s*เลขทะเบียนประกัน:/u, strip: /^🧾\s*/u, Icon: Barcode },
+  { pattern: /^📦\s*สินค้า:/u, strip: /^📦\s*/u, Icon: FileText },
+  { pattern: /^🔢\s*Serial No\.:/iu, strip: /^🔢\s*/u, Icon: Barcode },
+  { pattern: /^🧮\s*เลขคำสั่งซื้อ:/u, strip: /^🧮\s*/u, Icon: FileText },
+  { pattern: /^✅\s*ผลการตรวจสอบ:/u, strip: /^✅\s*/u, Icon: CircleCheck },
+  { pattern: /^🟢\s*สถานะ:/u, strip: /^🟢\s*/u, Icon: CircleCheck },
+  { pattern: /^📅\s*วันที่ซื้อ:/u, strip: /^📅\s*/u, Icon: Calendar },
+  { pattern: /^🚚\s*วันที่ส่ง:/u, strip: /^🚚\s*/u, Icon: Truck },
+  { pattern: /^⏳\s*ระยะประกัน:/u, strip: /^⏳\s*/u, Icon: Shield },
+  { pattern: /^📆\s*วันที่หมดประกัน:/u, strip: /^📆\s*/u, Icon: CalendarCheck },
+  { pattern: /^🛒\s*ช่องทางขาย:/u, strip: /^🛒\s*/u, Icon: ShoppingBag },
+];
+
+const renderLineWithBoldLabel = (line: string) => {
+  const iconRule = warrantyFieldIcons.find((rule) => rule.pattern.test(line));
+  const displayLine = iconRule ? line.replace(iconRule.strip, '') : line;
+  const match = displayLine.match(/^([^:：]{1,48}:)(\s*)(.+)$/u);
+  const content = match ? (
+    <>
+      <span className="font-bold text-slate-800">{match[1]}</span>
+      {match[2]}
+      {match[3]}
+    </>
+  ) : displayLine;
+
+  if (iconRule) {
+    const Icon = iconRule.Icon;
+    return (
+      <span className="inline-flex items-start gap-2">
+        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" strokeWidth={2.2} />
+        <span>{content}</span>
+      </span>
+    );
+  }
+
+  if (!match) return line;
+
+  return content;
 };
 
 export default function Chatbot() {
@@ -205,15 +288,29 @@ export default function Chatbot() {
                     <div className="space-y-1.5">
                       {formatAiMessage(msg.text).map((line, index) => {
                         const sentiment = parseSentimentLine(line);
+                        const isWarrantyItemHeader = /^รายการที่\s*\d+:/u.test(line);
+                        const isCallItemHeader = /^สายที่\s*\d+:/u.test(line);
+                        const itemHeaderIcon = isCallItemHeader ? PhoneCall : FileText;
+                        const ItemHeaderIcon = itemHeaderIcon;
+                        if (isWarrantyItemHeader || isCallItemHeader) {
+                          return (
+                            <p key={`${msg.id}-${index}`} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm font-bold text-slate-800 shadow-sm">
+                              <ItemHeaderIcon className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2.2} />
+                              <span>{line}</span>
+                            </p>
+                          );
+                        }
+
                         return sentiment ? (
                           <p key={`${msg.id}-${index}`} className="flex flex-wrap items-center gap-1.5 leading-relaxed text-slate-700">
-                            <span>{sentiment.label}</span>
+                            <MessageCircle className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2.2} />
+                            <span className="font-bold text-slate-800">{sentiment.label}</span>
                             <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide shadow-sm ring-1 ${getSentimentBadgeClass(sentiment.value)}`}>
                               {sentiment.value}
                             </span>
                           </p>
                         ) : (
-                          <p key={`${msg.id}-${index}`} className="leading-relaxed text-slate-700">{line}</p>
+                          <p key={`${msg.id}-${index}`} className="leading-relaxed text-slate-700">{renderLineWithBoldLabel(line)}</p>
                         );
                       })}
                     </div>

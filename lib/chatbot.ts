@@ -1682,12 +1682,35 @@ const formatTopicOverview = (topics: TopicDistributionItem[]): string => {
   return lines.join('\n');
 };
 
-const formatTopicMatches = (
+const appendTopicInsightLines = (
+  lines: string[],
+  item: EnrichedTopicSearchResult,
+  insight: ExactHistoryItem
+): void => {
+  const brand = insight.brand && insight.brand !== '-' ? insight.brand : item.brand;
+  const sentiment = insight.sentiment && insight.sentiment !== '-' ? insight.sentiment : item.sentiment;
+  const agentId = insight.agentId && insight.agentId !== '-' ? insight.agentId : item.agentId;
+
+  if (item.fileId) lines.push(`• File ID: ${item.fileId}`);
+  if (brand && brand !== '-') lines.push(`• แบรนด์: ${brand}`);
+  if (sentiment && sentiment !== '-') lines.push(`• Sentiment: ${sentiment}`);
+  if (agentId && agentId !== '-') lines.push(`• Agent: ${agentId}`);
+  if (item.registrationNo !== '-') lines.push(`• เลขทะเบียนประกัน: ${item.registrationNo}`);
+  if (item.serialNo !== '-') lines.push(`• Serial No.: ${item.serialNo}`);
+  if (item.orderNumber !== '-') lines.push(`• เลขคำสั่งซื้อ: ${item.orderNumber}`);
+
+  lines.push('✨ Summary Insight:');
+  if (insight.topic && insight.topic !== '-') lines.push(`🎯 Topic/Intent: ${insight.topic}`);
+  if (insight.contactReason && insight.contactReason !== '-') lines.push(`📌 สาเหตุการติดต่อ: ${insight.contactReason}`);
+  lines.push(`🔑 Keywords: ${formatKeywordList(insight.keywords)}`);
+};
+
+const formatTopicMatches = async (
   topicGroup: TopicGroupMatch,
   searchResponse: TopicSearchResponse,
   enrichedResults: EnrichedTopicSearchResult[],
   phone: string | null
-): string => {
+): Promise<string> => {
   const displayTotal = enrichedResults.length !== searchResponse.results.length
     ? enrichedResults.length
     : (searchResponse.total || enrichedResults.length);
@@ -1700,19 +1723,12 @@ const formatTopicMatches = (
 
   if (phone) {
     const lines = [`พบ ${displayTotal} รายการของลูกค้า ${phone} ในหัวข้อ "${topicGroup.label}"`];
+    const visibleResults = enrichedResults.slice(0, 5);
+    const insights = await Promise.all(visibleResults.map((item) => fetchExactHistoryItem(item)));
 
-    enrichedResults.slice(0, 5).forEach((item, index) => {
+    visibleResults.forEach((item, index) => {
       lines.push(`- เคส ${index + 1}`);
-      if (item.topic && item.topic !== '-') lines.push(`• Topic จริง: ${item.topic}`);
-      lines.push(`• แบรนด์: ${item.brand}`);
-      lines.push(`• Sentiment: ${item.sentiment}`);
-      lines.push(`• Agent: ${item.agentId}`);
-      if (item.registrationNo !== '-') lines.push(`• เลขทะเบียนประกัน: ${item.registrationNo}`);
-      if (item.serialNo !== '-') lines.push(`• Serial No.: ${item.serialNo}`);
-      if (item.orderNumber !== '-') lines.push(`• เลขคำสั่งซื้อ: ${item.orderNumber}`);
-      if (item.summary) {
-        lines.push(`สรุป: ${truncateText(item.summary)}`);
-      }
+      appendTopicInsightLines(lines, item, insights[index]);
     });
 
     return lines.join('\n');
@@ -1727,19 +1743,21 @@ const formatTopicMatches = (
   }
 
   const lines = [`พบ ${displayTotal} รายการในหัวข้อ "${topicGroup.label}" จาก ${grouped.size} ลูกค้า`];
+  const visibleItems = Array.from(grouped.entries())
+    .slice(0, 5)
+    .flatMap(([customerPhone, items]) => (
+      items.slice(0, 5).map((item, index) => ({
+        customerPhone,
+        item,
+        caseIndex: index + 1,
+        caseTotal: items.length,
+      }))
+    ));
+  const insights = await Promise.all(visibleItems.map(({ item }) => fetchExactHistoryItem(item)));
 
-  Array.from(grouped.entries()).slice(0, 5).forEach(([customerPhone, items]) => {
-    const latest = items[0];
-    lines.push(`- ลูกค้า ${customerPhone}: ${items.length} เคส`);
-    if (latest.topic && latest.topic !== '-') lines.push(`• Topic จริงล่าสุด: ${latest.topic}`);
-    lines.push(`• แบรนด์: ${latest.brand}`);
-    lines.push(`• Agent: ${latest.agentId}`);
-    if (latest.registrationNo !== '-') lines.push(`• เลขทะเบียนประกัน: ${latest.registrationNo}`);
-    if (latest.serialNo !== '-') lines.push(`• Serial No.: ${latest.serialNo}`);
-    if (latest.orderNumber !== '-') lines.push(`• เลขคำสั่งซื้อ: ${latest.orderNumber}`);
-    if (latest.summary) {
-      lines.push(`สรุปล่าสุด: ${truncateText(latest.summary)}`);
-    }
+  visibleItems.forEach(({ customerPhone, item, caseIndex, caseTotal }, index) => {
+    lines.push(`- ลูกค้า ${customerPhone}: เคส ${caseIndex}/${caseTotal}`);
+    appendTopicInsightLines(lines, item, insights[index]);
   });
 
   if (displayTotal === searchResponse.results.length && searchResponse.total > searchResponse.results.length) {
@@ -1749,11 +1767,11 @@ const formatTopicMatches = (
   return lines.join('\n');
 };
 
-const formatCustomerTopicOverview = (
+const formatCustomerTopicOverview = async (
   phone: string,
   searchResponse: TopicSearchResponse,
   enrichedResults: EnrichedTopicSearchResult[]
-): string => {
+): Promise<string> => {
   if (!enrichedResults.length) {
     return `ยังไม่พบข้อมูลหัวข้อของลูกค้า ${phone}`;
   }
@@ -1770,21 +1788,16 @@ const formatCustomerTopicOverview = (
 
   const lines = [`หัวข้อที่พบของลูกค้า ${phone}:`];
 
-  Array.from(grouped.entries())
+  const visibleGroups = Array.from(grouped.entries())
     .sort((left, right) => right[1].length - left[1].length)
-    .slice(0, 6)
-    .forEach(([topicName, items]) => {
+    .slice(0, 6);
+  const insights = await Promise.all(visibleGroups.map(([, items]) => fetchExactHistoryItem(items[0])));
+
+  visibleGroups
+    .forEach(([topicName, items], index) => {
       const latest = items[0];
       lines.push(`- ${topicName}: ${items.length} เคส`);
-      if (latest.topic && latest.topic !== '-' && latest.topic !== topicName) {
-        lines.push(`• Topic จริงล่าสุด: ${latest.topic}`);
-      }
-      if (latest.registrationNo !== '-') lines.push(`• เลขทะเบียนประกัน: ${latest.registrationNo}`);
-      if (latest.serialNo !== '-') lines.push(`• Serial No.: ${latest.serialNo}`);
-      if (latest.orderNumber !== '-') lines.push(`• เลขคำสั่งซื้อ: ${latest.orderNumber}`);
-      if (latest.summary) {
-        lines.push(`สรุปล่าสุด: ${truncateText(latest.summary)}`);
-      }
+      appendTopicInsightLines(lines, latest, insights[index]);
     });
 
   return lines.join('\n');
@@ -1927,7 +1940,7 @@ const tryTopicReply = async (question: string): Promise<string | null> => {
     const searchResponse = await fetchTopicSearch({ phone });
     if (searchResponse) {
       const enrichedResults = await enrichTopicSearchResults(searchResponse.results);
-      return formatCustomerTopicOverview(phone, searchResponse, enrichedResults);
+      return await formatCustomerTopicOverview(phone, searchResponse, enrichedResults);
     }
   }
 
@@ -1945,7 +1958,7 @@ const tryTopicReply = async (question: string): Promise<string | null> => {
         return null;
       }
 
-      return formatTopicMatches(matchedTopicGroup, searchResponse, enrichedResults, phone);
+      return await formatTopicMatches(matchedTopicGroup, searchResponse, enrichedResults, phone);
     }
 
     if (registrationNo || serialNo || orderNumber) {

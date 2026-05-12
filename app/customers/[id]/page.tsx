@@ -6,7 +6,6 @@ import {
   Cake,
   CalendarDays,
   ChevronLeft,
-  ChevronRight,
   History,
   ImagePlus,
   Mail,
@@ -723,22 +722,8 @@ export default function CustomerDetailPage() {
     }
     return expiryDate.toLocaleDateString('th-TH', {
       year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-  };
-
-  const formatWarrantyDetailDate = (value?: string | null) => {
-    const normalized = normalizeDateForInput(value);
-    if (!normalized) return '-';
-
-    const date = new Date(`${normalized}T00:00:00`);
-    if (Number.isNaN(date.getTime())) return value || '-';
-
-    return date.toLocaleDateString('th-TH', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
+      month: 'long',
+      day: 'numeric',
     });
   };
 
@@ -761,7 +746,7 @@ export default function CustomerDetailPage() {
 
   const getWarrantyExpiryDisplayDate = (warranty: WarrantyItem, baseDate: string) => {
     const explicitExpiry = normalizeTextInput(warranty.expiry_date_of_warranty || warranty.warranty_end_date);
-    if (explicitExpiry) return formatWarrantyDetailDate(explicitExpiry);
+    if (explicitExpiry) return formatWarrantyDisplayDate(explicitExpiry);
 
     return calculateExpiryDate(baseDate, warranty.warranty_period);
   };
@@ -770,24 +755,6 @@ export default function CustomerDetailPage() {
   const displayName = fullName || customer.nickname || customer.phone || customer.customer_id;
   const customerCreatedAt = normalizeTextInput(customer.created_at || customer.createdAt);
   const memberSinceDisplay = customerCreatedAt ? formatDisplayDate(customerCreatedAt) : '-';
-  const memberDurationDisplay = (() => {
-    if (!customerCreatedAt) return '-';
-
-    const startDate = new Date(customerCreatedAt);
-    if (Number.isNaN(startDate.getTime())) return '-';
-
-    const today = new Date();
-    let months = (today.getFullYear() - startDate.getFullYear()) * 12 + today.getMonth() - startDate.getMonth();
-    if (today.getDate() < startDate.getDate()) months -= 1;
-    if (months <= 0) return 'น้อยกว่า 1 เดือน';
-
-    const years = Math.floor(months / 12);
-    const remainingMonths = months % 12;
-    return [
-      years > 0 ? `${years} ปี` : null,
-      remainingMonths > 0 ? `${remainingMonths} เดือน` : null,
-    ].filter(Boolean).join(' ');
-  })();
   const addressLines = [
     normalizeTextInput(customer.address),
     [normalizeTextInput(customer.district), normalizeTextInput(customer.province)].filter(Boolean).join(' '),
@@ -821,16 +788,6 @@ export default function CustomerDetailPage() {
               กลับไปหน้ารายชื่อลูกค้า
             </button>
 
-            <div className="hidden items-center gap-3 sm:flex">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-600 text-sm font-black text-white shadow-sm">
-                N
-              </div>
-              <div className="leading-tight">
-                <p className="text-sm font-black text-slate-800">Natcha</p>
-                <p className="text-xs font-semibold text-slate-400">Admin</p>
-              </div>
-              <ChevronRight size={15} className="rotate-90 text-slate-400" />
-            </div>
           </div>
 
           <section className="relative">
@@ -875,7 +832,7 @@ export default function CustomerDetailPage() {
             </button>
           </div>
 
-          <section className="grid gap-4 lg:grid-cols-[minmax(320px,1.35fr)_repeat(4,minmax(150px,0.62fr))]">
+          <section className="grid gap-4 lg:grid-cols-[minmax(320px,1.35fr)_repeat(3,minmax(150px,0.62fr))]">
             <div className="rounded-[22px] border border-teal-100 bg-gradient-to-br from-teal-50 via-white to-emerald-50 p-6 shadow-sm">
               <div className="flex items-center gap-5">
                 <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-teal-600 shadow-sm">
@@ -912,20 +869,6 @@ export default function CustomerDetailPage() {
                   <p className="mt-2 text-3xl font-bold text-slate-800">{callHistory.length}</p>
                   <p className="mt-1 text-xs text-slate-500">ประวัติการติดต่อศูนย์บริการ</p>
                 </div>
-              </div>
-            </div>
-
-            <div className="rounded-[22px] border border-slate-100 bg-white p-5 shadow-sm">
-              <div className="flex h-full flex-col justify-between gap-7">
-                <div>
-                  <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-orange-50 text-orange-500">
-                    <CalendarDays size={24} />
-                  </div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">MEMBER SINCE</p>
-                  <p className="mt-2 text-xl font-bold text-slate-800">{memberSinceDisplay}</p>
-                  <p className="mt-1 text-xs text-slate-500">เป็นสมาชิกมาแล้ว</p>
-                </div>
-                <p className="text-sm font-bold text-slate-700">{memberDurationDisplay}</p>
               </div>
             </div>
 
