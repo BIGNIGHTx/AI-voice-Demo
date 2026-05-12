@@ -833,15 +833,21 @@ export default function CustomerDetailPage() {
           </div>
 
           <section className="grid gap-4 lg:grid-cols-[minmax(320px,1.35fr)_repeat(3,minmax(150px,0.62fr))]">
-            <div className="rounded-[22px] border border-teal-100 bg-gradient-to-br from-teal-50 via-white to-emerald-50 p-6 shadow-sm">
-              <div className="flex items-center gap-5">
-                <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-teal-600 shadow-sm">
-                  <User size={48} strokeWidth={1.8} />
+            <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex h-full items-center gap-7">
+                <div className="flex h-32 w-32 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-50 via-teal-50 to-emerald-50 text-teal-600">
+                  <User size={70} strokeWidth={1.8} />
                 </div>
+                <div className="h-28 w-px shrink-0 bg-slate-200" />
                 <div className="min-w-0">
-                  <h2 className="truncate text-2xl font-black tracking-tight text-slate-900">{displayName}</h2>
-                  <p className="mt-1 text-sm font-bold text-slate-400">เบอร์โทรศัพท์</p>
-                  <p className="mt-2 text-2xl font-black tracking-tight text-teal-600">{customer.phone || '-'}</p>
+                  <h2 className="truncate text-[34px] font-semibold leading-tight tracking-tight text-slate-900">{displayName}</h2>
+                  <p className="mt-3 text-lg font-semibold text-slate-400">เบอร์โทรศัพท์</p>
+                  <div className="mt-3 flex items-center gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-600">
+                      <Phone size={24} strokeWidth={2.2} />
+                    </span>
+                    <p className="truncate text-[32px] font-semibold leading-none tracking-tight text-teal-600">{customer.phone || '-'}</p>
+                  </div>
                 </div>
               </div>
             </div>
