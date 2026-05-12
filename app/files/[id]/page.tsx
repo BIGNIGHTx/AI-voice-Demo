@@ -673,6 +673,50 @@ const TRANSCRIPT_TOPIC_RULES: TranscriptTopicRule[] = [
   },
 ];
 
+interface ChatTopicRule {
+  label: string;
+  terms: string[];
+  contactReason: string;
+}
+
+const CHAT_TOPIC_RULES: ChatTopicRule[] = [
+  {
+    label: 'ตรวจสอบยอดและรายการในบิล',
+    terms: ['ยอด', 'บิล', 'สลิป', 'จ่ายแยก', 'ชำระ', 'รูดการ์ด', 'โอน', 'ตัดออกจากยอด', 'รวมในบิล'],
+    contactReason: 'ลูกค้าต้องการตรวจสอบยอดชำระ รายการในบิล หรือหลักฐานการชำระเงิน',
+  },
+  {
+    label: 'ยืนยันรายการที่ใช้แล้วและยังไม่ใช้',
+    terms: ['ใช้ไปแล้ว', 'แกะใช้', 'ยังไม่ได้แกะ', 'ไม่ได้ใช้', 'เปิดใช้', 'จะคืน', 'ไม่ได้จะคืน'],
+    contactReason: 'ลูกค้าต้องการยืนยันสถานะสินค้าที่ใช้แล้วและสินค้าที่ยังไม่ได้ใช้งาน',
+  },
+  {
+    label: 'ตรวจสอบสินค้าและจำนวนที่ได้รับ',
+    terms: ['ได้รับ', 'ได้มา', 'แถม', 'จำนวน', 'กี่ใบ', 'กี่ชุด', 'มีอยู่', 'ส่งรูป', 'ถ่ายรูป'],
+    contactReason: 'ลูกค้าต้องการเช็กสินค้า จำนวนที่ได้รับ หรือของแถมที่เกี่ยวข้อง',
+  },
+  {
+    label: 'เคลมหรือประกันสินค้า',
+    terms: ['เคลม', 'ประกัน', 'warranty', 'claim', 'หมดประกัน', 'รับประกัน'],
+    contactReason: 'ลูกค้าติดต่อเรื่องเคลม เงื่อนไขประกัน หรือสถานะการรับประกันสินค้า',
+  },
+  {
+    label: 'ตรวจสอบออเดอร์และรายการสั่งซื้อ',
+    terms: ['ออเดอร์', 'สั่งซื้อ', 'รายการซื้อ', 'ใบสั่งซื้อ', 'order'],
+    contactReason: 'ลูกค้าต้องการตรวจสอบออเดอร์หรือรายการสั่งซื้อ',
+  },
+  {
+    label: 'สอบถามข้อมูลสินค้า',
+    terms: ['สอบถาม', 'อยากทราบ', 'ขอข้อมูล', 'ข้อมูลสินค้า', 'ราคา', 'โปรโมชัน'],
+    contactReason: 'ลูกค้าติดต่อเพื่อสอบถามข้อมูลสินค้า ราคา หรือโปรโมชัน',
+  },
+  {
+    label: 'เคสปัญหา/ร้องเรียนสินค้า',
+    terms: ['แพ้', 'คัน', 'ผื่น', 'ไม่สบาย', 'เจ็บ', 'ร้องเรียน', 'ไม่พอใจ', 'ปัญหา', 'เสียหาย', 'ชำรุด'],
+    contactReason: 'ลูกค้าติดต่อเพื่อแจ้งปัญหา ร้องเรียน หรือขอความช่วยเหลือเกี่ยวกับสินค้า',
+  },
+];
+
 const THAI_NUMBER_MAP: Record<string, string> = {
   '1': '1',
   '2': '2',
@@ -727,6 +771,21 @@ const inferTranscriptTopicRule = (value: string): TranscriptTopicRule | null => 
       rule,
       score: rule.terms.reduce((total, term) => total + (text.includes(term.toLowerCase()) ? 2 : 0), 0)
         + (rule.supportingTerms || []).reduce((total, term) => total + (text.includes(term.toLowerCase()) ? 1 : 0), 0),
+    }))
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score);
+
+  return ranked[0]?.rule || null;
+};
+
+const inferChatTopicRule = (value: string): ChatTopicRule | null => {
+  const text = cleanInsightText(value).toLowerCase();
+  if (!text) return null;
+
+  const ranked = CHAT_TOPIC_RULES
+    .map((rule) => ({
+      rule,
+      score: rule.terms.reduce((total, term) => total + (text.includes(term.toLowerCase()) ? 1 : 0), 0),
     }))
     .filter((item) => item.score > 0)
     .sort((left, right) => right.score - left.score);
@@ -827,6 +886,7 @@ const buildDerivedSummaryData = (params: {
   ].join(' '));
 
   const topicRule = inferTranscriptTopicRule(evidenceText);
+  const chatTopicRule = inferChatTopicRule(evidenceText);
   const productMentions = extractProductMentions(evidenceText, params.keywords);
   const topicProductPhrase = productMentions.slice(0, 2).join(' / ');
   const productPhrase = productMentions.length > 0 ? productMentions.slice(0, 3).join(', ') : 'รายการสินค้าในเคส';
@@ -837,20 +897,22 @@ const buildDerivedSummaryData = (params: {
     params.keyInsights,
   ]);
 
-  const topic = topicRule?.label
+  const fallbackTopic = topicRule?.label
     ? `${topicRule.label}${topicProductPhrase ? ` - ${topicProductPhrase}` : ''}`
     : (specificTopicCandidate || normalizeSummaryPointText(params.intent) || '-');
+  const topic = chatTopicRule?.label || fallbackTopic;
 
-  let contactReason = specificTopicCandidate ? `สาเหตุ: ${specificTopicCandidate}` : 'สาเหตุ: ยังสรุปจาก transcript ไม่ชัดเจน';
-  if (topicRule?.id === 'billing') {
+  let contactReason = chatTopicRule?.contactReason
+    || (specificTopicCandidate ? `สาเหตุ: ${specificTopicCandidate}` : 'สาเหตุ: ยังสรุปจาก transcript ไม่ชัดเจน');
+  if (!chatTopicRule && topicRule?.id === 'billing') {
     contactReason = `ลูกค้าต้องการตรวจสอบว่ายอดของ ${productPhrase} ควรคิดรวมในบิลหรือเป็นรายการที่จ่ายแยก`;
-  } else if (topicRule?.id === 'usage') {
+  } else if (!chatTopicRule && topicRule?.id === 'usage') {
     contactReason = `ลูกค้าต้องการยืนยันว่า ${productPhrase} ส่วนใดถูกใช้แล้ว และส่วนใดยังไม่ได้แกะ`;
-  } else if (topicRule?.id === 'delivery') {
+  } else if (!chatTopicRule && topicRule?.id === 'delivery') {
     contactReason = `ลูกค้าต้องการเช็กจำนวนสินค้าและของแถมที่ได้รับจริง เช่น ${productPhrase}`;
-  } else if (topicRule?.id === 'warranty') {
+  } else if (!chatTopicRule && topicRule?.id === 'warranty') {
     contactReason = `ลูกค้าติดต่อเรื่องเคลมหรือประกันของ ${productPhrase}`;
-  } else if (topicRule?.id === 'order') {
+  } else if (!chatTopicRule && topicRule?.id === 'order') {
     contactReason = `ลูกค้าต้องการตรวจสอบรายการสั่งซื้อของ ${productPhrase}`;
   }
 
