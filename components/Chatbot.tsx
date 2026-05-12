@@ -114,7 +114,10 @@ const getSentimentBadgeClass = (value: string): string => {
 };
 
 const warrantyFieldIcons: Array<{ pattern: RegExp; strip: RegExp; Icon: LucideIcon }> = [
+  { pattern: /^🛡️?\s*ข้อมูลประกัน:/u, strip: /^🛡️?\s*/u, Icon: Shield },
   { pattern: /^📞\s*ประเภทสาย:/u, strip: /^📞\s*/u, Icon: PhoneCall },
+  { pattern: /^📞\s*เบอร์โทร:/u, strip: /^📞\s*/u, Icon: PhoneCall },
+  { pattern: /^👤\s*ลูกค้า:/u, strip: /^👤\s*/u, Icon: UserCheck },
   { pattern: /^🏷️?\s*แบรนด์:/u, strip: /^🏷️?\s*/u, Icon: Tag },
   { pattern: /^✨\s*Summary Insight:/iu, strip: /^✨\s*/u, Icon: Sparkles },
   { pattern: /^🎯\s*Topic\/Intent:/iu, strip: /^🎯\s*/u, Icon: Target },
