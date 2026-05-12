@@ -392,14 +392,12 @@ export default function CustomersPage() {
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse min-w-[1180px]">
+                  <table className="w-full text-left border-collapse min-w-[980px]">
                     <thead>
                       <tr className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
                         <th className="p-4 pl-6">Customer</th>
                         <th className="p-4">Phone</th>
                         <th className="p-4">Agent</th>
-                        <th className="p-4">Brand</th>
-                        <th className="p-4">Product</th>
                         <th className="p-4">Sentiment</th>
                         <th className="p-4">Warranty</th>
                         <th className="p-4">Call Type</th>
@@ -434,8 +432,6 @@ export default function CustomersPage() {
                               <p className="text-sm font-semibold text-slate-700">{c.agent_id || '-'}</p>
                               <p className="text-[11px] text-slate-400">{c.sale_channel || '-'}</p>
                             </td>
-                            <td className="p-4 text-sm text-slate-700 whitespace-nowrap">{c.brand || '-'}</td>
-                            <td className="p-4 text-sm text-slate-700 max-w-48 truncate">{c.product_category || '-'}</td>
                             <td className="p-4">
                               <span className={`px-3 py-1 rounded-full text-[11px] font-bold ${sentiment.cls}`}>
                                 {sentiment.label}

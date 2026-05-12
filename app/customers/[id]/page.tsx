@@ -849,8 +849,8 @@ export default function CustomerDetailPage() {
             <div className="rounded-[22px] border border-slate-100 bg-white p-5 shadow-sm">
               <div className="flex h-full flex-col justify-between gap-7">
                 <div>
-                  <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-teal-50 text-teal-600">
-                    <ShieldCheck size={24} />
+                  <div className="mb-6 flex h-9 w-9 items-center justify-center rounded-xl border border-teal-100 bg-teal-50 text-teal-600">
+                    <ShieldCheck size={18} strokeWidth={1.9} />
                   </div>
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400">WARRANTIES</p>
                   <p className="mt-2 text-3xl font-bold text-slate-800">{warranties.length}</p>
@@ -862,8 +862,8 @@ export default function CustomerDetailPage() {
             <div className="rounded-[22px] border border-slate-100 bg-white p-5 shadow-sm">
               <div className="flex h-full flex-col justify-between gap-7">
                 <div>
-                  <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-violet-50 text-violet-600">
-                    <Phone size={24} />
+                  <div className="mb-6 flex h-9 w-9 items-center justify-center rounded-xl border border-violet-100 bg-violet-50 text-violet-600">
+                    <Phone size={18} strokeWidth={1.9} />
                   </div>
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400">CALLS</p>
                   <p className="mt-2 text-3xl font-bold text-slate-800">{callHistory.length}</p>
@@ -875,8 +875,8 @@ export default function CustomerDetailPage() {
             <div className="rounded-[22px] border border-slate-100 bg-white p-5 shadow-sm">
               <div className="flex h-full flex-col justify-between gap-5">
                 <div>
-                  <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-sky-50 text-sky-600">
-                    <MapPin size={24} />
+                  <div className="mb-6 flex h-9 w-9 items-center justify-center rounded-xl border border-sky-100 bg-sky-50 text-sky-600">
+                    <MapPin size={18} strokeWidth={1.9} />
                   </div>
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400">ADDRESS</p>
                   <p className="mt-2 line-clamp-3 text-sm font-semibold leading-6 text-slate-800">{shortAddress}</p>
