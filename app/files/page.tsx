@@ -1160,7 +1160,6 @@ export default function FilesPage() {
                 <thead>
                   <tr className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
                     <th className="w-[24%] px-3 py-3 pl-5">File Name</th>
-                    <th className="hidden 2xl:table-cell w-[9%] px-3 py-3">Auto ID</th>
                     <th className="w-[10%] px-3 py-3">Sentiment</th>
                     <th className="w-[13%] px-3 py-3">Customer</th>
                     <th className="hidden xl:table-cell w-[8%] px-3 py-3">Agent ID</th>
@@ -1173,12 +1172,12 @@ export default function FilesPage() {
                 </thead>
                 <tbody className="bg-white">
                   {loading && filteredFiles.length === 0 ? (
-                    <tr><td colSpan={10} className="p-12 text-center text-slate-400">
+                    <tr><td colSpan={9} className="p-12 text-center text-slate-400">
                       <RefreshCw size={24} className="animate-spin mx-auto mb-2" />
                       <p className="text-sm">กำลังโหลดข้อมูล...</p>
                     </td></tr>
                   ) : filteredFiles.length === 0 ? (
-                    <tr><td colSpan={10} className="p-12 text-center text-slate-400">
+                    <tr><td colSpan={9} className="p-12 text-center text-slate-400">
                       <FileAudio size={32} className="mx-auto mb-2 opacity-50" />
                       <p className="text-sm font-medium">ไม่พบไฟล์ที่ตรงกับตัวกรอง</p>
                       <p className="text-xs mt-1">ลองปรับ filters หรือกด Clear All</p>
@@ -1215,24 +1214,6 @@ export default function FilesPage() {
                                 </span>
                               </div>
                             </div>
-                          </td>
-                          <td className="hidden 2xl:table-cell px-3 py-3 align-middle">
-                            {canOpenFile ? (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  router.push(`/files/${file.file_id}`);
-                                }}
-                                className="rounded bg-blue-50 px-2 py-1 font-mono text-[10px] font-bold text-blue-600 transition-all hover:bg-blue-600 hover:text-white cursor-pointer"
-                                title="View Analysis"
-                              >
-                                {autoIdLabel}
-                              </button>
-                            ) : (
-                              <span className="rounded bg-blue-50 px-2 py-1 font-mono text-[10px] font-bold text-blue-600">
-                                {autoIdLabel}
-                              </span>
-                            )}
                           </td>
                           <td className="px-3 py-3 align-middle">
                             <span className={`inline-flex max-w-full truncate rounded-full px-2.5 py-1 text-[10px] font-bold ${getSentimentStyle(file.sentiment)}`}>
