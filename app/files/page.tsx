@@ -244,7 +244,10 @@ export default function FilesPage() {
     return `HTTP ${response.status}`;
   }, []);
 
-  const fetchFiles = useCallback(async (silent = false) => {
+  const fetchFiles = useCallback(async (
+    silent = false,
+    overrides?: { search?: string; brand?: string }
+  ) => {
     const fetchId = latestFetchIdRef.current + 1;
     latestFetchIdRef.current = fetchId;
 
@@ -259,10 +262,12 @@ export default function FilesPage() {
     setError(null);
     try {
       const perRequest = 200;
+      const requestSearch = overrides?.search ?? fileSearch;
+      const requestBrand = overrides?.brand ?? filters.brand;
       const buildParams = (targetPage: number) => {
         const params = new URLSearchParams({ page: targetPage.toString(), per_page: perRequest.toString() });
-        if (fileSearch && !isFileIdSearchQuery(fileSearch)) params.set('search', fileSearch);
-        if (filters.brand) params.set('brand', filters.brand);
+        if (requestSearch && !isFileIdSearchQuery(requestSearch)) params.set('search', requestSearch);
+        if (requestBrand) params.set('brand', requestBrand);
         return params;
       };
 
@@ -668,6 +673,7 @@ export default function FilesPage() {
   }, []);
 
   const clearFilters = () => {
+    setFileSearch('');
     setFilters({
       brand: '',
       sentiment: '',
@@ -678,6 +684,7 @@ export default function FilesPage() {
     });
     setPage(1);
     setShowDateFilters(false);
+    void fetchFiles(false, { search: '', brand: '' });
   };
 
   const getCallType = (file: FileRecord) => {
@@ -1090,8 +1097,11 @@ export default function FilesPage() {
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={() => fetchFiles()}
                   disabled={deletingAll || uploadingFiles}
+                  aria-label="Refresh file list"
+                  title="Refresh file list"
                   suppressHydrationWarning
                   className="p-2.5 bg-slate-50 text-slate-500 rounded-lg border border-slate-200 hover:bg-slate-100 cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -1295,6 +1305,7 @@ export default function FilesPage() {
                                     e.stopPropagation();
                                     router.push(`/files/${file.file_id}`);
                                   }}
+                                  aria-label={`View analysis detail for ${autoIdLabel}`}
                                   suppressHydrationWarning
                                   className="flex items-center justify-center rounded-lg p-1.5 text-blue-600 transition-all hover:bg-blue-100 cursor-pointer active:scale-95"
                                   title="View Analysis Detail"
@@ -1304,6 +1315,7 @@ export default function FilesPage() {
                                 <button
                                   onClick={(e) => handleDelete(file.file_id, e)}
                                   disabled={deleting === file.file_id}
+                                  aria-label={`Delete file ${autoIdLabel}`}
                                   suppressHydrationWarning
                                   className="flex items-center justify-center rounded-lg p-1.5 text-red-500 transition-all hover:bg-red-50 cursor-pointer disabled:opacity-50 active:scale-95"
                                   title="Delete file"

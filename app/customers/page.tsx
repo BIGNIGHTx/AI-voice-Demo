@@ -348,6 +348,8 @@ export default function CustomersPage() {
               <button
                 type="button"
                 onClick={() => { setSearchQuery(''); setPage(1); }}
+                aria-label="Clear customer search"
+                title="Clear customer search"
                 className="p-3.5 bg-slate-50 text-slate-500 rounded-xl border border-slate-200 hover:bg-slate-100 cursor-pointer transition-colors"
               >
                 <RotateCw size={18} />
@@ -466,6 +468,7 @@ export default function CustomersPage() {
                                   e.stopPropagation();
                                   router.push(`/customers/${c.customer_id}`);
                                 }}
+                                aria-label={`ดูรายละเอียดลูกค้า ${c.first_name} ${c.last_name}`}
                                 className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors cursor-pointer"
                                 title="ดูรายละเอียด"
                               >

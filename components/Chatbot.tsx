@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import {
   Barcode,
   Bot,
@@ -173,6 +174,7 @@ const renderLineWithBoldLabel = (line: string) => {
 };
 
 export default function Chatbot() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -235,15 +237,18 @@ export default function Chatbot() {
     if (isLoading) return;
     setInput(prompt);
   };
+  const isFilesPage = pathname === '/files';
 
   return (
     <>
       {/* Floating Button */}
       {!isOpen && (
         <button
+          type="button"
           onClick={() => setIsOpen(true)}
+          aria-label="Open Warranty Assistant"
           suppressHydrationWarning
-          className="fixed bottom-5 right-4 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-200 transition-transform duration-300 hover:scale-105 hover:bg-blue-700 sm:bottom-6 sm:right-6 sm:h-16 sm:w-16 lg:bottom-8 lg:right-8"
+          className={`fixed right-4 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-200 transition-transform duration-300 hover:scale-105 hover:bg-blue-700 sm:right-6 sm:h-16 sm:w-16 lg:right-8 ${isFilesPage ? 'bottom-24 sm:bottom-28 lg:bottom-32' : 'bottom-5 sm:bottom-6 lg:bottom-8'}`}
           style={{ animation: 'float 3s ease-in-out infinite' }}
         >
           <MessageCircle className="h-7 w-7 sm:h-8 sm:w-8" />
@@ -268,7 +273,9 @@ export default function Chatbot() {
               </div>
             </div>
             <button
+              type="button"
               onClick={() => setIsOpen(false)}
+              aria-label="Close Warranty Assistant"
               suppressHydrationWarning
               className="cursor-pointer rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600"
             >
@@ -361,8 +368,10 @@ export default function Chatbot() {
                 disabled={isLoading}
               />
               <button
+                type="button"
                 onClick={handleSend}
                 disabled={!input.trim() || isLoading}
+                aria-label="Send message"
                 suppressHydrationWarning
                 className="absolute right-2 cursor-pointer rounded-lg bg-blue-600 p-2 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >

@@ -1,6 +1,7 @@
 'use client';
 
-import { Loader2, LogOut } from 'lucide-react';
+import Link from 'next/link';
+import { Loader2, LogIn, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
@@ -10,6 +11,7 @@ import type { SerializedPublicUser } from '@/lib/auth/user';
 interface SidebarUserPanelProps {
   user: SerializedPublicUser | null;
   loading: boolean;
+  loginHref?: string;
 }
 
 const getInitials = (name: string) => name
@@ -19,7 +21,7 @@ const getInitials = (name: string) => name
   .map((part) => part[0]?.toUpperCase() ?? '')
   .join('') || 'U';
 
-export default function SidebarUserPanel({ user, loading }: SidebarUserPanelProps) {
+export default function SidebarUserPanel({ user, loading, loginHref = '/login' }: SidebarUserPanelProps) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -36,15 +38,28 @@ export default function SidebarUserPanel({ user, loading }: SidebarUserPanelProp
   if (loading) {
     return (
       <div className="border-t border-slate-200 p-2 sm:p-4">
-        <div className="flex items-center justify-center rounded-2xl bg-slate-900/95 p-4 text-slate-200 sm:justify-start sm:gap-3">
-          <Loader2 className="h-5 w-5 animate-spin" />
+        <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-4 text-slate-500 shadow-sm sm:justify-start sm:gap-3">
+          <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
           <span className="hidden text-sm sm:inline">โหลดผู้ใช้...</span>
         </div>
       </div>
     );
   }
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <div className="border-t border-slate-200 p-2 sm:p-4">
+        <Link
+          href={loginHref}
+          className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-3 text-sm font-bold text-blue-700 transition-all hover:border-blue-200 hover:bg-blue-100 sm:h-auto sm:py-3"
+          aria-label="เข้าสู่ระบบ"
+        >
+          <LogIn className="h-4 w-4" />
+          <span className="hidden sm:inline">เข้าสู่ระบบ</span>
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="border-t border-slate-200 p-2 sm:p-4">

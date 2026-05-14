@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { LayoutDashboard, FileText, Folder, Users, ShieldCheck, History, UserCog } from 'lucide-react';
 
 import SidebarUserPanel from '@/components/auth/SidebarUserPanel';
 import { isAdminRole } from '@/lib/auth/role';
+import { isPublicPath } from '@/lib/auth/routes';
 import {
   clearCachedSessionUser,
   getCachedSessionUserState,
@@ -16,12 +17,23 @@ import type { SerializedPublicUser } from '@/lib/auth/user';
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const cachedSessionState = getCachedSessionUserState();
   const [user, setUser] = useState<SerializedPublicUser | null>(cachedSessionState.user);
   const [loadingUser, setLoadingUser] = useState(!cachedSessionState.resolved);
+  const loginHref = pathname && !isPublicPath(pathname)
+    ? `/login?next=${encodeURIComponent(pathname)}`
+    : '/login';
 
   useEffect(() => {
     let active = true;
+
+    const redirectToLogin = () => {
+      if (!pathname || isPublicPath(pathname)) return;
+
+      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      router.refresh();
+    };
 
     const loadSession = async () => {
       const currentCache = getCachedSessionUserState();
@@ -40,6 +52,7 @@ export default function Sidebar() {
           clearCachedSessionUser();
           setUser(null);
           setLoadingUser(false);
+          redirectToLogin();
           return;
         }
 
@@ -49,6 +62,9 @@ export default function Sidebar() {
         setUser(nextUser);
       } catch {
         if (!active) return;
+        clearCachedSessionUser();
+        setUser(null);
+        redirectToLogin();
       } finally {
         if (active) {
           setLoadingUser(false);
@@ -61,7 +77,7 @@ export default function Sidebar() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [pathname, router]);
 
   const canViewAuditLogs = isAdminRole(user?.role);
 
@@ -111,7 +127,7 @@ export default function Sidebar() {
         </nav>
       </div>
 
-      <SidebarUserPanel user={user} loading={loadingUser} />
+      <SidebarUserPanel user={user} loading={loadingUser} loginHref={loginHref} />
     </aside>
   );
 }

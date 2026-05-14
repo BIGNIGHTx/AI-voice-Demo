@@ -709,6 +709,7 @@ export default function DashboardPage() {
   const [, setBrandIntelligence] = useState<BrandRow[]>([]);
   const [topicByFileId, setTopicByFileId] = useState<Record<string, string>>({});
   const [selectedTopicName, setSelectedTopicName] = useState<string | null>(null);
+  const [brandInfoView, setBrandInfoView] = useState<'files' | 'intelligence'>('files');
 
   const [keywordFrequency, setKeywordFrequency] = useState<KeywordFrequencyRow[]>([]);
   const [keywordLoading, setKeywordLoading] = useState(false);
@@ -1615,18 +1616,40 @@ export default function DashboardPage() {
           </div>
 
           {/* Third Row: Brand Info */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Files by Brand */}
-            <div className="bg-white rounded-xl p-6 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] overflow-hidden">
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h3 className="font-semibold text-lg flex items-center gap-2">
-                    <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-orange-400 to-amber-600 shadow-sm"></div>
-                    Files by Brand
-                  </h3>
-                  <p className="mt-1 text-sm text-slate-500">Sorted by volume with a tighter layout so every brand is easier to scan.</p>
-                </div>
-                <div className="flex flex-wrap gap-2 text-xs font-medium">
+          <div className="bg-white rounded-xl p-5 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-100">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="font-semibold text-lg flex items-center gap-2">
+                  <div className={`w-1.5 h-5 rounded-full shadow-sm ${brandInfoView === 'files' ? 'bg-gradient-to-b from-orange-400 to-amber-600' : 'bg-[#00A985]'}`}></div>
+                  {brandInfoView === 'files' ? 'Files by Brand' : 'Brand Intelligence'}
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  {brandInfoView === 'files'
+                    ? 'Sorted by volume with a tighter layout so every brand is easier to scan.'
+                    : 'Track positive, negative, and neutral mentions by brand.'}
+                </p>
+              </div>
+              <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setBrandInfoView('files')}
+                  className={`rounded-lg px-3 py-1.5 transition ${brandInfoView === 'files' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Files by Brand
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBrandInfoView('intelligence')}
+                  className={`rounded-lg px-3 py-1.5 transition ${brandInfoView === 'intelligence' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Brand Intelligence
+                </button>
+              </div>
+            </div>
+
+            {brandInfoView === 'files' ? (
+              <>
+                <div className="mb-4 flex flex-wrap gap-2 text-xs font-medium">
                   <div className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-orange-700">
                     <Building2 size={13} />
                     {brandSummary.totalBrands} Brands
@@ -1636,92 +1659,86 @@ export default function DashboardPage() {
                     {brandSummary.totalFiles.toLocaleString()} Files
                   </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-1 gap-3 max-h-[280px] overflow-y-auto pr-1 md:grid-cols-2">
-                {brandDistribution.length > 0 ? (
-                  brandDistribution.map((brand, i) => {
-                    const tone = BRAND_TONES[i % BRAND_TONES.length];
-                    const share = brandSummary.totalFiles > 0 ? Math.round((brand.count / brandSummary.totalFiles) * 100) : 0;
-                    const relativeWidth = brandSummary.topBrand ? Math.max((brand.count / brandSummary.topBrand.count) * 100, 12) : 0;
+                <div className="grid grid-cols-1 gap-3 max-h-[280px] overflow-y-auto pr-1 md:grid-cols-2">
+                  {brandDistribution.length > 0 ? (
+                    brandDistribution.map((brand, i) => {
+                      const tone = BRAND_TONES[i % BRAND_TONES.length];
+                      const share = brandSummary.totalFiles > 0 ? Math.round((brand.count / brandSummary.totalFiles) * 100) : 0;
+                      const relativeWidth = brandSummary.topBrand ? Math.max((brand.count / brandSummary.topBrand.count) * 100, 12) : 0;
 
-                    return (
-                      <div key={brand.name} className="rounded-xl border border-slate-200/80 bg-gradient-to-r from-white via-orange-50/40 to-amber-50/50 p-3 shadow-sm shadow-orange-100/30">
-                        <div className="flex items-start gap-3">
-                          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-xs font-bold ${tone.badge}`}>
-                            {String(i + 1).padStart(2, '0')}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">{brand.name}</p>
-                                <p className="mt-1 text-[11px] text-slate-400">{share}% of visible recordings</p>
+                      return (
+                        <div key={brand.name} className="rounded-xl border border-slate-200/80 bg-gradient-to-r from-white via-orange-50/40 to-amber-50/50 p-3 shadow-sm shadow-orange-100/30">
+                          <div className="flex items-start gap-3">
+                            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-xs font-bold ${tone.badge}`}>
+                              {String(i + 1).padStart(2, '0')}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">{brand.name}</p>
+                                  <p className="mt-1 text-[11px] text-slate-400">{share}% of visible recordings</p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <p className="text-xl font-bold leading-none text-slate-800">{brand.count.toLocaleString()}</p>
+                                  <p className="mt-1 text-[11px] font-medium text-slate-400">files</p>
+                                </div>
                               </div>
-                              <div className="text-right shrink-0">
-                                <p className="text-xl font-bold leading-none text-slate-800">{brand.count.toLocaleString()}</p>
-                                <p className="mt-1 text-[11px] font-medium text-slate-400">files</p>
+                              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white ring-1 ring-orange-100">
+                                <div
+                                  className={`h-full rounded-full bg-gradient-to-r ${tone.bar}`}
+                                  style={{ width: `${relativeWidth}%` }}
+                                ></div>
                               </div>
                             </div>
-                            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white ring-1 ring-orange-100">
-                              <div
-                                className={`h-full rounded-full bg-gradient-to-r ${tone.bar}`}
-                                style={{ width: `${relativeWidth}%` }}
-                              ></div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="col-span-2 text-center text-slate-400 text-sm py-8">No files data available</div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-end gap-1.5 mb-2 px-1">
+                  <div className="w-[60px] text-center text-[10px] font-medium text-slate-500">Positive</div>
+                  <div className="w-[60px] text-center text-[10px] font-medium text-slate-500">Negative</div>
+                  <div className="w-[60px] text-center text-[10px] font-medium text-slate-500">Neutral</div>
+                </div>
+
+                <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+                  {visibleBrandIntelligence.length > 0 ? (
+                    visibleBrandIntelligence.map((brand, idx) => {
+                      const pointColors = ['bg-blue-500', 'bg-indigo-500', 'bg-emerald-500', 'bg-purple-500', 'bg-amber-500'];
+                      const neutralMentions = brand.total_mentions - brand.positive_mentions - brand.negative_mentions;
+
+                      return (
+                        <div key={idx} className="flex items-center justify-between bg-white px-3 py-2.5 rounded-lg border border-slate-100 shadow-[0_2px_5px_-2px_rgba(0,0,0,0.03)] hover:shadow-md hover:-translate-y-0.5 transition-all">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-1.5 h-1.5 rounded-full ${pointColors[idx % pointColors.length]}`}></div>
+                            <span className="font-bold text-[12px] text-slate-800 tracking-wide uppercase">{brand.brand_name}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-[60px] bg-[#EEFDF3] text-[#10B981] font-bold text-[12px] py-1 rounded-md text-center">
+                              +{brand.positive_mentions}
+                            </div>
+                            <div className="w-[60px] bg-[#FEF2F2] text-[#EF4444] font-bold text-[12px] py-1 rounded-md text-center">
+                              -{brand.negative_mentions}
+                            </div>
+                            <div className="w-[60px] bg-[#F4F7FB] text-[#64748B] font-bold text-[12px] py-1 rounded-md text-center">
+                              ={Math.max(0, neutralMentions)}
                             </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="col-span-2 text-center text-slate-400 text-sm py-8">No files data available</div>
-                )}
-              </div>
-            </div>
-
-            {/* Brand Intelligence */}
-            <div className="bg-white rounded-xl p-5 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]">
-              <h3 className="font-semibold text-[15px] text-slate-800 mb-4 flex items-center gap-2">
-                <div className="w-1 h-4 rounded-full bg-[#00A985]"></div>
-                Brand Intelligence
-              </h3>
-
-              <div className="flex justify-end gap-1.5 mb-2 px-1">
-                <div className="w-[60px] text-center text-[10px] font-medium text-slate-500">Positive</div>
-                <div className="w-[60px] text-center text-[10px] font-medium text-slate-500">Negative</div>
-                <div className="w-[60px] text-center text-[10px] font-medium text-slate-500">Neutral</div>
-              </div>
-
-              <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
-                {visibleBrandIntelligence.length > 0 ? (
-                  visibleBrandIntelligence.map((brand, idx) => {
-                    const pointColors = ['bg-blue-500', 'bg-indigo-500', 'bg-emerald-500', 'bg-purple-500', 'bg-amber-500'];
-                    const neutralMentions = brand.total_mentions - brand.positive_mentions - brand.negative_mentions;
-
-                    return (
-                      <div key={idx} className="flex items-center justify-between bg-white px-3 py-2.5 rounded-lg border border-slate-100 shadow-[0_2px_5px_-2px_rgba(0,0,0,0.03)] hover:shadow-md hover:-translate-y-0.5 transition-all">
-                        <div className="flex items-center gap-2.5">
-                          <div className={`w-1.5 h-1.5 rounded-full ${pointColors[idx % pointColors.length]}`}></div>
-                          <span className="font-bold text-[12px] text-slate-800 tracking-wide uppercase">{brand.brand_name}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-[60px] bg-[#EEFDF3] text-[#10B981] font-bold text-[12px] py-1 rounded-md text-center">
-                            +{brand.positive_mentions}
-                          </div>
-                          <div className="w-[60px] bg-[#FEF2F2] text-[#EF4444] font-bold text-[12px] py-1 rounded-md text-center">
-                            -{brand.negative_mentions}
-                          </div>
-                          <div className="w-[60px] bg-[#F4F7FB] text-[#64748B] font-bold text-[12px] py-1 rounded-md text-center">
-                            ={Math.max(0, neutralMentions)}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="text-center text-slate-400 text-xs py-6">No brand data available</div>
-                )}
-              </div>
-            </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center text-slate-400 text-xs py-6">No brand data available</div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Fourth Row: Agent Performance */}

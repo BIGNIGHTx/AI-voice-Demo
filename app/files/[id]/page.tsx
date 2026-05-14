@@ -1510,11 +1510,6 @@ export default function FileAnalysisDetail() {
   useEffect(() => {
     if (!isPlaying || activeTranscriptIndex < 0) return;
     if (lastFocusedTranscriptIndexRef.current === activeTranscriptIndex) return;
-
-    transcriptItemRefs.current[activeTranscriptIndex]?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'nearest',
-    });
     lastFocusedTranscriptIndexRef.current = activeTranscriptIndex;
   }, [activeTranscriptIndex, isPlaying]);
 
@@ -1572,7 +1567,6 @@ export default function FileAnalysisDetail() {
   const summaryKeywordChips = conversationKeywords.slice(0, 8);
   const topicIntentValue = derivedSummary.topic;
   const contactReasonSentence = derivedSummary.contactReason;
-  const displayKeyInsight = derivedSummary.keyInsight || normalizeSummaryPointText(analysis?.key_insights) || '-';
   const deepInsight = analysis?.deep_insight || null;
   const showDeepInsight = hasDeepInsight(deepInsight);
   const deepInsightRisk = getDeepInsightRisk(deepInsight?.risk_level);
@@ -1966,7 +1960,6 @@ export default function FileAnalysisDetail() {
                       {transcriptSegments.map((segment, idx) => {
                         const isAgent = segment.role === 'Agent';
                         const isActive = idx === activeTranscriptIndex;
-                        const timeText = formatTime(segment.startSec);
 
                         return (
                           <div
@@ -1980,8 +1973,6 @@ export default function FileAnalysisDetail() {
                               <span className={`text-xs font-bold ${isAgent ? 'text-blue-700' : 'text-emerald-700'}`}>
                                 {segment.role}
                               </span>
-                              <span className={`rounded px-2 py-0.5 text-[10px] ${isActive ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>{timeText}</span>
-                              {isActive && <span className="text-[10px] font-bold uppercase tracking-wide text-blue-600">Now Playing</span>}
                             </div>
                             <button
                               type="button"
@@ -2272,39 +2263,6 @@ export default function FileAnalysisDetail() {
                     <span className="text-[9px] px-2 py-0.5 bg-blue-50 text-blue-600 rounded">🤖 Brand/Product/QA/CSAT จาก AI</span>
                   </div>
                 </div>
-
-                {/* ── Key Insights (Llama) ── */}
-                {displayKeyInsight !== '-' && (
-                  <div className="bg-blue-800 rounded-2xl p-6 text-white relative overflow-hidden shadow-md">
-                    <div className="absolute -bottom-6 -right-4 text-[90px] font-bold text-blue-700/40 leading-none select-none pointer-events-none">💡</div>
-                    <div className="relative z-10">
-                      <div className="flex items-center space-x-3 mb-4">
-                        <div className="bg-blue-700/50 p-2 rounded-lg"><Lightbulb size={20} className="text-white" /></div>
-                        <h2 className="text-lg font-bold">Key Insights</h2>
-                      </div>
-                      <p className="text-sm text-blue-100 leading-relaxed whitespace-pre-wrap">{displayKeyInsight}</p>
-                      {analysis.wav2vec2_emotion && (
-                        <div className="mt-4 pt-3 border-t border-blue-700/50">
-                          <p className="text-[10px] text-blue-300 font-bold uppercase mb-2">Wav2Vec2 Emotion Analysis</p>
-                          <div className="flex gap-2">
-                            {Object.entries(analysis.wav2vec2_emotion.scores).map(([k, v]) => (
-                              <div key={k} className="flex-1 text-center">
-                                <div className="text-[10px] text-blue-300 capitalize mb-1">{k}</div>
-                                <div className="h-1.5 bg-blue-900 rounded-full overflow-hidden">
-                                  <div className={`h-full rounded-full ${k === 'positive' ? 'bg-emerald-400' : k === 'negative' ? 'bg-red-400' : 'bg-slate-400'}`}
-                                    style={{ width: `${(v as number) * 100}%` }} />
-                                </div>
-                                <div className="text-[10px] text-blue-200 mt-0.5">{((v as number) * 100).toFixed(0)}%</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-
 
                 {/* ── Enhanced Analysis Section ── */}
                 {enhancedAnalysis && (
