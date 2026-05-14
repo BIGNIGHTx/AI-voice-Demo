@@ -238,6 +238,12 @@ export default function Chatbot() {
     setInput(prompt);
   };
   const isFilesPage = pathname === '/files';
+  const floatingButtonPosition = isFilesPage
+    ? 'bottom-2 right-8 sm:bottom-2 sm:right-10 lg:bottom-3 lg:right-12'
+    : 'bottom-5 right-4 sm:bottom-6 sm:right-6 lg:bottom-8 lg:right-8';
+  const chatWindowPosition = isFilesPage
+    ? 'bottom-3 right-8 sm:bottom-5 sm:right-10 lg:bottom-8 lg:right-12'
+    : 'bottom-3 right-3 sm:bottom-5 sm:right-5 lg:bottom-8 lg:right-8';
 
   return (
     <>
@@ -248,7 +254,7 @@ export default function Chatbot() {
           onClick={() => setIsOpen(true)}
           aria-label="Open Warranty Assistant"
           suppressHydrationWarning
-          className={`fixed right-4 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-200 transition-transform duration-300 hover:scale-105 hover:bg-blue-700 sm:right-6 sm:h-16 sm:w-16 lg:right-8 ${isFilesPage ? 'bottom-24 sm:bottom-28 lg:bottom-32' : 'bottom-5 sm:bottom-6 lg:bottom-8'}`}
+          className={`fixed z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-200 transition-transform duration-300 hover:scale-105 hover:bg-blue-700 sm:h-16 sm:w-16 ${floatingButtonPosition}`}
           style={{ animation: 'float 3s ease-in-out infinite' }}
         >
           <MessageCircle className="h-7 w-7 sm:h-8 sm:w-8" />
@@ -257,7 +263,7 @@ export default function Chatbot() {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="animation-slide-up fixed bottom-3 right-3 z-[9999] flex h-[min(500px,calc(100vh-24px))] w-[min(320px,calc(100vw-24px))] flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white font-sans shadow-2xl sm:bottom-5 sm:right-5 sm:h-[540px] sm:w-[340px] lg:bottom-8 lg:right-8 lg:w-[350px]">
+        <div className={`animation-slide-up fixed z-[9999] flex h-[min(500px,calc(100vh-24px))] w-[min(320px,calc(100vw-24px))] flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white font-sans shadow-2xl sm:h-[540px] sm:w-[340px] lg:w-[350px] ${chatWindowPosition}`}>
           {/* Header */}
           <div className="z-10 flex items-center justify-between border-b border-slate-100 bg-white px-4 py-3 shadow-sm sm:px-5 sm:py-4">
             <div className="flex items-center gap-3">

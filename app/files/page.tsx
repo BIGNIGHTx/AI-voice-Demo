@@ -1346,7 +1346,7 @@ export default function FilesPage() {
                 Showing <span className="font-bold text-slate-800">{paginatedFiles.length}</span> of <span className="font-bold text-slate-800">{filteredFiles.length}</span> entries
                 {hasActiveFilters ? ` (filtered from ${displayTotal})` : ''}
               </span>
-              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+              <div className="flex flex-wrap items-center gap-2 pr-14 sm:pr-16 lg:justify-end lg:pr-20">
                 <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1} suppressHydrationWarning
                   className="px-3 py-2 text-slate-400 cursor-pointer transition-colors hover:text-slate-600 disabled:opacity-30">PREVIOUS</button>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
