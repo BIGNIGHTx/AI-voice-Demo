@@ -817,10 +817,10 @@ export default function FilesPage() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-900" style={{ colorScheme: 'light' }}>
       <Sidebar />
-      <main className="flex-1 overflow-auto p-4 sm:p-5 lg:p-6">
-        <div className="max-w-full mx-auto">
+      <main className="flex-1 overflow-auto bg-slate-50 p-4 sm:p-5 lg:p-6">
+        <div className="mx-auto w-full">
           <div className="mb-8 flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
             <div className="relative">
               {/* Decorative Frame */}
