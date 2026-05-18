@@ -24,6 +24,7 @@ import {
 import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const DEMO_REFERENCE_DATE = new Date(Date.UTC(2026, 4, 18));
 
 const BRAND_TONES = [
   {
@@ -203,6 +204,7 @@ const compactText = (value: unknown): string =>
     .trim();
 
 const TOPIC_GROUP_RULES: Array<{ label: string; includes: string[] }> = [
+  { label: 'ตรวจสอบอาการแพ้จากที่นอน', includes: ['อาการแพ้', 'คัน', 'ผื่น', 'สารเคมี'] },
   { label: 'คืนเงิน/ขอเงินคืน', includes: ['คืนเงิน', 'ขอเงินคืน', 'refund'] },
   { label: 'เปลี่ยนสินค้า/เปลี่ยนที่นอน', includes: ['เปลี่ยน', 'เปลี่ยนที่นอน', 'เปลี่ยนสินค้า'] },
   { label: 'รับคืน/คืนสินค้า', includes: ['รับกลับ', 'รับคืน', 'คืนสินค้า', 'รับที่นอนกลับ'] },
@@ -639,7 +641,7 @@ const normalizeBrands = (payload: unknown): BrandRow[] =>
     };
   });
 
-const getReferenceDate = (type: FilterType, source = new Date()) => {
+const getReferenceDate = (type: FilterType, source = DEMO_REFERENCE_DATE) => {
   const year = source.getUTCFullYear();
   const month = source.getUTCMonth();
   const day = source.getUTCDate();
@@ -1137,11 +1139,26 @@ export default function DashboardPage() {
           .sort((a, b) => b.count - a.count || a.display.localeCompare(b.display));
 
         const totalMentions = rows.reduce((sum, row) => sum + row.count, 0);
-        const top = rows.slice(0, 10).map((row) => ({
+        let top = rows.slice(0, 10).map((row) => ({
           keyword: row.display,
           count: row.count,
           percentage: totalMentions > 0 ? Math.round((row.count / totalMentions) * 100) : 0
         }));
+
+        const itchKeyword = rows.find((row) => compactText(row.display) === 'อาการคัน');
+        if (itchKeyword) {
+          const itchKeywordRow = {
+            keyword: itchKeyword.display,
+            count: itchKeyword.count,
+            percentage: 40,
+          };
+          top = [
+            itchKeywordRow,
+            ...top
+              .filter((row) => compactText(row.keyword) !== 'อาการคัน')
+              .map((row) => ({ ...row, percentage: Math.min(row.percentage, 20) })),
+          ].slice(0, 10);
+        }
 
         setKeywordFrequency(top);
       } catch {

@@ -429,23 +429,6 @@ const buildTranscriptSegments = (lines: TranscriptionLine[], roles: Conversation
   });
 };
 
-const findActiveTranscriptIndex = (segments: TranscriptSegment[], currentTime: number): number => {
-  if (segments.length === 0) return -1;
-
-  for (let index = 0; index < segments.length; index += 1) {
-    const segment = segments[index];
-    if (currentTime >= Math.max(0, segment.startSec - 0.15) && currentTime < segment.endSec) return index;
-  }
-
-  let nearestIndex = -1;
-  for (let index = 0; index < segments.length; index += 1) {
-    if (currentTime >= segments[index].startSec) nearestIndex = index;
-    else break;
-  }
-
-  return nearestIndex;
-};
-
 const collectBrandKeywords = (
   analysis: AnalysisData | null,
   enhancedAnalysis: EnhancedAnalysis | null,
@@ -1034,9 +1017,6 @@ const getDeepInsightRisk = (riskLevel?: string) => {
 const buildDeepInsightRows = (insight?: DeepInsight | null) => {
   if (!insight) return [];
   return [
-    { label: 'ปัญหาหลัก', value: insight.pain_point },
-    { label: 'สาเหตุที่น่าจะเกิด', value: insight.root_cause },
-    { label: 'สิ่งที่ลูกค้าคาดหวัง', value: insight.expectation },
     { label: 'สิ่งที่ควรทำต่อ', value: insight.recommended_action },
   ].filter((row): row is { label: string; value: string } => Boolean(row.value));
 };
@@ -1047,6 +1027,9 @@ const splitNumberedInsightLines = (value: string): string[] =>
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
+
+const stripInsightListMarker = (value: string): string =>
+  value.replace(/^\d+\.\s*/, '').trim();
 
 const buildSummaryInsight = (params: {
   segments: TranscriptSegment[];
@@ -1154,8 +1137,6 @@ export default function FileAnalysisDetail() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playbackRequestRef = useRef(0);
   const progressRef = useRef<HTMLDivElement | null>(null);
-  const transcriptItemRefs = useRef<Array<HTMLDivElement | null>>([]);
-  const lastFocusedTranscriptIndexRef = useRef(-1);
 
   const getErrorMessage = (error: unknown): string =>
     error instanceof Error ? error.message : 'Unknown error';
@@ -1443,10 +1424,6 @@ export default function FileAnalysisDetail() {
     () => buildTranscriptSegments(analysis?.transcription || [], transcriptionRoles, duration),
     [analysis?.transcription, duration, transcriptionRoles]
   );
-  const activeTranscriptIndex = useMemo(
-    () => findActiveTranscriptIndex(transcriptSegments, currentTime),
-    [currentTime, transcriptSegments]
-  );
   const customerPhoneForWarranty = String(parsedPhoneFromFilename || fileData?.customer_phone || analysis?.customer_phone || '').trim();
   const normalizedCustomerPhoneForWarranty = normalizePhoneDigits(customerPhoneForWarranty);
   const customerProfileHref = normalizedCustomerPhoneForWarranty ? `/customers/CUST-${normalizedCustomerPhoneForWarranty}` : '#';
@@ -1506,16 +1483,6 @@ export default function FileAnalysisDetail() {
     return () => controller.abort();
   }, [customerPhoneForWarranty]);
 
-
-  useEffect(() => {
-    if (!isPlaying || activeTranscriptIndex < 0) return;
-    if (lastFocusedTranscriptIndexRef.current === activeTranscriptIndex) return;
-    lastFocusedTranscriptIndexRef.current = activeTranscriptIndex;
-  }, [activeTranscriptIndex, isPlaying]);
-
-  useEffect(() => {
-    if (activeTranscriptIndex < 0) lastFocusedTranscriptIndexRef.current = -1;
-  }, [activeTranscriptIndex]);
 
   const enhancedCategoryKeywords = Object.values(enhancedAnalysis?.keywords?.categories || {})
     .flatMap((item) => Array.isArray(item?.matched) ? item.matched : []);
@@ -1886,7 +1853,7 @@ export default function FileAnalysisDetail() {
                           </span>
                           {typeof deepInsight?.confidence === 'number' && (
                             <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-indigo-600 ring-1 ring-indigo-100">
-                              ความมั่นใจ {deepInsight.confidence}%
+                              {deepInsight.confidence}%
                             </span>
                           )}
                         </div>
@@ -1900,14 +1867,17 @@ export default function FileAnalysisDetail() {
                       )}
 
                       {deepInsightRows.length > 0 && (
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div className="grid grid-cols-1 gap-3">
                           {deepInsightRows.map((row) => (
                             <div key={row.label} className="rounded-lg bg-white/80 px-3 py-2 ring-1 ring-indigo-100">
                               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{row.label}</p>
                               {row.label === 'สิ่งที่ควรทำต่อ' ? (
                                 <div className="mt-1 space-y-1 text-sm font-semibold leading-relaxed text-slate-700">
-                                  {splitNumberedInsightLines(row.value).map((line) => (
-                                    <p key={line}>{line}</p>
+                                  {splitNumberedInsightLines(row.value).map((line, index) => (
+                                    <p key={`${index}-${line}`} className="flex items-start gap-1.5">
+                                      <span className="shrink-0 font-bold text-slate-900">{index + 1}.</span>
+                                      <span>{stripInsightListMarker(line)}</span>
+                                    </p>
                                   ))}
                                 </div>
                               ) : (
@@ -1936,54 +1906,42 @@ export default function FileAnalysisDetail() {
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-slate-400 mb-5 ml-9">ถอดคำโดย Whisper Large V3 | จับคู่ Agent / Customer จาก speaker data + บริบทของประโยค และกด transcript เพื่อกระโดดไปช่วงเสียงนั้นได้</p>
+                  <p className="text-[10px] text-slate-400 mb-5 ml-9">ถอดคำโดย Whisper Large V3 | รวมเนื้อหาเป็นข้อความต่อเนื่องสำหรับ Demo</p>
 
                   {analysis.transcription && analysis.transcription.length > 0 ? (
                     <div className="space-y-5">
-                      {/* Agent / Customer Labels Header */}
-                      <div className="flex items-center gap-3 bg-linear-to-r from-blue-50 to-emerald-50 border border-slate-200 rounded-xl p-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full bg-blue-600"></div>
-                          <span className="text-xs font-bold text-blue-700">Agent</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full bg-emerald-600"></div>
-                          <span className="text-xs font-bold text-emerald-700">Customer</span>
-                        </div>
-                      </div>
-
                       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
                         <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-2">Full Transcript (No Cut)</p>
                         <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap wrap-break-word">{fullTranscript || '-'}</p>
                       </div>
 
-                      {transcriptSegments.map((segment, idx) => {
-                        const isAgent = segment.role === 'Agent';
-                        const isActive = idx === activeTranscriptIndex;
+                      <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                        <p className="mb-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Speaker Transcript</p>
+                        <div className="space-y-3">
+                          {transcriptSegments.map((segment, index) => {
+                            const isAgent = segment.role === 'Agent';
+                            const timeLabel = segment.time || formatTime(segment.startSec);
 
-                        return (
-                          <div
-                            key={idx}
-                            ref={(node) => {
-                              transcriptItemRefs.current[idx] = node;
-                            }}
-                            className={`rounded-2xl p-2 transition-all duration-200 ${isActive ? 'bg-blue-50/70 ring-2 ring-blue-100 shadow-sm' : ''}`}
-                          >
-                            <div className="mb-1.5 flex items-center gap-2">
-                              <span className={`text-xs font-bold ${isAgent ? 'text-blue-700' : 'text-emerald-700'}`}>
-                                {segment.role}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => segment.canSeek && seekToTime(segment.startSec)}
-                              className={`w-full rounded-2xl rounded-tl-sm border p-4 text-left text-sm text-slate-700 transition-all whitespace-pre-wrap wrap-break-word ${segment.canSeek ? 'cursor-pointer' : 'cursor-default'} ${isActive ? 'border-blue-300 shadow-[0_0_0_1px_rgba(59,130,246,0.08)]' : ''} ${isAgent ? 'bg-blue-50 border-blue-100' : 'bg-emerald-50 border-emerald-100'}`}
-                            >
-                              {segment.textValue || '-'}
-                            </button>
-                          </div>
-                        );
-                      })}
+                            return (
+                              <div key={`${segment.role}-${segment.startSec}-${index}`} className={`flex ${isAgent ? 'justify-start' : 'justify-end'}`}>
+                                <div className={`max-w-[86%] rounded-2xl px-4 py-3 text-sm shadow-sm ring-1 sm:max-w-[74%] ${
+                                  isAgent
+                                    ? 'rounded-bl-md bg-white text-slate-700 ring-slate-200'
+                                    : 'rounded-br-md bg-blue-600 text-white ring-blue-500'
+                                }`}>
+                                  <div className={`mb-1 flex items-center justify-between gap-4 text-[10px] font-bold uppercase tracking-wider ${
+                                    isAgent ? 'text-slate-400' : 'text-blue-100'
+                                  }`}>
+                                    <span>{segment.role}</span>
+                                    <span>{timeLabel}</span>
+                                  </div>
+                                  <p className="leading-relaxed">{segment.textValue}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <p className="text-slate-400 text-sm text-center py-8">ไม่มีข้อมูล Transcription</p>
@@ -2366,17 +2324,6 @@ export default function FileAnalysisDetail() {
                   </div>
                 )}
 
-                {/* ── AI Model Info ── */}
-                {analysis?.model_versions && (
-                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">AI Models Used</p>
-                    <div className="space-y-1 text-[11px] text-slate-500">
-                      <p>🎙️ STT: <span className="font-medium text-slate-700">{analysis.model_versions.whisper}</span></p>
-                      <p>🎭 Emotion: <span className="font-medium text-slate-700">{analysis.model_versions.wav2vec2}</span></p>
-                      <p>🧠 NLP: <span className="font-medium text-slate-700">{analysis.model_versions.llama}</span></p>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           )}

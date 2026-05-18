@@ -88,7 +88,7 @@ export default function Sidebar() {
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-700 text-white sm:h-10 sm:w-10">
             <Folder className="h-5 w-5 sm:h-6 sm:w-6" />
           </div>
-          <span className="hidden text-base font-bold text-slate-800 sm:inline lg:text-lg">File Manager</span>
+          <span className="hidden text-base font-bold text-slate-800 sm:inline lg:text-lg">Demo</span>
         </div>
 
         <nav className="mt-4 space-y-1.5 px-2 sm:px-3 lg:px-4">

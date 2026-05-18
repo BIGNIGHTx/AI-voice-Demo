@@ -25,8 +25,10 @@ import { useState, useEffect, useCallback, type ChangeEvent } from 'react';
 import Link from 'next/link';
 
 import { logClientActivity } from '@/lib/activity-client';
+import mattressImage from '@/lib/image/ที่นอน.jpg';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const DEMO_MATTRESS_IMAGE_SRC = mattressImage.src;
 const EMPTY_TEXT_VALUES = new Set(['', '-', 'n/a', 'none', 'null', 'unknown']);
 
 interface WarrantyImage {
@@ -1077,7 +1079,7 @@ export default function CustomerDetailPage() {
                 warranties.map((warranty, index) => {
                   const warrantyDeliveryDate = getWarrantyDeliveryDate(warranty);
                   const statusMeta = getWarrantyStatusMeta(warranty.status, warrantyDeliveryDate, warranty.warranty_period);
-                  const previewImage = getApiAssetUrl(warranty.images?.[0]?.url);
+                  const previewImage = getApiAssetUrl(warranty.images?.[0]?.url) || DEMO_MATTRESS_IMAGE_SRC;
                   const expiryDate = getWarrantyExpiryDisplayDate(warranty, warrantyDeliveryDate);
 
                   return (

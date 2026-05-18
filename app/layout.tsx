@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Montserrat, Sarabun, Great_Vibes } from "next/font/google";
 
+import DemoMockProvider from '@/components/DemoMockProvider';
 import AppClientShell from '@/components/auth/AppClientShell';
 import "./globals.css";
 
@@ -37,7 +38,7 @@ export default function RootLayout({
   return (
     <html lang="th" className={`${montserrat.variable} ${sarabun.variable} ${greatVibes.variable}`}>
       <body className="font-sans antialiased">
-        {children}
+        <DemoMockProvider>{children}</DemoMockProvider>
         <AppClientShell />
       </body>
     </html>

@@ -123,6 +123,7 @@ const TOPIC_OVERVIEW_KEYWORDS = [
 ];
 
 const TOPIC_ALIAS_RULES: Array<{ includes: string[]; aliases: string[] }> = [
+  { includes: ['อาการแพ้', 'แพ้', 'คัน', 'ผื่น', 'สารเคมี', 'ที่นอน'], aliases: ['ตรวจสอบอาการแพ้จากที่นอน', 'อาการแพ้จากที่นอน', 'แพ้ที่นอน', 'คัน', 'ผื่น', 'สารเคมี', 'ตรวจสอบที่นอน'] },
   { includes: ['คืนเงิน'], aliases: ['ขอคืนเงิน', 'ขอเงินคืน', 'คืนเงิน', 'refund', 'เงินคืน'] },
   { includes: ['ยกเลิก'], aliases: ['ยกเลิก', 'cancel', 'ยกเลิกสินค้า'] },
   { includes: ['จัดส่ง', 'ส่งสินค้า'], aliases: ['จัดส่ง', 'ส่งสินค้า', 'delivery', 'ติดตามของ'] },
@@ -134,6 +135,7 @@ const TOPIC_ALIAS_RULES: Array<{ includes: string[]; aliases: string[] }> = [
 ];
 
 const TOPIC_GROUP_RULES: Array<{ label: string; includes: string[] }> = [
+  { label: 'ตรวจสอบอาการแพ้จากที่นอน', includes: ['อาการแพ้', 'แพ้', 'คัน', 'ผื่น', 'สารเคมี', 'ตรวจสอบที่นอน'] },
   { label: 'คืนเงิน/ขอเงินคืน', includes: ['คืนเงิน', 'ขอเงินคืน', 'refund'] },
   { label: 'รับคืน/คืนสินค้า', includes: ['รับ', 'รับกลับ', 'รับคืน', 'คืนสินค้า', 'รับที่นอนกลับ'] },
   { label: 'เปลี่ยนสินค้า/เปลี่ยนที่นอน', includes: ['เปลี่ยน', 'เปลี่ยนที่นอน', 'เปลี่ยนสินค้า'] },
@@ -168,10 +170,10 @@ const WARRANTY_LOOKUP_KEYWORDS = [
 
 export const CHATBOT_SUGGESTED_PROMPTS = [
   'เบอร์ 0819979336 มีประกันอะไรบ้าง',
+  'ขอประวัติการโทรของเบอร์ 0819979336',
   'ตรวจทะเบียนประกัน LOT-2026-0102',
-  'Serial LT-HY-Q5-774455 หมดประกันวันไหน',
-  'ลูกค้าคนไหนขอคืนเงิน',
-  'หัวข้อแก้ไขปัญหา/ขอความช่วยเหลือเป็นของลูกค้าคนไหน',
+  'ลูกค้าคนไหนแจ้งอาการแพ้จากที่นอน',
+  'หัวข้อจาก Topic Distribution มีอะไรบ้าง',
   'RAG ควรใส่ข้อมูลอะไรเข้า Qdrant',
 ];
 
@@ -1361,9 +1363,6 @@ const appendDeepInsightLines = (lines: string[], item: ExactHistoryItem): void =
 
   lines.push('💡 อินไซต์ลูกค้า:');
   if (item.deepInsight.customerNeed) lines.push(`🙋 ลูกค้าต้องการอะไร: ${item.deepInsight.customerNeed}`);
-  if (item.deepInsight.painPoint) lines.push(`🧩 ปัญหาหลัก: ${item.deepInsight.painPoint}`);
-  if (item.deepInsight.rootCause) lines.push(`🔎 สาเหตุที่น่าจะเกิด: ${item.deepInsight.rootCause}`);
-  if (item.deepInsight.expectation) lines.push(`✅ สิ่งที่ลูกค้าคาดหวัง: ${item.deepInsight.expectation}`);
   if (item.deepInsight.recommendedAction) lines.push(`🛠️ สิ่งที่ควรทำต่อ: ${item.deepInsight.recommendedAction}`);
 
   const riskParts = [
@@ -1703,6 +1702,7 @@ const appendTopicInsightLines = (
   if (insight.topic && insight.topic !== '-') lines.push(`🎯 Topic/Intent: ${insight.topic}`);
   if (insight.contactReason && insight.contactReason !== '-') lines.push(`📌 สาเหตุการติดต่อ: ${insight.contactReason}`);
   lines.push(`🔑 Keywords: ${formatKeywordList(insight.keywords)}`);
+  appendDeepInsightLines(lines, insight);
 };
 
 const formatTopicMatches = async (

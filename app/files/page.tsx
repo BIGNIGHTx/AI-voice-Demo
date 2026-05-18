@@ -28,6 +28,8 @@ interface FileRecord {
   file_id: string;
   name: string;
   customer: string;
+  customer_phone?: string;
+  customer_name?: string;
   agent: string;
   agent_name: string;
   brand: string;
@@ -1222,7 +1224,9 @@ export default function FilesPage() {
                           </td>
                           <td className="px-3 py-3 align-middle">
                             <div className="min-w-0">
-                              <span className="block truncate text-sm text-slate-600" title={file.customer || '-'}>{file.customer || '-'}</span>
+                              <span className="block truncate text-sm text-slate-600" title={file.customer_phone || file.customer || '-'}>
+                                {file.customer_phone || file.customer || '-'}
+                              </span>
                               {file.local_upload_error ? (
                                 <span className="mt-1 block truncate text-[10px] text-red-500" title={file.local_upload_error}>
                                   {file.local_upload_error}
