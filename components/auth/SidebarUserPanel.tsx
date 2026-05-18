@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { Loader2, LogIn, LogOut } from 'lucide-react';
+import { Loader2, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
@@ -11,7 +10,6 @@ import type { SerializedPublicUser } from '@/lib/auth/user';
 interface SidebarUserPanelProps {
   user: SerializedPublicUser | null;
   loading: boolean;
-  loginHref?: string;
 }
 
 const getInitials = (name: string) => name
@@ -21,7 +19,7 @@ const getInitials = (name: string) => name
   .map((part) => part[0]?.toUpperCase() ?? '')
   .join('') || 'U';
 
-export default function SidebarUserPanel({ user, loading, loginHref = '/login' }: SidebarUserPanelProps) {
+export default function SidebarUserPanel({ user, loading }: SidebarUserPanelProps) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -31,7 +29,7 @@ export default function SidebarUserPanel({ user, loading, loginHref = '/login' }
     setLoggingOut(true);
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => null);
     clearCachedSessionUser();
-    router.replace('/login');
+    router.replace('/files');
     router.refresh();
   };
 
@@ -49,14 +47,10 @@ export default function SidebarUserPanel({ user, loading, loginHref = '/login' }
   if (!user) {
     return (
       <div className="border-t border-slate-200 p-2 sm:p-4">
-        <Link
-          href={loginHref}
-          className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-3 text-sm font-bold text-blue-700 transition-all hover:border-blue-200 hover:bg-blue-100 sm:h-auto sm:py-3"
-          aria-label="เข้าสู่ระบบ"
-        >
-          <LogIn className="h-4 w-4" />
-          <span className="hidden sm:inline">เข้าสู่ระบบ</span>
-        </Link>
+        <div className="flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 px-3 text-sm font-bold text-slate-600 sm:h-auto sm:py-3">
+          <span className="hidden sm:inline">Demo mode</span>
+          <span className="sm:hidden">Demo</span>
+        </div>
       </div>
     );
   }
